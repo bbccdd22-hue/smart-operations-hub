@@ -1,0 +1,16 @@
+# Smart Operations Hub - Production dependencies
+# [Ref: Render deployment, Net Sales 981,459.30 SAR logic]
+django>=5.0,<6.1
+djangorestframework>=3.15
+django-cors-headers>=4.0
+psycopg[binary]>=3.2
+pandas>=2.2
+openpyxl>=3.1
+numpy>=1.24
+scikit-learn>=1.3
+gunicorn>=21.0
+dj-database-url>=2.1
+whitenoise>=6.6
+reportlab>=4.0
+rapidfuzz>=3.0
+pdfplumber>=0.10

@@ -1,0 +1,287 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================
+   UNIFIED DESIGN SYSTEM — iOS Liquid Glass
+   Single source of truth for colors, borders, fonts.
+   Changes here propagate to ALL tabs and pages.
+   ============================================ */
+
+/* --- LIGHT MODE (Liquid Glass) --- */
+:root {
+  color-scheme: light dark;
+  /* Liquid Glass base - soft translucent #F0F2F5 at 80%, backdrop-blur */
+  --glass-bg: rgba(240, 242, 245, 0.8);
+  --glass-bg-strong: rgba(240, 242, 245, 0.95);
+  --glass-border: rgba(255, 255, 255, 0.5);
+  --glass-border-subtle: rgba(0, 0, 0, 0.06);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  --glass-blur: blur(20px) saturate(180%);
+
+  /* Text */
+  --glass-text: #1e293b;
+  --glass-text-muted: #64748b;
+  --glass-text-subtle: #94a3b8;
+
+  /* Accents */
+  --accent-primary: #7C3AED;
+  --accent-secondary: #00b074;
+
+  /* Page background gradient */
+  --page-bg-start: #f0f2f5;
+  --page-bg-end: #e2e8f0;
+  --page-bg-animated: linear-gradient(135deg, #e8ecf1 0%, #dbe1e8 40%, #e2e8f0 70%, #d1d9e4 100%);
+}
+
+/* --- DARK MODE (Deep translucent, vibrant accents) --- */
+.dark {
+  --glass-bg: rgba(30, 41, 59, 0.6);
+  --glass-bg-strong: rgba(30, 41, 59, 0.9);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --glass-border-subtle: rgba(255, 255, 255, 0.06);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  --glass-blur: blur(20px) saturate(180%);
+
+  --glass-text: #f1f5f9;
+  --glass-text-muted: #94a3b8;
+  --glass-text-subtle: #64748b;
+
+  --accent-primary: #a78bfa;
+  --accent-secondary: #34d399;
+
+  --page-bg-start: #0f172a;
+  --page-bg-end: #1e1b4b;
+  --page-bg-animated: linear-gradient(135deg, #0f172a 0%, #1e1b4b 40%, #0f172a 70%, #064e3b 100%);
+}
+
+/* Smooth liquid transition when switching themes */
+html {
+  transition: background-color 0.4s ease, color 0.3s ease;
+}
+
+/* ===== Liquid Glassmorphism Utilities ===== */
+@layer components {
+  /* Primary glass card - data cards, tables */
+  .glass-card {
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+  }
+
+  /* Stronger glass - headers, prominent panels */
+  .glass-panel {
+    background: var(--glass-bg-strong);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    transition: background 0.3s ease, border-color 0.3s ease;
+  }
+
+  /* Frosted button/control */
+  .glass-btn {
+    background: var(--glass-bg);
+    backdrop-filter: blur(12px) saturate(150%);
+    -webkit-backdrop-filter: blur(12px) saturate(150%);
+    border: 1px solid var(--glass-border);
+    transition: background 0.2s ease, border-color 0.2s ease;
+  }
+
+  .glass-btn:hover {
+    background: var(--glass-bg-strong);
+    border-color: var(--glass-border);
+  }
+
+  /* Glass table header */
+  .glass-table-header {
+    background: var(--glass-bg);
+    border-color: var(--glass-border-subtle);
+  }
+
+  /* Glass input - unified for light/dark */
+  .glass-input {
+    background: var(--glass-bg);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--glass-border);
+    color: var(--glass-text) !important;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .glass-input:focus {
+    border-color: var(--accent-primary);
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.2);
+  }
+
+  .dark .glass-input:focus {
+    box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.3);
+  }
+
+  .glass-input::placeholder {
+    color: var(--glass-text-subtle);
+  }
+
+  /* Header - light: glass; dark: glass */
+  .header-glass {
+    background: var(--glass-bg-strong) !important;
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border) !important;
+    box-shadow: var(--glass-shadow) !important;
+    transition: background 0.3s ease, border-color 0.3s ease;
+  }
+
+  /* Ensure header dropdowns (Notifications, Health) are not clipped */
+  header.glass-panel,
+  header.header-white {
+    overflow: visible !important;
+  }
+  header.glass-panel > div,
+  header.header-white > div {
+    overflow: visible !important;
+  }
+
+  /* [Legacy] header-white - now uses design tokens for light */
+  .header-white {
+    background: var(--glass-bg-strong) !important;
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border) !important;
+    box-shadow: var(--glass-shadow) !important;
+  }
+
+  .header-white .text-white,
+  .header-white [class*="text-white"],
+  .header-white .text-emerald-300 {
+    color: var(--glass-text) !important;
+  }
+
+  .header-white .glass-btn,
+  .header-white a.rounded-lg {
+    color: var(--glass-text-muted) !important;
+    border-color: var(--glass-border) !important;
+  }
+
+  .header-white .glass-btn:hover,
+  .header-white a:hover {
+    background: var(--glass-bg) !important;
+    color: var(--glass-text) !important;
+  }
+
+  /* Filter controls - use design tokens */
+  .filter-std {
+    background: var(--glass-bg) !important;
+    border: 1px solid var(--glass-border) !important;
+    color: var(--glass-text) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    transition: background 0.2s ease, border-color 0.2s ease;
+  }
+
+  .filter-std:focus {
+    border-color: var(--accent-primary) !important;
+    outline: none !important;
+    box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.2) !important;
+  }
+
+  .dark .filter-std:focus {
+    box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.3) !important;
+  }
+
+  .filter-std option {
+    background: var(--glass-bg-strong) !important;
+    color: var(--glass-text) !important;
+  }
+
+  .filter-std option:checked {
+    background: var(--accent-primary) !important;
+    color: #ffffff !important;
+  }
+
+  .filter-dropdown {
+    background: var(--glass-bg-strong) !important;
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border) !important;
+    box-shadow: var(--glass-shadow) !important;
+    transition: background 0.2s ease, border-color 0.2s ease;
+    max-height: 300px;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  /* iOS Glassmorphism scrollbar for filter dropdowns */
+  .filter-dropdown::-webkit-scrollbar {
+    width: 6px;
+  }
+  .filter-dropdown::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.04);
+    border-radius: 3px;
+  }
+  .filter-dropdown::-webkit-scrollbar-thumb {
+    background: rgba(124, 58, 237, 0.35);
+    border-radius: 3px;
+  }
+  .filter-dropdown::-webkit-scrollbar-thumb:hover {
+    background: rgba(124, 58, 237, 0.5);
+  }
+
+  /* Page content cards - unified (iOS Glassmorphism) */
+  .page-card {
+    background: var(--glass-bg);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--glass-shadow);
+    transition: background 0.3s ease, border-color 0.3s ease;
+  }
+
+  /* Owner signature footer - glass matching */
+  .signature-footer {
+    background: var(--glass-bg) !important;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border) !important;
+    box-shadow: var(--glass-shadow);
+    transition: background 0.3s ease, border-color 0.3s ease;
+  }
+}
+
+/* Tajawal (Arabic) / Inter (English) - applied via i18n */
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ===== Mobile / Touch Optimizations ===== */
+@media (max-width: 640px) {
+  /* Glass cards: comfortable padding on small screens */
+  .glass-card {
+    border-radius: 1rem;
+  }
+  .page-card {
+    padding: 1rem !important;
+    min-height: auto !important;
+  }
+  /* Touch-friendly tap targets for primary buttons (44px min for accessibility) */
+  nav .glass-btn,
+  header .glass-btn {
+    min-height: 44px;
+    padding: 0.625rem 1rem;
+  }
+  /* Switch: touch-friendly, containment verified */
+  [role="switch"] {
+    min-width: 56px;
+    min-height: 32px;
+    touch-action: manipulation;
+  }
+  /* Tables: ensure horizontal scroll on small screens */
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+}

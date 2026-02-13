@@ -1,0 +1,1316 @@
+{
+  "exported_at": "2026-02-11T19:54:09.394950+00:00",
+  "period": {
+    "from": "2026-01-01",
+    "to": "2026-01-31"
+  },
+  "brand": "8OZ",
+  "product_sales_total_sar": 0.0,
+  "daily_sales_total_sar": 981459.3,
+  "product_sales_rows": [],
+  "daily_sales_rows": [
+    {
+      "branch__name": "مكه كشك الدائري الرابع",
+      "date": "2026-01-01",
+      "total_sales": 3206.78,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "فرع مكة العوالي",
+      "date": "2026-01-01",
+      "total_sales": 8732.0,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة كشك العوالي",
+      "date": "2026-01-01",
+      "total_sales": 5057.43,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الرصيفة",
+      "date": "2026-01-01",
+      "total_sales": 11677.65,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الشرايع",
+      "date": "2026-01-01",
+      "total_sales": 7767.78,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه العمرة",
+      "date": "2026-01-01",
+      "total_sales": 4131.96,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه كشك الدائري الرابع",
+      "date": "2026-01-02",
+      "total_sales": 3423.3,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "فرع مكة العوالي",
+      "date": "2026-01-02",
+      "total_sales": 8855.7,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة كشك العوالي",
+      "date": "2026-01-02",
+      "total_sales": 4629.48,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الرصيفة",
+      "date": "2026-01-02",
+      "total_sales": 8636.35,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الشرايع",
+      "date": "2026-01-02",
+      "total_sales": 8844.78,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه العمرة",
+      "date": "2026-01-02",
+      "total_sales": 7299.56,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه كشك الدائري الرابع",
+      "date": "2026-01-03",
+      "total_sales": 2423.0,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "فرع مكة العوالي",
+      "date": "2026-01-03",
+      "total_sales": 5324.61,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة كشك العوالي",
+      "date": "2026-01-03",
+      "total_sales": 3565.65,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الرصيفة",
+      "date": "2026-01-03",
+      "total_sales": 9146.13,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الشرايع",
+      "date": "2026-01-03",
+      "total_sales": 6646.0,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه العمرة",
+      "date": "2026-01-03",
+      "total_sales": 4554.74,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه كشك الدائري الرابع",
+      "date": "2026-01-04",
+      "total_sales": 2609.65,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "فرع مكة العوالي",
+      "date": "2026-01-04",
+      "total_sales": 5366.87,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة كشك العوالي",
+      "date": "2026-01-04",
+      "total_sales": 3699.74,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الرصيفة",
+      "date": "2026-01-04",
+      "total_sales": 8274.7,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الشرايع",
+      "date": "2026-01-04",
+      "total_sales": 6893.48,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه العمرة",
+      "date": "2026-01-04",
+      "total_sales": 4565.7,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه كشك الدائري الرابع",
+      "date": "2026-01-05",
+      "total_sales": 2507.56,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "فرع مكة العوالي",
+      "date": "2026-01-05",
+      "total_sales": 5983.7,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة كشك العوالي",
+      "date": "2026-01-05",
+      "total_sales": 4245.39,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الرصيفة",
+      "date": "2026-01-05",
+      "total_sales": 8394.83,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الشرايع",
+      "date": "2026-01-05",
+      "total_sales": 7115.48,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه العمرة",
+      "date": "2026-01-05",
+      "total_sales": 4277.87,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه كشك الدائري الرابع",
+      "date": "2026-01-06",
+      "total_sales": 2800.7,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "فرع مكة العوالي",
+      "date": "2026-01-06",
+      "total_sales": 5970.7,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة كشك العوالي",
+      "date": "2026-01-06",
+      "total_sales": 4268.35,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الرصيفة",
+      "date": "2026-01-06",
+      "total_sales": 7243.26,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الشرايع",
+      "date": "2026-01-06",
+      "total_sales": 6006.39,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه العمرة",
+      "date": "2026-01-06",
+      "total_sales": 3870.35,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه كشك الدائري الرابع",
+      "date": "2026-01-07",
+      "total_sales": 3038.26,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "فرع مكة العوالي",
+      "date": "2026-01-07",
+      "total_sales": 6667.0,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة كشك العوالي",
+      "date": "2026-01-07",
+      "total_sales": 4155.22,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الرصيفة",
+      "date": "2026-01-07",
+      "total_sales": 8942.3,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الشرايع",
+      "date": "2026-01-07",
+      "total_sales": 7243.56,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه العمرة",
+      "date": "2026-01-07",
+      "total_sales": 5154.87,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه كشك الدائري الرابع",
+      "date": "2026-01-08",
+      "total_sales": 2879.56,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "فرع مكة العوالي",
+      "date": "2026-01-08",
+      "total_sales": 8043.3,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة كشك العوالي",
+      "date": "2026-01-08",
+      "total_sales": 4371.3,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الرصيفة",
+      "date": "2026-01-08",
+      "total_sales": 9340.39,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الشرايع",
+      "date": "2026-01-08",
+      "total_sales": 8078.96,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه العمرة",
+      "date": "2026-01-08",
+      "total_sales": 4405.74,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه كشك الدائري الرابع",
+      "date": "2026-01-09",
+      "total_sales": 3742.48,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "فرع مكة العوالي",
+      "date": "2026-01-09",
+      "total_sales": 8832.22,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة كشك العوالي",
+      "date": "2026-01-09",
+      "total_sales": 4835.09,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الرصيفة",
+      "date": "2026-01-09",
+      "total_sales": 7698.39,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الشرايع",
+      "date": "2026-01-09",
+      "total_sales": 7725.26,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه العمرة",
+      "date": "2026-01-09",
+      "total_sales": 5445.17,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه كشك الدائري الرابع",
+      "date": "2026-01-10",
+      "total_sales": 2942.22,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "فرع مكة العوالي",
+      "date": "2026-01-10",
+      "total_sales": 7824.04,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة كشك العوالي",
+      "date": "2026-01-10",
+      "total_sales": 4116.26,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الرصيفة",
+      "date": "2026-01-10",
+      "total_sales": 8935.39,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الشرايع",
+      "date": "2026-01-10",
+      "total_sales": 7641.0,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه العمرة",
+      "date": "2026-01-10",
+      "total_sales": 4840.43,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه كشك الدائري الرابع",
+      "date": "2026-01-11",
+      "total_sales": 3189.48,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "فرع مكة العوالي",
+      "date": "2026-01-11",
+      "total_sales": 8703.78,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة كشك العوالي",
+      "date": "2026-01-11",
+      "total_sales": 4174.0,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الرصيفة",
+      "date": "2026-01-11",
+      "total_sales": 8414.09,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الشرايع",
+      "date": "2026-01-11",
+      "total_sales": 8971.09,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه العمرة",
+      "date": "2026-01-11",
+      "total_sales": 5289.83,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه كشك الدائري الرابع",
+      "date": "2026-01-12",
+      "total_sales": 2631.78,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "فرع مكة العوالي",
+      "date": "2026-01-12",
+      "total_sales": 7185.35,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة كشك العوالي",
+      "date": "2026-01-12",
+      "total_sales": 4399.91,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الرصيفة",
+      "date": "2026-01-12",
+      "total_sales": 9499.96,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الشرايع",
+      "date": "2026-01-12",
+      "total_sales": 6881.22,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه العمرة",
+      "date": "2026-01-12",
+      "total_sales": 4966.78,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه كشك الدائري الرابع",
+      "date": "2026-01-13",
+      "total_sales": 2618.96,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "فرع مكة العوالي",
+      "date": "2026-01-13",
+      "total_sales": 7353.91,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة كشك العوالي",
+      "date": "2026-01-13",
+      "total_sales": 4821.91,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الرصيفة",
+      "date": "2026-01-13",
+      "total_sales": 8733.65,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الشرايع",
+      "date": "2026-01-13",
+      "total_sales": 7772.09,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه العمرة",
+      "date": "2026-01-13",
+      "total_sales": 4170.39,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه كشك الدائري الرابع",
+      "date": "2026-01-14",
+      "total_sales": 2796.0,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "فرع مكة العوالي",
+      "date": "2026-01-14",
+      "total_sales": 7041.96,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة كشك العوالي",
+      "date": "2026-01-14",
+      "total_sales": 4519.43,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الرصيفة",
+      "date": "2026-01-14",
+      "total_sales": 8047.43,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الشرايع",
+      "date": "2026-01-14",
+      "total_sales": 7295.96,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه العمرة",
+      "date": "2026-01-14",
+      "total_sales": 4206.09,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه كشك الدائري الرابع",
+      "date": "2026-01-15",
+      "total_sales": 3166.26,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "فرع مكة العوالي",
+      "date": "2026-01-15",
+      "total_sales": 8870.22,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة كشك العوالي",
+      "date": "2026-01-15",
+      "total_sales": 4928.35,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الرصيفة",
+      "date": "2026-01-15",
+      "total_sales": 8807.17,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الشرايع",
+      "date": "2026-01-15",
+      "total_sales": 6808.09,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه العمرة",
+      "date": "2026-01-15",
+      "total_sales": 4153.65,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه كشك الدائري الرابع",
+      "date": "2026-01-16",
+      "total_sales": 3075.74,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "فرع مكة العوالي",
+      "date": "2026-01-16",
+      "total_sales": 5204.09,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة كشك العوالي",
+      "date": "2026-01-16",
+      "total_sales": 5204.3,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الرصيفة",
+      "date": "2026-01-16",
+      "total_sales": 7751.09,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الشرايع",
+      "date": "2026-01-16",
+      "total_sales": 5641.09,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه العمرة",
+      "date": "2026-01-16",
+      "total_sales": 4539.78,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه كشك الدائري الرابع",
+      "date": "2026-01-17",
+      "total_sales": 2206.26,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "فرع مكة العوالي",
+      "date": "2026-01-17",
+      "total_sales": 5117.0,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة كشك العوالي",
+      "date": "2026-01-17",
+      "total_sales": 4115.13,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الرصيفة",
+      "date": "2026-01-17",
+      "total_sales": 6900.39,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الشرايع",
+      "date": "2026-01-17",
+      "total_sales": 4905.87,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه العمرة",
+      "date": "2026-01-17",
+      "total_sales": 3148.65,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه كشك الدائري الرابع",
+      "date": "2026-01-18",
+      "total_sales": 2287.22,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "فرع مكة العوالي",
+      "date": "2026-01-18",
+      "total_sales": 3593.48,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة كشك العوالي",
+      "date": "2026-01-18",
+      "total_sales": 3901.35,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الرصيفة",
+      "date": "2026-01-18",
+      "total_sales": 5117.48,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الشرايع",
+      "date": "2026-01-18",
+      "total_sales": 4537.04,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه العمرة",
+      "date": "2026-01-18",
+      "total_sales": 3687.3,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه كشك الدائري الرابع",
+      "date": "2026-01-19",
+      "total_sales": 2383.13,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "فرع مكة العوالي",
+      "date": "2026-01-19",
+      "total_sales": 4408.3,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة كشك العوالي",
+      "date": "2026-01-19",
+      "total_sales": 3620.0,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الرصيفة",
+      "date": "2026-01-19",
+      "total_sales": 6488.7,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الشرايع",
+      "date": "2026-01-19",
+      "total_sales": 4683.26,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه العمرة",
+      "date": "2026-01-19",
+      "total_sales": 2790.09,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه كشك الدائري الرابع",
+      "date": "2026-01-20",
+      "total_sales": 2275.35,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "فرع مكة العوالي",
+      "date": "2026-01-20",
+      "total_sales": 4093.3,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة كشك العوالي",
+      "date": "2026-01-20",
+      "total_sales": 3114.09,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الرصيفة",
+      "date": "2026-01-20",
+      "total_sales": 5370.61,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الشرايع",
+      "date": "2026-01-20",
+      "total_sales": 5286.74,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه العمرة",
+      "date": "2026-01-20",
+      "total_sales": 3511.04,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه كشك الدائري الرابع",
+      "date": "2026-01-21",
+      "total_sales": 2544.52,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "فرع مكة العوالي",
+      "date": "2026-01-21",
+      "total_sales": 4280.57,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة كشك العوالي",
+      "date": "2026-01-21",
+      "total_sales": 3612.87,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الرصيفة",
+      "date": "2026-01-21",
+      "total_sales": 6685.96,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الشرايع",
+      "date": "2026-01-21",
+      "total_sales": 5059.87,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه العمرة",
+      "date": "2026-01-21",
+      "total_sales": 3279.83,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه كشك الدائري الرابع",
+      "date": "2026-01-22",
+      "total_sales": 2710.61,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "فرع مكة العوالي",
+      "date": "2026-01-22",
+      "total_sales": 6161.13,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة كشك العوالي",
+      "date": "2026-01-22",
+      "total_sales": 3987.04,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الرصيفة",
+      "date": "2026-01-22",
+      "total_sales": 7684.7,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الشرايع",
+      "date": "2026-01-22",
+      "total_sales": 6529.83,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه العمرة",
+      "date": "2026-01-22",
+      "total_sales": 3397.39,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه كشك الدائري الرابع",
+      "date": "2026-01-23",
+      "total_sales": 3199.52,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "فرع مكة العوالي",
+      "date": "2026-01-23",
+      "total_sales": 6544.65,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة كشك العوالي",
+      "date": "2026-01-23",
+      "total_sales": 3801.39,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الرصيفة",
+      "date": "2026-01-23",
+      "total_sales": 7743.3,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الشرايع",
+      "date": "2026-01-23",
+      "total_sales": 4950.91,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه العمرة",
+      "date": "2026-01-23",
+      "total_sales": 3497.52,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه كشك الدائري الرابع",
+      "date": "2026-01-24",
+      "total_sales": 1965.78,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "فرع مكة العوالي",
+      "date": "2026-01-24",
+      "total_sales": 3995.65,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة كشك العوالي",
+      "date": "2026-01-24",
+      "total_sales": 2821.39,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الرصيفة",
+      "date": "2026-01-24",
+      "total_sales": 6107.22,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الشرايع",
+      "date": "2026-01-24",
+      "total_sales": 5313.56,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه العمرة",
+      "date": "2026-01-24",
+      "total_sales": 2723.74,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه كشك الدائري الرابع",
+      "date": "2026-01-25",
+      "total_sales": 2055.26,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "فرع مكة العوالي",
+      "date": "2026-01-25",
+      "total_sales": 3288.48,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة كشك العوالي",
+      "date": "2026-01-25",
+      "total_sales": 3165.65,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الرصيفة",
+      "date": "2026-01-25",
+      "total_sales": 6086.87,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الشرايع",
+      "date": "2026-01-25",
+      "total_sales": 4665.78,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه العمرة",
+      "date": "2026-01-25",
+      "total_sales": 2978.61,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه كشك الدائري الرابع",
+      "date": "2026-01-26",
+      "total_sales": 2412.13,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "فرع مكة العوالي",
+      "date": "2026-01-26",
+      "total_sales": 4542.7,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة كشك العوالي",
+      "date": "2026-01-26",
+      "total_sales": 3736.56,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الرصيفة",
+      "date": "2026-01-26",
+      "total_sales": 6029.57,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الشرايع",
+      "date": "2026-01-26",
+      "total_sales": 3924.65,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه العمرة",
+      "date": "2026-01-26",
+      "total_sales": 2463.09,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه كشك الدائري الرابع",
+      "date": "2026-01-27",
+      "total_sales": 2832.13,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "فرع مكة العوالي",
+      "date": "2026-01-27",
+      "total_sales": 5100.74,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة كشك العوالي",
+      "date": "2026-01-27",
+      "total_sales": 4637.22,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الرصيفة",
+      "date": "2026-01-27",
+      "total_sales": 8468.22,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الشرايع",
+      "date": "2026-01-27",
+      "total_sales": 6245.22,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه العمرة",
+      "date": "2026-01-27",
+      "total_sales": 3429.83,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه كشك الدائري الرابع",
+      "date": "2026-01-28",
+      "total_sales": 2462.09,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "فرع مكة العوالي",
+      "date": "2026-01-28",
+      "total_sales": 6133.13,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة كشك العوالي",
+      "date": "2026-01-28",
+      "total_sales": 4421.09,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الرصيفة",
+      "date": "2026-01-28",
+      "total_sales": 8935.91,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الشرايع",
+      "date": "2026-01-28",
+      "total_sales": 7206.09,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه العمرة",
+      "date": "2026-01-28",
+      "total_sales": 3328.39,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه كشك الدائري الرابع",
+      "date": "2026-01-29",
+      "total_sales": 3787.43,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "فرع مكة العوالي",
+      "date": "2026-01-29",
+      "total_sales": 7895.09,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة كشك العوالي",
+      "date": "2026-01-29",
+      "total_sales": 4739.26,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الرصيفة",
+      "date": "2026-01-29",
+      "total_sales": 9183.56,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الشرايع",
+      "date": "2026-01-29",
+      "total_sales": 6213.39,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه العمرة",
+      "date": "2026-01-29",
+      "total_sales": 4369.43,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه كشك الدائري الرابع",
+      "date": "2026-01-30",
+      "total_sales": 4115.91,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "فرع مكة العوالي",
+      "date": "2026-01-30",
+      "total_sales": 8623.61,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة كشك العوالي",
+      "date": "2026-01-30",
+      "total_sales": 4359.65,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الرصيفة",
+      "date": "2026-01-30",
+      "total_sales": 7195.04,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الشرايع",
+      "date": "2026-01-30",
+      "total_sales": 6765.65,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه العمرة",
+      "date": "2026-01-30",
+      "total_sales": 5545.52,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه كشك الدائري الرابع",
+      "date": "2026-01-31",
+      "total_sales": 2500.78,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "فرع مكة العوالي",
+      "date": "2026-01-31",
+      "total_sales": 5476.61,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة كشك العوالي",
+      "date": "2026-01-31",
+      "total_sales": 3370.09,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الرصيفة",
+      "date": "2026-01-31",
+      "total_sales": 6524.35,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكة الشرايع",
+      "date": "2026-01-31",
+      "total_sales": 5624.65,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    },
+    {
+      "branch__name": "مكه العمرة",
+      "date": "2026-01-31",
+      "total_sales": 3728.26,
+      "cash_amount": 0.0,
+      "network_amount": 0.0
+    }
+  ],
+  "note": "صافي المبيعات (Net Sales) - Column L only. Ref: 981,459.30 SAR"
+}
