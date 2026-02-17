@@ -1,7 +1,8 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNotifications } from "../contexts/NotificationContext";
-import { fetchBrands, fetchBranches, uploadExcel, type Brand, type Branch } from "../lib/api";
+import { fetchBrands, fetchBranches, uploadExcel, logActivity, type Brand, type Branch } from "../lib/api";
+import { getBrandDisplayName, getBranchDisplayName } from "../lib/localization";
 
 type UploadState = "idle" | "uploading" | "success" | "error";
 
@@ -15,7 +16,8 @@ type VarianceItem = {
 };
 
 export default function UploadCenterPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const lang = i18n.language;
   const { addToast } = useNotifications() ?? { addToast: () => {} };
   const [file, setFile] = useState<File | null>(null);
   const [reportType, setReportType] = useState<
@@ -61,6 +63,12 @@ export default function UploadCenterPage() {
             ? t("paymentsReportSuccess")
             : t("styledHeaderToast");
       addToast(t("uploadSuccess"), msg);
+      logActivity({
+        action_type: "file_upload",
+        page_path: "/upload-center",
+        file_name: file?.name ?? "Excel",
+        description: `رفع ${reportType} - ${file?.name ?? ""}`,
+      });
       window.dispatchEvent(new CustomEvent("smart-ops-dashboard-refresh"));
     } catch (err: unknown) {
       setStatus("error");
@@ -99,7 +107,7 @@ export default function UploadCenterPage() {
               <option value="">Select brand</option>
               {brands.map((b) => (
                 <option key={b.id} value={b.id}>
-                  {b.name}
+                  {getBrandDisplayName(b, lang)}
                 </option>
               ))}
             </select>
@@ -115,7 +123,7 @@ export default function UploadCenterPage() {
               <option value="">All branches</option>
               {branches.map((b) => (
                 <option key={b.id} value={b.id}>
-                  {b.name}
+                  {getBranchDisplayName(b, lang)}
                 </option>
               ))}
             </select>

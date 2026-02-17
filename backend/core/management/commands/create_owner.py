@@ -19,7 +19,7 @@ class Command(BaseCommand):
         username = options["username"]
         password = options["password"]
         email = (options.get("email") or "").strip()
-        if not email and username.lower() == "saif":
+        if not email and username.upper() == "SAIF":
             email = OWNER_EMAIL
 
         defaults = {"is_staff": True, "is_superuser": True}

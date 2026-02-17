@@ -1,5 +1,11 @@
 from django.db import models
 
+from config.constants import (
+    SYSTEM_CODE_DAILY_SALE,
+    SYSTEM_CODE_EXCEL_UPLOAD,
+    SYSTEM_CODE_HOURLY_SALE,
+    SYSTEM_CODE_PRODUCT_SALE,
+)
 from org.models import Brand, Branch, TimestampedModel
 
 
@@ -23,6 +29,10 @@ class ExcelUpload(TimestampedModel):
     ETL: Parse once → save to DB models → mark PROCESSED. UI fetches from DB only.
     """
 
+    system_code = models.CharField(
+        max_length=16, default=SYSTEM_CODE_EXCEL_UPLOAD, db_index=True,
+        help_text="ERP hierarchy code",
+    )
     report_type = models.CharField(max_length=32, choices=ExcelReportType.choices)
     file = models.FileField(upload_to="excel_uploads/")
     uploaded_by = models.ForeignKey(
@@ -48,6 +58,10 @@ class HourlySale(TimestampedModel):
     Parsed Hourly Sales archive. All UI reads from this—never re-reads Excel.
     """
 
+    system_code = models.CharField(
+        max_length=16, default=SYSTEM_CODE_HOURLY_SALE, db_index=True,
+        help_text="ERP hierarchy code",
+    )
     brand = models.ForeignKey(Brand, on_delete=models.PROTECT, db_index=True)
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, db_index=True)
     date = models.DateField(db_index=True)
@@ -70,6 +84,10 @@ class DailySale(TimestampedModel):
     Parsed Daily Sales archive. All UI reads from this—never re-reads Excel.
     """
 
+    system_code = models.CharField(
+        max_length=16, default=SYSTEM_CODE_DAILY_SALE, db_index=True,
+        help_text="ERP hierarchy code",
+    )
     brand = models.ForeignKey(Brand, on_delete=models.PROTECT, db_index=True)
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, db_index=True)
     date = models.DateField(db_index=True)
@@ -94,8 +112,13 @@ class DailySale(TimestampedModel):
 class ProductSale(TimestampedModel):
     """
     Product-level archive (per branch). All UI reads from this—never re-reads Excel.
+    SP1003 - Prep List (PR1002) fetches sales data from this source.
     """
 
+    system_code = models.CharField(
+        max_length=16, default=SYSTEM_CODE_PRODUCT_SALE, db_index=True,
+        help_text="ERP hierarchy code (SP1003)",
+    )
     brand = models.ForeignKey(Brand, on_delete=models.PROTECT, db_index=True)
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, db_index=True)
     date = models.DateField(db_index=True)

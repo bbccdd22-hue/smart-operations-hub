@@ -1,22 +1,37 @@
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 
-export default defineConfig({
-  plugins: [react()],
-  build: {
-    minify: true,
-    cssMinify: true,
-    rollupOptions: {
-      output: {
-        assetFileNames: "assets/[name]-[hash][extname]",
-        chunkFileNames: "assets/[name]-[hash].js",
-        entryFileNames: "assets/[name]-[hash].js",
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), "");
+  const apiBase = env.VITE_API_BASE;
+  const target =
+    apiBase && apiBase.startsWith("http")
+      ? apiBase.replace(/\/api\/?$/, "")
+      : "http://127.0.0.1:8000";
+
+  return {
+    plugins: [react()],
+    server: {
+      port: 5173,
+      host: true,
+      proxy: {
+        "/api": {
+          target,
+          changeOrigin: true,
+        },
       },
     },
-  },
-  server: {
-    port: 5173,
-    host: true, // Listen on 0.0.0.0 for LAN access (e.g. http://192.168.x.x:5173)
-  },
+    build: {
+      minify: true,
+      cssMinify: true,
+      rollupOptions: {
+        output: {
+          assetFileNames: "assets/[name]-[hash][extname]",
+          chunkFileNames: "assets/[name]-[hash].js",
+          entryFileNames: "assets/[name]-[hash].js",
+        },
+      },
+    },
+  };
 });
 

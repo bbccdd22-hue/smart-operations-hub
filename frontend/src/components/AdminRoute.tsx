@@ -5,7 +5,7 @@ type Props = {
   children: React.ReactNode;
 };
 
-/** Admin Hub is for SAIF only. Redirect non-SAIF or non-owner to Shift Closing. */
+/** Admin Hub: سيف، المدير العام، المالك. غيرهم يُعاد إلى الشفت. */
 export default function AdminRoute({ children }: Props) {
   const { user, loading } = useAuth();
 
@@ -17,10 +17,13 @@ export default function AdminRoute({ children }: Props) {
     );
   }
 
-  const isSAIF = user?.username?.toLowerCase() === "saif";
-  const isOwner = user?.role === "owner";
+  const isSAIF = user?.username === "SAIF";
+  const canAccessAdmin =
+    isSAIF ||
+    user?.role === "owner" ||
+    user?.role === "general_manager";
 
-  if (!user || !isSAIF || !isOwner) {
+  if (!user || !canAccessAdmin) {
     return <Navigate to="/shift-closing" replace />;
   }
 

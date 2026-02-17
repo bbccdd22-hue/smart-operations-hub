@@ -139,9 +139,9 @@ export default function SalesVsQuantityChart({
                 type="monotone"
                 dataKey="sales"
                 name="sales"
-                stroke="rgb(16 185 129)"
+                stroke="#00ffcc"
                 strokeWidth={2.5}
-                dot={{ fill: "rgb(16 185 129)", r: 3 }}
+                dot={{ fill: "#00ffcc", r: 3 }}
                 activeDot={{ r: 5 }}
               />
               <Line
@@ -149,10 +149,10 @@ export default function SalesVsQuantityChart({
                 type="monotone"
                 dataKey="qty"
                 name="qty"
-                stroke="rgb(99 102 241)"
+                stroke="rgb(148 163 184)"
                 strokeWidth={2}
                 strokeDasharray="6 4"
-                dot={{ fill: "rgb(99 102 241)", r: 3 }}
+                dot={{ fill: "rgb(148 163 184)", r: 3 }}
                 activeDot={{ r: 5 }}
               />
             </LineChart>

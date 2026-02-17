@@ -1,9 +1,27 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { useAuth } from "../contexts/AuthContext";
+import { useAuth, isOperationsUser } from "../contexts/AuthContext";
+import { useTheme } from "../contexts/ThemeContext";
 import AnimatedBackground from "../components/AnimatedBackground";
+
+/** Clear any stored auth/token data from old network – fixes 403 after IP change */
+function clearStaleAuthState() {
+  try {
+    ["localStorage", "sessionStorage"].forEach((store) => {
+      const s = store === "localStorage" ? localStorage : sessionStorage;
+      const keys: string[] = [];
+      for (let i = 0; i < s.length; i++) {
+        const k = s.key(i);
+        if (k && /auth|token|session|user|csrf/i.test(k)) keys.push(k);
+      }
+      keys.forEach((k) => s.removeItem(k));
+    });
+  } catch {
+    /* ignore */
+  }
+}
 
 export default function LoginPage() {
   const { t, i18n } = useTranslation();
@@ -13,13 +31,22 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
 
   const isRTL = i18n.language === "ar";
+  const { dark, toggleTheme } = useTheme();
+
+  useEffect(() => {
+    clearStaleAuthState();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password) return;
     try {
-      await login(username.trim(), password);
-      navigate("/dashboard");
+      const user = await login(username.trim(), password);
+      if (user && isOperationsUser(user)) {
+        navigate("/", { replace: true });
+      } else {
+        navigate("/dashboard", { replace: true });
+      }
     } catch {
       // Error shown in context
     }
@@ -28,48 +55,82 @@ export default function LoginPage() {
   return (
     <div
       dir={isRTL ? "rtl" : "ltr"}
-      className="relative flex min-h-screen items-center justify-center px-4"
+      className="relative flex min-h-screen min-h-[100dvh] items-center justify-center px-2 py-4 sm:px-4 sm:py-8 md:px-6 md:py-12"
+      style={{ fontFamily: "Inter, Lexend, Tajawal, system-ui, sans-serif" }}
     >
       <AnimatedBackground />
       <motion.div
-        className="relative z-10 w-full max-w-md"
-        initial={{ opacity: 0, y: 20 }}
+        className="relative z-10 w-full max-w-[440px] shrink-0"
+        initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
+        transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
       >
-        <div className="glass-card rounded-3xl p-8 [color:var(--glass-text)]">
-          <div className="mb-4 flex justify-end">
+        {/* Glassmorphism – 25px blur, Emerald gradient border glow */}
+        <div
+          className="overflow-hidden rounded-[28px] p-4 sm:p-6 md:p-8"
+          style={{
+            background: dark ? "rgba(15, 23, 42, 0.58)" : "rgba(248, 250, 252, 0.65)",
+            backdropFilter: "blur(25px)",
+            WebkitBackdropFilter: "blur(25px)",
+            border: dark
+              ? "1px solid rgba(16, 185, 129, 0.25)"
+              : "1px solid rgba(16, 185, 129, 0.3)",
+            boxShadow: dark
+              ? "0 8px 32px rgba(0,0,0,0.3), 0 0 0 1px rgba(255,255,255,0.04) inset, 0 0 28px rgba(16,185,129,0.15), 0 0 0 1px rgba(16,185,129,0.2)"
+              : "0 8px 32px rgba(0,0,0,0.06), 0 0 0 1px rgba(255,255,255,0.6) inset, 0 0 28px rgba(16,185,129,0.12), 0 0 0 1px rgba(16,185,129,0.15)",
+          }}
+        >
+          <div className="mb-6 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="rounded-xl p-2 text-slate-600 transition hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-slate-200"
+              title={dark ? "Light mode" : "Dark mode"}
+              aria-label={dark ? "Light mode" : "Dark mode"}
+            >
+              {dark ? "☀️" : "🌙"}
+            </button>
             <button
               type="button"
               onClick={() => i18n.changeLanguage(isRTL ? "en" : "ar")}
-              className="glass-btn rounded-lg px-3 py-1.5 text-xs [color:var(--glass-text-muted)] hover:[color:var(--glass-text)]"
+              className="rounded-xl px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-100 hover:text-slate-800 dark:text-slate-400 dark:hover:bg-white/10 dark:hover:text-slate-200"
             >
               {isRTL ? "EN" : "عربي"}
             </button>
           </div>
           <div className="mb-6 flex justify-center">
-            <div className="h-16 w-16 rounded-2xl bg-emerald-500/20" />
+            <div
+              className="flex h-14 w-14 items-center justify-center rounded-2xl sm:h-16 sm:w-16"
+              style={{
+                background: "linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(16, 185, 129, 0.08) 100%)",
+              }}
+            >
+              <span className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">S</span>
+            </div>
           </div>
-          <h1 className="text-center text-2xl font-bold tracking-tight">
+          <h1 className="text-center text-xl font-semibold tracking-tight text-slate-800 sm:text-2xl dark:text-white">
             {t("appName")}
           </h1>
-          <p className="mt-2 text-center text-sm [color:var(--glass-text-muted)]">
+          <p className="mt-2 text-center text-sm text-slate-600 dark:text-slate-400">
             {isRTL ? "تسجيل الدخول إلى لوحة التحكم" : "Sign in to your dashboard"}
           </p>
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-5">
             {error && (
               <motion.div
-                initial={{ opacity: 0, y: -10 }}
+                initial={{ opacity: 0, y: -8 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="rounded-xl bg-rose-500/20 px-4 py-3 text-sm text-rose-200"
+                className="rounded-2xl bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:bg-rose-900/30 dark:text-rose-200"
               >
                 {error}
               </motion.div>
             )}
 
             <label className="block">
-              <span className="mb-2 block text-sm font-medium [color:var(--glass-text-muted)]">
+              <span
+                className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-400"
+                style={{ fontFamily: "Inter, sans-serif" }}
+              >
                 {t("username")}
               </span>
               <input
@@ -78,13 +139,16 @@ export default function LoginPage() {
                 onChange={(e) => setUsername(e.target.value)}
                 autoComplete="username"
                 autoFocus
-                className="glass-input w-full rounded-xl px-4 py-3 outline-none transition"
+                className="login-aqua-input w-full min-h-[48px] rounded-2xl px-4 py-3.5 text-base text-slate-800 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/25 dark:text-slate-100"
                 placeholder={isRTL ? "أدخل اسم المستخدم" : "Enter username"}
               />
             </label>
 
             <label className="block">
-              <span className="mb-2 block text-sm font-medium [color:var(--glass-text-muted)]">
+              <span
+                className="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-400"
+                style={{ fontFamily: "Inter, sans-serif" }}
+              >
                 {t("password")}
               </span>
               <input
@@ -92,7 +156,7 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="current-password"
-                className="glass-input w-full rounded-xl px-4 py-3 outline-none transition"
+                className="login-aqua-input w-full min-h-[48px] rounded-2xl px-4 py-3.5 text-base text-slate-800 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/25 dark:text-slate-100"
                 placeholder={isRTL ? "أدخل كلمة المرور" : "Enter password"}
               />
             </label>
@@ -100,13 +164,13 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading || !username.trim() || !password}
-              className="w-full rounded-xl bg-emerald-500 py-3 font-semibold text-white transition hover:bg-emerald-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="w-full min-h-[48px] rounded-2xl bg-emerald-500 py-3.5 font-semibold text-white shadow-lg shadow-emerald-500/25 transition hover:bg-emerald-600 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? "…" : t("signIn")}
             </button>
           </form>
 
-          <p className="mt-6 text-center text-xs [color:var(--glass-text-subtle)]">
+          <p className="mt-6 text-center text-xs text-slate-500 dark:text-slate-500">
             {isRTL ? "للوصول عبر الشبكة المحلية أو الأنفاق الآمنة" : "Access via local network or secure tunnels"}
           </p>
         </div>

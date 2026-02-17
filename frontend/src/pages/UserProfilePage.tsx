@@ -43,7 +43,7 @@ export default function UserProfilePage() {
   }, [id]);
 
   const handleToggleActive = async () => {
-    if (!user || user.username.toLowerCase() === "saif") return;
+    if (!user || user.username === "SAIF") return;
     setTogglingId(true);
     try {
       await updateUser(user.id, { is_active: !user.is_active });
@@ -72,7 +72,7 @@ export default function UserProfilePage() {
   const displayName = user
     ? [user.first_name, user.last_name].filter(Boolean).join(" ") || user.username
     : "";
-  const isSAIF = user?.username?.toLowerCase() === "saif";
+  const isSAIF = user?.username === "SAIF";
 
   if (loading) {
     return (

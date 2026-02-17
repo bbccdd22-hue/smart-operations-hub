@@ -1,0 +1,50 @@
+---
+description: طريقة تشغيل Smart Operations Hub (Backend + Frontend)
+alwaysApply: true
+---
+
+# تشغيل Smart Operations Hub
+
+## الطريقة الموصى بها
+
+تشغيل السيرفرين من ملف واحد:
+
+```
+start_all.bat
+```
+
+يفتح نافذتين: Backend (Django) و Frontend (Vite).
+
+## التشغيل اليدوي (إذا احتجت)
+
+**الطرفية 1 – Backend:**
+```bash
+cd backend
+python manage.py runserver 0.0.0.0:8000 --noreload
+```
+
+**الطرفية 2 – Frontend:**
+```bash
+cd frontend
+set VITE_API_BASE=http://127.0.0.1:8000/api
+npm run dev
+```
+
+## المنافذ والروابط
+
+| السيرفر | المنفذ | الرابط |
+|---------|--------|--------|
+| Backend | 8000 | http://127.0.0.1:8000 |
+| Frontend | 5173 | http://localhost:5173 |
+
+## التحقق من التشغيل
+
+- Backend: `Invoke-WebRequest http://127.0.0.1:8000/api/auth/me/` → يرد 401 بدون auth (طبيعي)
+- Frontend: المتصفح على http://localhost:5173
+- تسجيل الدخول: `SAIF` (أحرف كبيرة)
+
+## ملاحظات مهمة
+
+- استخدم `--noreload` مع Django لاستقرار أفضل على Windows
+- أول تشغيل؟ إنشاء المالك: `cd backend && python manage.py create_owner SAIF 123`
+- دليل استقرار السيرفرات: `docs/SERVER_STABILITY.md`

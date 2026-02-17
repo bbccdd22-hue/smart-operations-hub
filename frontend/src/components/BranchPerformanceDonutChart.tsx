@@ -3,12 +3,12 @@ import { motion } from "framer-motion";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 
 const COLORS = [
-  "rgb(16 185 129)",
-  "rgb(99 102 241)",
-  "rgb(245 158 11)",
-  "rgb(236 72 153)",
-  "rgb(6 182 212)",
-  "rgb(139 92 246)",
+  "#00ffcc",
+  "#00d4aa",
+  "#00aa88",
+  "#008866",
+  "#006655",
+  "#004433",
 ];
 
 type Props = {
@@ -74,15 +74,16 @@ export default function BranchPerformanceDonutChart({
     >
       <div className="p-5 pb-2">
         <h3 className="text-sm font-semibold">Sales by Branch</h3>
-        <div style={{ height }}>
+        {/* Perfect 1:1 circle – aspect-ratio 1 + % radii */}
+        <div className="relative w-full" style={{ aspectRatio: "1" }}>
           <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
+            <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
               <Pie
                 data={chartData}
                 cx="50%"
                 cy="50%"
-                innerRadius={55}
-                outerRadius={85}
+                innerRadius="42%"
+                outerRadius="58%"
                 paddingAngle={2}
                 dataKey="value"
               >

@@ -9,11 +9,12 @@ import {
   createBranch,
   updateBranch,
   deleteBranch,
-  branchDisplayName,
   type Brand,
   type Branch,
   type City,
 } from "../lib/api";
+import { getBranchDisplayName, getBrandDisplayName } from "../lib/localization";
+import { dispatchOrgsChanged } from "../contexts/OrgsContext";
 import AddBranchModal from "../components/AddBranchModal";
 
 export default function BranchesPage() {
@@ -51,6 +52,7 @@ export default function BranchesPage() {
     try {
       await deleteBranch(id);
       setBranches((prev) => prev.filter((b) => b.id !== id));
+      dispatchOrgsChanged();
     } catch {
       // Error could be shown via toast
     } finally {
@@ -95,9 +97,6 @@ export default function BranchesPage() {
                 <th className="w-24 shrink-0 px-4 py-3 text-right font-semibold text-white/90">
                   {t("actions")}
                 </th>
-                <th className="min-w-[5rem] px-4 py-3 text-right font-semibold text-white/90">
-                  {lang === "ar" ? "كود الفرع" : "Branch Code"}
-                </th>
                 <th className="min-w-[10rem] px-4 py-3 text-right font-semibold text-white/90">
                   {lang === "ar" ? "الاسم" : t("name")}
                 </th>
@@ -112,13 +111,13 @@ export default function BranchesPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-white/60">
+                  <td colSpan={4} className="px-4 py-12 text-center text-white/60">
                     Loading…
                   </td>
                 </tr>
               ) : branches.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-12 text-center text-white/60">
+                  <td colSpan={4} className="px-4 py-12 text-center text-white/60">
                     No branches found
                   </td>
                 </tr>
@@ -145,7 +144,7 @@ export default function BranchesPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDelete(b.id, branchDisplayName(b, lang))}
+                          onClick={() => handleDelete(b.id, getBranchDisplayName(b, lang))}
                           disabled={deletingId === b.id}
                           className="rounded-lg p-2 text-white/60 transition hover:bg-rose-500/20 hover:text-rose-300 disabled:opacity-50"
                           title={t("delete")}
@@ -156,14 +155,11 @@ export default function BranchesPage() {
                         </button>
                       </div>
                     </td>
-                    <td className="min-w-[5rem] px-4 py-3 text-right font-mono text-white/90">
-                      {b.branch_code ?? "—"}
-                    </td>
                     <td className="min-w-[10rem] px-4 py-3 text-right font-medium text-white/95">
-                      {branchDisplayName(b, lang)}
+                      {getBranchDisplayName(b, lang)}
                     </td>
                     <td className="min-w-[6rem] px-4 py-3 text-right text-white/70">
-                      {b.brand?.name ?? "—"}
+                      {b.brand ? getBrandDisplayName(b.brand, lang) : "—"}
                     </td>
                     <td className="min-w-[6rem] px-4 py-3 text-right text-white/70">
                       {(lang === "ar" ? b.city?.name_ar : b.city?.name_en) ||
@@ -182,7 +178,7 @@ export default function BranchesPage() {
       <AddBranchModal
         open={modalOpen}
         onClose={handleModalClose}
-        onSuccess={loadBranches}
+        onSuccess={() => { loadBranches(); dispatchOrgsChanged(); }}
         editingBranch={editingBranch}
         brands={brands}
         cities={cities}

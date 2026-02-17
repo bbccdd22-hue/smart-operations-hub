@@ -4,6 +4,7 @@ from analytics.views import (
     DashboardChartView,
     DashboardInsightsView,
     ForecastView,
+    HeartbeatView,
     OwnerDashboardSummaryView,
     PredictDateView,
     SystemHealthView,
@@ -11,6 +12,7 @@ from analytics.views import (
 
 urlpatterns = [
     path("summary/", OwnerDashboardSummaryView.as_view(), name="owner-dashboard-summary"),
+    path("heartbeat/", HeartbeatView.as_view(), name="dashboard-heartbeat"),
     path("insights/", DashboardInsightsView.as_view(), name="dashboard-insights"),
     path("chart-data/", DashboardChartView.as_view(), name="dashboard-chart-data"),
     path("forecast/", ForecastView.as_view(), name="forecast"),

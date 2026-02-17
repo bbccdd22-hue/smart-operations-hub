@@ -4,9 +4,10 @@ import { motion } from "framer-motion";
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from "recharts";
 
 const COLORS = [
-  "rgb(16 185 129)", // emerald
-  "rgb(99 102 241)", // indigo
-  "rgb(245 158 11)", // amber
+  "#00ffcc",
+  "#00d4aa",
+  "#00aa88",
+  "#008866",
 ];
 
 type Props = {
@@ -45,7 +46,7 @@ export default function RevenueSplitChart({ data, height = 280, showFooter, vari
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="page-card flex h-64 items-center justify-center rounded-2xl"
+        className="float-card flex h-64 items-center justify-center rounded-2xl"
       >
         <p className="text-sm [color:var(--glass-text-muted)]">{t("noRevenueData")}</p>
       </motion.div>
@@ -57,20 +58,21 @@ export default function RevenueSplitChart({ data, height = 280, showFooter, vari
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5, delay: 0.1 }}
-      className="page-card rounded-2xl p-5"
+      className="float-card flex flex-col rounded-2xl p-3"
     >
-      <div className="mb-4 flex items-center justify-between">
+      <div className="mb-2 flex items-center justify-between">
         <h3 className="text-sm font-semibold [color:var(--glass-text)]">{t("revenueSplit")}</h3>
       </div>
-      <div style={{ height }}>
+      {/* Perfect 1:1 circle – aspect-square + % radii */}
+      <div className="donut-circle-wrap relative w-full" style={{ aspectRatio: "1" }}>
         <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
+          <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
             <Pie
               data={chartData}
               cx="50%"
               cy="50%"
-              innerRadius={60}
-              outerRadius={90}
+              innerRadius="42%"
+              outerRadius="58%"
               paddingAngle={2}
               dataKey="value"
             >
@@ -82,7 +84,9 @@ export default function RevenueSplitChart({ data, height = 280, showFooter, vari
               contentStyle={{
                 fontSize: "12px",
                 borderRadius: "12px",
-                border: "1px solid rgb(226 232 240)",
+                border: "1px solid rgba(0, 255, 204, 0.2)",
+                backgroundColor: "rgba(15, 23, 42, 0.9)",
+                color: "#e2e8f0",
               }}
               formatter={(value, _name, props) => {
                 const v = value as number | undefined;

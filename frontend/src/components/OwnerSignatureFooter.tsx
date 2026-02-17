@@ -1,8 +1,9 @@
 import { useTranslation } from "react-i18next";
 import { useState } from "react";
 
-const VERSION = "v1.0";
+export const FOOTER_HEIGHT = 28; /* Glass Signature – 28px slim */
 const OWNER_EMAIL = "SAAL.NQ@ICLOUD.COM";
+const SIDEBAR_WIDTH = 260;
 
 export default function OwnerSignatureFooter() {
   const { i18n } = useTranslation();
@@ -11,46 +12,44 @@ export default function OwnerSignatureFooter() {
 
   return (
     <footer
-      className="fixed bottom-0 left-0 right-0 z-40 flex justify-center pb-2 pt-4"
-      style={{ pointerEvents: "none" }}
+      className="signature-footer fixed bottom-0 z-[100] hidden items-center justify-center lg:flex"
+      style={{
+        height: FOOTER_HEIGHT,
+        left: isRTL ? 0 : SIDEBAR_WIDTH,
+        right: isRTL ? SIDEBAR_WIDTH : 0,
+        background: "rgba(5, 10, 20, 0.4)",
+        borderTop: "1px solid rgba(0, 255, 204, 0.08)",
+        backdropFilter: "blur(12px)",
+        WebkitBackdropFilter: "blur(12px)",
+        pointerEvents: "none",
+      }}
     >
-      <div
-        className="signature-footer pointer-events-auto relative rounded-xl px-4 py-2.5"
+      <a
+        href={`mailto:${OWNER_EMAIL}`}
+        className="pointer-events-auto relative flex items-center justify-center gap-1.5 transition hover:opacity-90"
         style={{
           fontFamily: isRTL ? "'Tajawal', sans-serif" : "'Inter', sans-serif",
-          fontWeight: 500,
-          letterSpacing: "0.01em",
+          color: "rgba(148, 163, 184, 0.9)",
+          fontSize: "11px",
+          letterSpacing: "0.03em",
         }}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
       >
-        <a
-          href={`mailto:${OWNER_EMAIL}`}
-          className="flex items-center gap-2 transition hover:opacity-90"
-          style={{ color: "var(--glass-text-muted)" }}
-          onMouseEnter={() => setHovered(true)}
-          onMouseLeave={() => setHovered(false)}
+        <span className="opacity-80" aria-hidden>👑</span>
+        <span>{isRTL ? "بإشراف سيف" : "Directed by"}</span>
+        <span
+          className="font-semibold"
+          style={{
+            color: "#00ffcc",
+            textShadow: hovered ? "0 0 12px rgba(0,255,204,0.5)" : "0 0 8px rgba(0,255,204,0.2)",
+          }}
         >
-          <span className="text-sm opacity-70" aria-hidden>👑</span>
-          <span className="text-sm">
-            {isRTL ? "بإشراف سيف" : "Directed by"}
-          </span>
-          <span
-            className="font-semibold"
-            style={{
-              color: "var(--accent-primary)",
-              textShadow: hovered ? "0 0 12px rgba(124,58,237,0.4)" : "none",
-              transition: "text-shadow 0.2s ease",
-            }}
-          >
-            SAIF
-          </span>
-          <span className="opacity-50">|</span>
-          <span className="tabular-nums text-xs" style={{ color: "var(--glass-text-subtle)" }}>
-            {VERSION}
-          </span>
-        </a>
+          SAIF
+        </span>
         {hovered && (
-          <div
-            className="absolute bottom-full left-1/2 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg px-3 py-2 text-xs"
+          <span
+            className="absolute bottom-full left-1/2 mb-1 -translate-x-1/2 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[11px]"
             style={{
               background: "var(--glass-bg-strong)",
               backdropFilter: "blur(20px)",
@@ -61,9 +60,9 @@ export default function OwnerSignatureFooter() {
             }}
           >
             {OWNER_EMAIL}
-          </div>
+          </span>
         )}
-      </div>
+      </a>
     </footer>
   );
 }

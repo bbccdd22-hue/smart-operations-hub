@@ -148,7 +148,7 @@ export default function SavedViewsDropdown({
         <button
           type="button"
           onClick={() => setSaveModalOpen(true)}
-          className="flex items-center gap-2 rounded-lg border border-[#7C3AED] bg-[#7C3AED]/12 px-3 py-2 text-sm font-medium text-[#7C3AED]"
+          className="flex items-center gap-2 rounded-lg border border-emerald-500 bg-emerald-500/12 px-3 py-2 text-sm font-medium text-emerald-600 dark:text-emerald-400"
         >
           {t("saveCurrentView")}
         </button>
@@ -176,7 +176,7 @@ export default function SavedViewsDropdown({
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-slate-800">{v.name}</span>
                     {v.is_default && (
-                      <span className="text-xs text-[#7C3AED]">★</span>
+                      <span className="text-xs text-emerald-600 dark:text-emerald-400">★</span>
                     )}
                   </div>
                   <div className="flex items-center gap-1">
@@ -186,7 +186,7 @@ export default function SavedViewsDropdown({
                         e.stopPropagation();
                         handleSetDefault(v.id);
                       }}
-                      className="text-xs text-slate-400 hover:text-[#7C3AED]"
+                      className="text-xs text-slate-400 hover:text-emerald-600 dark:text-emerald-400"
                     >
                       ★
                     </button>

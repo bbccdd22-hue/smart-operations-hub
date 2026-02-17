@@ -3,285 +3,781 @@
 @tailwind utilities;
 
 /* ============================================
-   UNIFIED DESIGN SYSTEM — iOS Liquid Glass
-   Single source of truth for colors, borders, fonts.
-   Changes here propagate to ALL tabs and pages.
+   Financial Terminal – Dark Glassmorphism
+   Aqua Emerald #00ffcc | Deep Navy/Charcoal
+   16px radius | High-end financial dashboard
    ============================================ */
 
-/* --- LIGHT MODE (Liquid Glass) --- */
 :root {
-  color-scheme: light dark;
-  /* Liquid Glass base - soft translucent #F0F2F5 at 80%, backdrop-blur */
-  --glass-bg: rgba(240, 242, 245, 0.8);
-  --glass-bg-strong: rgba(240, 242, 245, 0.95);
-  --glass-border: rgba(255, 255, 255, 0.5);
-  --glass-border-subtle: rgba(0, 0, 0, 0.06);
-  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  /* Primary palette */
+  --color-surface: #F8FAFC;
+  --color-surface-elevated: #FFFFFF;
+  --color-charcoal: #1E293B;
+  --color-charcoal-muted: #64748B;
+  --color-emerald: #10B981;
+  --color-emerald-glow: rgba(16, 185, 129, 0.35);
+
+  /* Aqua Emerald – primary for terminal */
+  --aqua-emerald: #00ffcc;
+  --aqua-glow: rgba(0, 255, 204, 0.4);
+  --aqua-glow-subtle: rgba(0, 255, 204, 0.15);
+
+  /* Glass */
+  --glass-bg: rgba(248, 250, 252, 0.85);
+  --glass-bg-strong: rgba(255, 255, 255, 0.95);
+  --glass-border: rgba(148, 163, 184, 0.2);
   --glass-blur: blur(20px) saturate(180%);
+  --glass-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
 
   /* Text */
-  --glass-text: #1e293b;
-  --glass-text-muted: #64748b;
-  --glass-text-subtle: #94a3b8;
+  --glass-text: #1E293B;
+  --glass-text-muted: #64748B;
+  --glass-text-subtle: #94A3B8;
 
   /* Accents */
-  --accent-primary: #7C3AED;
-  --accent-secondary: #00b074;
+  --accent-primary: #10B981;
+  --accent-secondary: #059669;
 
-  /* Page background gradient */
-  --page-bg-start: #f0f2f5;
-  --page-bg-end: #e2e8f0;
-  --page-bg-animated: linear-gradient(135deg, #e8ecf1 0%, #dbe1e8 40%, #e2e8f0 70%, #d1d9e4 100%);
+  /* Layout – 16px radius */
+  --gutter: 24px;
+  --gutter-lg: 32px;
+  --radius: 16px;
+  --radius-lg: 20px;
+
+  /* Page background */
+  --page-bg: linear-gradient(165deg, #F8FAFC 0%, #F1F5F9 35%, #E2E8F0 100%);
+  --page-bg-animated: linear-gradient(165deg, #F8FAFC 0%, #F1F5F9 25%, #E8ECF1 50%, #E2E8F0 75%, #F1F5F9 100%);
 }
 
-/* --- DARK MODE (Deep translucent, vibrant accents) --- */
-.dark {
-  --glass-bg: rgba(30, 41, 59, 0.6);
-  --glass-bg-strong: rgba(30, 41, 59, 0.9);
-  --glass-border: rgba(255, 255, 255, 0.12);
-  --glass-border-subtle: rgba(255, 255, 255, 0.06);
-  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
-  --glass-blur: blur(20px) saturate(180%);
+/* Dark Glassmorphism – Financial Terminal theme */
+.dark,
+.terminal-theme {
+  --glass-bg: rgba(15, 23, 42, 0.6);
+  --glass-bg-strong: rgba(30, 41, 59, 0.75);
+  --glass-border: rgba(0, 255, 204, 0.12);
+  --glass-blur: blur(24px) saturate(160%);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255,255,255,0.04) inset;
 
-  --glass-text: #f1f5f9;
+  --glass-text: #e2e8f0;
   --glass-text-muted: #94a3b8;
   --glass-text-subtle: #64748b;
 
-  --accent-primary: #a78bfa;
-  --accent-secondary: #34d399;
+  --accent-primary: #00ffcc;
+  --accent-secondary: #00d4aa;
+  --aqua-emerald: #00ffcc;
+  --aqua-glow: rgba(0, 255, 204, 0.4);
+  --aqua-glow-subtle: rgba(0, 255, 204, 0.12);
 
-  --page-bg-start: #0f172a;
-  --page-bg-end: #1e1b4b;
-  --page-bg-animated: linear-gradient(135deg, #0f172a 0%, #1e1b4b 40%, #0f172a 70%, #064e3b 100%);
+  --page-bg: linear-gradient(180deg, #020617 0%, #0f172a 35%, #020617 100%);
+  --page-bg-animated: linear-gradient(180deg, #020617 0%, #0f172a 25%, #1e293b 60%, #0f172a 100%);
 }
 
-/* Smooth liquid transition when switching themes */
-html {
-  transition: background-color 0.4s ease, color 0.3s ease;
+@layer base {
+  html {
+    transition: background-color 0.3s ease, color 0.2s ease;
+    scroll-behavior: smooth;
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+  /* Selection – Aqua Emerald tint */
+  ::selection {
+    background: rgba(0, 255, 204, 0.25);
+    color: inherit;
+  }
+  ::-moz-selection {
+    background: rgba(0, 255, 204, 0.25);
+    color: inherit;
+  }
 }
 
-/* ===== Liquid Glassmorphism Utilities ===== */
 @layer components {
-  /* Primary glass card - data cards, tables */
-  .glass-card {
+  /* Dark Glassmorphism cards – semi-transparent, Aqua Emerald accent */
+  .float-card,
+  .aqua-glass-card {
+    background: var(--glass-bg-strong);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(16, 185, 129, 0.15);
+    box-shadow: var(--glass-shadow), 0 0 20px rgba(16, 185, 129, 0.06);
+    border-radius: var(--radius);
+    transition: box-shadow 0.3s ease, transform 0.2s ease, border-color 0.2s ease;
+  }
+
+  .float-card:hover,
+  .aqua-glass-card:hover {
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), 0 0 24px rgba(16, 185, 129, 0.1);
+    border-color: rgba(16, 185, 129, 0.25);
+  }
+
+  .dark .float-card,
+  .dark .aqua-glass-card,
+  .terminal-theme .float-card,
+  .terminal-theme .aqua-glass-card {
+    border-color: rgba(0, 255, 204, 0.15);
+    box-shadow: var(--glass-shadow), 0 0 0 1px rgba(255,255,255,0.03) inset;
+  }
+
+  .dark .float-card:hover,
+  .dark .aqua-glass-card:hover,
+  .terminal-theme .float-card:hover,
+  .terminal-theme .aqua-glass-card:hover {
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5), 0 0 32px rgba(0, 255, 204, 0.1);
+    border-color: rgba(0, 255, 204, 0.25);
+  }
+
+  /* Financial metric glow – glowing numbers */
+  .metric-glow {
+    text-shadow: 0 0 20px var(--aqua-glow-subtle);
+  }
+  .dark .metric-glow,
+  .terminal-theme .metric-glow {
+    text-shadow: 0 0 24px rgba(0, 255, 204, 0.25);
+  }
+
+  /* Table row hover – soft aqua glow */
+  .table-row-hover:hover {
+    background: rgba(0, 255, 204, 0.06);
+    box-shadow: inset 0 0 20px rgba(0, 255, 204, 0.08);
+  }
+
+  /* Layout container – 24–32px gutters */
+  .layout-gutter {
+    padding-left: var(--gutter);
+    padding-right: var(--gutter);
+  }
+
+  .layout-gutter-lg {
+    padding-left: var(--gutter-lg);
+    padding-right: var(--gutter-lg);
+  }
+
+  .glass-card,
+  .page-card {
     background: var(--glass-bg);
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
     border: 1px solid var(--glass-border);
     box-shadow: var(--glass-shadow);
+    border-radius: var(--radius);
     transition: background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
   }
 
-  /* Stronger glass - headers, prominent panels */
   .glass-panel {
     background: var(--glass-bg-strong);
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
     border: 1px solid var(--glass-border);
     box-shadow: var(--glass-shadow);
-    transition: background 0.3s ease, border-color 0.3s ease;
   }
 
-  /* Frosted button/control */
   .glass-btn {
     background: var(--glass-bg);
-    backdrop-filter: blur(12px) saturate(150%);
-    -webkit-backdrop-filter: blur(12px) saturate(150%);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     border: 1px solid var(--glass-border);
-    transition: background 0.2s ease, border-color 0.2s ease;
+    transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
   }
 
   .glass-btn:hover {
     background: var(--glass-bg-strong);
-    border-color: var(--glass-border);
   }
 
-  /* Glass table header */
-  .glass-table-header {
-    background: var(--glass-bg);
-    border-color: var(--glass-border-subtle);
-  }
-
-  /* Glass input - unified for light/dark */
   .glass-input {
     background: var(--glass-bg);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     border: 1px solid var(--glass-border);
     color: var(--glass-text) !important;
-    transition: border-color 0.2s ease, box-shadow 0.2s ease;
   }
 
   .glass-input:focus {
     border-color: var(--accent-primary);
     outline: none;
-    box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.2);
+    box-shadow: 0 0 0 3px var(--aqua-glow-subtle);
   }
 
-  .dark .glass-input:focus {
-    box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.3);
-  }
-
-  .glass-input::placeholder {
-    color: var(--glass-text-subtle);
-  }
-
-  /* Header - light: glass; dark: glass */
-  .header-glass {
-    background: var(--glass-bg-strong) !important;
-    backdrop-filter: var(--glass-blur);
-    -webkit-backdrop-filter: var(--glass-blur);
-    border: 1px solid var(--glass-border) !important;
-    box-shadow: var(--glass-shadow) !important;
-    transition: background 0.3s ease, border-color 0.3s ease;
-  }
-
-  /* Ensure header dropdowns (Notifications, Health) are not clipped */
-  header.glass-panel,
-  header.header-white {
-    overflow: visible !important;
-  }
-  header.glass-panel > div,
-  header.header-white > div {
-    overflow: visible !important;
-  }
-
-  /* [Legacy] header-white - now uses design tokens for light */
+  .header-glass,
   .header-white {
     background: var(--glass-bg-strong) !important;
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
     border: 1px solid var(--glass-border) !important;
-    box-shadow: var(--glass-shadow) !important;
   }
 
   .header-white .text-white,
-  .header-white [class*="text-white"],
-  .header-white .text-emerald-300 {
+  .header-white [class*="text-white"] {
     color: var(--glass-text) !important;
   }
 
-  .header-white .glass-btn,
-  .header-white a.rounded-lg {
-    color: var(--glass-text-muted) !important;
-    border-color: var(--glass-border) !important;
+  /* AppShell sidebar – Dark Glass, minimalist, fixed right for RTL */
+  .app-shell-sidebar {
+    background: rgba(248, 250, 252, 0.82);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border-right: 1px solid rgba(16, 185, 129, 0.12);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.04);
   }
 
-  .header-white .glass-btn:hover,
-  .header-white a:hover {
-    background: var(--glass-bg) !important;
-    color: var(--glass-text) !important;
+  [dir="rtl"] .app-shell-sidebar {
+    border-right: none;
+    border-left: 1px solid rgba(0, 255, 204, 0.12);
+    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.3);
   }
 
-  /* Filter controls - use design tokens */
+  .dark .app-shell-sidebar,
+  .terminal-theme .app-shell-sidebar {
+    background: rgba(15, 23, 42, 0.65);
+    border-right: 1px solid rgba(0, 255, 204, 0.1);
+    box-shadow: 4px 0 32px rgba(0, 0, 0, 0.4);
+  }
+
+  .dark [dir="rtl"] .app-shell-sidebar,
+  .terminal-theme [dir="rtl"] .app-shell-sidebar {
+    border-right: none;
+    border-left: 1px solid rgba(0, 255, 204, 0.1);
+    box-shadow: -4px 0 32px rgba(0, 0, 0, 0.4);
+  }
+
+  /* Emerald glow for active nav */
+  .nav-active-emerald {
+    color: var(--accent-primary);
+    box-shadow: 0 0 0 2px var(--color-emerald-glow);
+  }
+
+  /* Filter controls – Aqua Glass */
   .filter-std {
-    background: var(--glass-bg) !important;
-    border: 1px solid var(--glass-border) !important;
-    color: var(--glass-text) !important;
+    background: rgba(255, 255, 255, 0.5) !important;
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    transition: background 0.2s ease, border-color 0.2s ease;
+    border: 1px solid rgba(16, 185, 129, 0.2) !important;
+    color: var(--glass-text) !important;
+    box-shadow: 0 0 12px rgba(16, 185, 129, 0.05);
   }
 
   .filter-std:focus {
     border-color: var(--accent-primary) !important;
-    outline: none !important;
-    box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.2) !important;
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.15), 0 0 0 2px rgba(16, 185, 129, 0.2) !important;
+  }
+
+  .dark .filter-std {
+    background: rgba(15, 23, 42, 0.5) !important;
+    border-color: rgba(16, 185, 129, 0.15) !important;
   }
 
   .dark .filter-std:focus {
-    box-shadow: 0 0 0 2px rgba(167, 139, 250, 0.3) !important;
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.2), 0 0 0 2px rgba(16, 185, 129, 0.25) !important;
   }
 
-  .filter-std option {
-    background: var(--glass-bg-strong) !important;
-    color: var(--glass-text) !important;
-  }
-
-  .filter-std option:checked {
-    background: var(--accent-primary) !important;
-    color: #ffffff !important;
-  }
-
-  .filter-dropdown {
-    background: var(--glass-bg-strong) !important;
-    backdrop-filter: var(--glass-blur);
-    -webkit-backdrop-filter: var(--glass-blur);
-    border: 1px solid var(--glass-border) !important;
-    box-shadow: var(--glass-shadow) !important;
-    transition: background 0.2s ease, border-color 0.2s ease;
-    max-height: 300px;
-    overflow-y: auto;
-    overflow-x: hidden;
-  }
-
-  /* iOS Glassmorphism scrollbar for filter dropdowns */
-  .filter-dropdown::-webkit-scrollbar {
-    width: 6px;
-  }
-  .filter-dropdown::-webkit-scrollbar-track {
-    background: rgba(0, 0, 0, 0.04);
-    border-radius: 3px;
-  }
-  .filter-dropdown::-webkit-scrollbar-thumb {
-    background: rgba(124, 58, 237, 0.35);
-    border-radius: 3px;
-  }
-  .filter-dropdown::-webkit-scrollbar-thumb:hover {
-    background: rgba(124, 58, 237, 0.5);
-  }
-
-  /* Page content cards - unified (iOS Glassmorphism) */
-  .page-card {
-    background: var(--glass-bg);
-    backdrop-filter: var(--glass-blur);
-    -webkit-backdrop-filter: var(--glass-blur);
+  /* Folder card – tappable, sleek */
+  .folder-card {
+    background: var(--glass-bg-strong);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
     border: 1px solid var(--glass-border);
+    border-radius: var(--radius);
     box-shadow: var(--glass-shadow);
-    transition: background 0.3s ease, border-color 0.3s ease;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
   }
 
-  /* Owner signature footer - glass matching */
-  .signature-footer {
-    background: var(--glass-bg) !important;
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border: 1px solid var(--glass-border) !important;
-    box-shadow: var(--glass-shadow);
-    transition: background 0.3s ease, border-color 0.3s ease;
+  .folder-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  }
+
+  /* Aqua Glass – searchable selects and dropdowns */
+  .aqua-glass-select,
+  .aqua-glass-dropdown {
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .dark .aqua-glass-select,
+  .dark .aqua-glass-dropdown {
+    background: rgba(16, 185, 129, 0.08);
+  }
+
+  /* Login – Aqua Glass inputs (watery glow, text always readable) */
+  .login-aqua-input {
+    background: rgba(255, 255, 255, 0.45);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(148, 163, 184, 0.3);
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  }
+
+  .login-aqua-input::placeholder {
+    color: rgba(100, 116, 139, 0.85);
+  }
+
+  .login-aqua-input:focus {
+    box-shadow: 0 0 24px rgba(16, 185, 129, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  }
+
+  .dark .login-aqua-input {
+    background: rgba(15, 23, 42, 0.5);
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+
+  .dark .login-aqua-input:focus {
+    box-shadow: 0 0 24px rgba(16, 185, 129, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  .dark .login-aqua-input::placeholder {
+    color: rgba(148, 163, 184, 0.65);
+  }
+
+  .login-aqua-select {
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
   }
 }
 
-/* Tajawal (Arabic) / Inter (English) - applied via i18n */
-body {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/* Financial reports – full width, no right gap */
+.finance-full-width {
+  margin-left: -1rem;
+  margin-right: -1rem;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  width: calc(100% + 2rem);
+  max-width: 100vw;
 }
 
-/* ===== Mobile / Touch Optimizations ===== */
-@media (max-width: 640px) {
-  /* Glass cards: comfortable padding on small screens */
-  .glass-card {
-    border-radius: 1rem;
+@media (min-width: 1024px) {
+  .finance-full-width {
+    margin-left: -1.5rem;
+    margin-right: -1.5rem;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+    width: calc(100% + 3rem);
   }
-  .page-card {
-    padding: 1rem !important;
-    min-height: auto !important;
+}
+
+/* Donut chart – 1:1 circle */
+.donut-circle-wrap {
+  width: 100%;
+}
+
+/* [LOCK] Dashboard section heights – prevent collapse; NO 100vh on parent */
+.dashboard-metrics {
+  min-height: 20vh; /* Financial Summary + KPI row */
+}
+.dashboard-charts {
+  min-height: 40vh; /* Sales vs AI + Revenue Distribution + Product charts */
+}
+.dashboard-viewport {
+  width: 100%;
+  margin: 0 auto;
+}
+
+/* App shell – Fixed sidebar; main content LOCKED to remaining viewport */
+.app-shell-root {
+  overflow-x: hidden;
+  width: 100vw;
+  max-width: 100vw;
+}
+.main-content-area {
+  min-width: 0;
+  box-sizing: border-box;
+}
+/* Desktop: main content positioned explicitly – no shift, no overflow */
+@media (min-width: 1024px) {
+  .main-content-area {
+    position: relative;
+    width: calc(100vw - 260px) !important;
+    max-width: calc(100vw - 260px) !important;
+    flex-shrink: 0;
   }
-  /* Touch-friendly tap targets for primary buttons (44px min for accessibility) */
-  nav .glass-btn,
-  header .glass-btn {
-    min-height: 44px;
-    padding: 0.625rem 1rem;
+  /* LTR: main starts at 260px from left (next to sidebar) */
+  .main-content-area.sidebar-left {
+    margin-left: 260px;
+    margin-right: 0;
   }
-  /* Switch: touch-friendly, containment verified */
-  [role="switch"] {
-    min-width: 56px;
-    min-height: 32px;
-    touch-action: manipulation;
+  /* RTL: main starts at 0 (left edge); sidebar fixed on right */
+  .main-content-area.sidebar-right {
+    margin-left: 0;
+    margin-right: 260px;
   }
-  /* Tables: ensure horizontal scroll on small screens */
-  .overflow-x-auto {
-    -webkit-overflow-scrolling: touch;
+}
+.main-content-inner {
+  width: 100%;
+  max-width: 100%;
+}
+
+/* iPad & tablet – charts stay circular, grid scales */
+@media (min-width: 768px) and (max-width: 1024px) {
+  .dashboard-viewport .aspect-square,
+  .dashboard-viewport [style*="aspectRatio"] {
+    min-width: 100px;
+  }
+}
+
+/* Safe area – login and mobile */
+.safe-area-padding {
+  padding-left: max(1rem, env(safe-area-inset-left));
+  padding-right: max(1rem, env(safe-area-inset-right));
+  padding-top: max(2rem, env(safe-area-inset-top));
+  padding-bottom: max(2rem, env(safe-area-inset-bottom));
+}
+
+/* Mobile bottom bar spacing */
+.pb-mobile-nav {
+  padding-bottom: 88px;
+}
+
+@media (min-width: 768px) {
+  .pb-mobile-nav {
+    padding-bottom: 1.5rem;
+  }
+}
+
+/* Main content bottom padding – footer (28px) must not overlap data */
+.pb-content-footer {
+  padding-bottom: 88px; /* mobile nav + safe */
+}
+@media (min-width: 1024px) {
+  .pb-content-footer {
+    padding-bottom: 48px; /* 28px footer + 20px breathing room */
+  }
+}
+
+/* Prevent layout shift on load */
+.layout-stable {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* [DEPRECATED] Do NOT use 100vh constraints – they hide child content */
+
+/* ============================================
+   Chart of Accounts – Tree View (سيف المالي)
+   Emerald accents | Soft badges | Parent–child connectors
+   ============================================ */
+
+.chart-tree .tree-node {
+  background-color: var(--glass-bg-strong, #ffffff);
+  transition: all 0.3s ease;
+}
+
+.chart-tree .account-row:hover {
+  background-color: rgba(0, 255, 204, 0.06); /* لمسة خضراء خفيفة عند المرور */
+}
+
+/* Dark theme: softer hover */
+.dark .chart-tree .account-row:hover,
+.terminal-theme .chart-tree .account-row:hover {
+  background-color: rgba(0, 255, 204, 0.08);
+}
+
+.chart-tree .text-emerald {
+  color: #10b981;
+  font-size: 1.2rem;
+}
+
+.chart-tree .bg-soft-primary {
+  background-color: #e0f2fe;
+  color: #0369a1;
+}
+
+.chart-tree .bg-soft-success {
+  background-color: #d1fae5;
+  color: #065f46;
+}
+
+/* Dark theme badge overrides */
+.dark .chart-tree .bg-soft-primary,
+.terminal-theme .chart-tree .bg-soft-primary {
+  background-color: rgba(59, 130, 246, 0.2);
+  color: #93c5fd;
+}
+
+.dark .chart-tree .bg-soft-success,
+.terminal-theme .chart-tree .bg-soft-success {
+  background-color: rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
+}
+
+/* خط جانبي يربط الأبناء بالأب – RTL: right; LTR: left */
+[dir="rtl"] .chart-tree .child-container {
+  border-right: 1px dashed rgba(203, 213, 225, 0.5);
+  margin-right: 10px;
+}
+
+[dir="ltr"] .chart-tree .child-container {
+  border-left: 1px dashed rgba(203, 213, 225, 0.5);
+  margin-left: 10px;
+}
+
+.dark .chart-tree .child-container,
+.terminal-theme .chart-tree .child-container {
+  border-color: rgba(148, 163, 184, 0.35);
+}
+
+/* محرك بحث – تمييز النتائج (لون أصفر خفيف) */
+.chart-tree .account-row-highlight {
+  background-color: #fff9c4 !important;
+  border: 1px solid #ffeb3b !important;
+}
+
+.dark .chart-tree .account-row-highlight,
+.terminal-theme .chart-tree .account-row-highlight {
+  background-color: rgba(255, 249, 196, 0.35) !important;
+  border-color: rgba(255, 235, 59, 0.5) !important;
+}
+
+/* ============================================
+   قائمة الدخل – الدفعة 2: تصميم واجهة سيف
+   Income Statement – Saif Report Card
+   ============================================ */
+
+.saif-report-card {
+  background: #ffffff;
+  border-radius: 15px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+  padding: 30px;
+  font-family: "Cairo", "Amiri", ui-sans-serif, system-ui, sans-serif;
+}
+
+.dark .saif-report-card,
+.terminal-theme .saif-report-card {
+  background: rgba(30, 41, 59, 0.8);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+}
+
+.saif-report-card .header-info {
+  border-bottom: 2px solid #f1f5f9;
+  margin-bottom: 25px;
+  padding-bottom: 15px;
+}
+
+.dark .saif-report-card .header-info,
+.terminal-theme .saif-report-card .header-info {
+  border-color: rgba(148, 163, 184, 0.3);
+}
+
+.saif-report-card .table-saif {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 8px;
+}
+
+.saif-report-card .table-saif th {
+  background: #f8fafc;
+  color: #64748b;
+  padding: 12px;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.dark .saif-report-card .table-saif th,
+.terminal-theme .saif-report-card .table-saif th {
+  background: rgba(51, 65, 85, 0.5);
+  color: #94a3b8;
+}
+
+.saif-report-card .table-saif td {
+  padding: 15px 12px;
+  background: #ffffff;
+  border-top: 1px solid #f1f5f9;
+  border-bottom: 1px solid #f1f5f9;
+  text-align: center;
+}
+
+.dark .saif-report-card .table-saif td,
+.terminal-theme .saif-report-card .table-saif td {
+  background: rgba(30, 41, 59, 0.5);
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+.saif-report-card .row-title {
+  text-align: right !important;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.dark .saif-report-card .row-title,
+.terminal-theme .saif-report-card .row-title {
+  color: #e2e8f0;
+}
+
+.saif-report-card .val-current {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.dark .saif-report-card .val-current,
+.terminal-theme .saif-report-card .val-current {
+  color: #f1f5f9;
+}
+
+.saif-report-card .val-perc {
+  color: #10b981;
+  font-size: 0.8rem;
+  background: #ecfdf5;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.dark .saif-report-card .val-perc,
+.terminal-theme .saif-report-card .val-perc {
+  background: rgba(16, 185, 129, 0.2);
+  color: #6ee7b7;
+}
+
+.saif-report-card .diff-positive {
+  color: #10b981;
+}
+
+.saif-report-card .diff-negative {
+  color: #ef4444;
+}
+
+.saif-report-card .level-badge {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  border: 1px solid #e2e8f0;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.dark .saif-report-card .level-badge,
+.terminal-theme .saif-report-card .level-badge {
+  border-color: rgba(148, 163, 184, 0.4);
+}
+
+/* قالب قائمة الدخل – فرع العوالي سويت بريد (من HTML) */
+.saif-income-report {
+  font-family: "Cairo", "Tajawal", "Inter", system-ui, sans-serif;
+}
+
+.saif-income-report .report-container {
+  max-width: 1100px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+
+.dark .saif-income-report .report-container,
+.terminal-theme .saif-income-report .report-container {
+  background: rgba(30, 41, 59, 0.9);
+  border-color: rgba(148, 163, 184, 0.3);
+}
+
+.saif-income-report .report-header {
+  background: #10b981;
+  color: white;
+  padding: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.saif-income-report .main-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+}
+
+.dark .saif-income-report .main-table,
+.terminal-theme .saif-income-report .main-table {
+  background: transparent;
+}
+
+.saif-income-report .main-table th {
+  background: #f8fafc;
+  padding: 15px;
+  color: #64748b;
+  font-size: 0.9rem;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.dark .saif-income-report .main-table th,
+.terminal-theme .saif-income-report .main-table th {
+  background: rgba(51, 65, 85, 0.5);
+  border-color: rgba(148, 163, 184, 0.3);
+}
+
+.saif-income-report .main-table td {
+  padding: 14px;
+  border-bottom: 1px solid #f1f5f9;
+  text-align: center;
+}
+
+.dark .saif-income-report .main-table td,
+.terminal-theme .saif-income-report .main-table td {
+  border-color: rgba(148, 163, 184, 0.15);
+}
+
+.saif-income-report .account-name {
+  text-align: right !important;
+  font-weight: bold;
+  color: #1e293b;
+  padding-right: 25px !important;
+}
+
+.dark .saif-income-report .account-name,
+.terminal-theme .saif-income-report .account-name {
+  color: #e2e8f0;
+}
+
+.saif-income-report .perc-tag {
+  background: #ecfdf5;
+  color: #10b981;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-weight: bold;
+  font-size: 0.85rem;
+}
+
+.dark .saif-income-report .perc-tag,
+.terminal-theme .saif-income-report .perc-tag {
+  background: rgba(16, 185, 129, 0.25);
+  color: #6ee7b7;
+}
+
+.saif-income-report .diff-pos {
+  color: #10b981;
+  font-weight: bold;
+}
+
+.saif-income-report .diff-neg {
+  color: #ef4444;
+  font-weight: bold;
+}
+
+.saif-income-report .total-row {
+  background: #10b981 !important;
+  color: white !important;
+  font-weight: bold;
+}
+
+.saif-income-report .total-row td {
+  border: none;
+  padding: 18px;
+}
+
+.saif-income-report .level-label {
+  font-size: 0.7rem;
+  color: #94a3b8;
+  font-weight: normal;
+  display: block;
+}
+
+/* محرك قوائم الدخل v2.0 – إخفاء الفلاتر عند الطباعة */
+@media print {
+  .no-print {
+    display: none !important;
   }
 }

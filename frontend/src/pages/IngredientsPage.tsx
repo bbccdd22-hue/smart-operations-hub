@@ -1,9 +1,11 @@
 import { useState, FormEvent } from "react";
 import { useTranslation } from "react-i18next";
+import FolderCard from "../components/FolderCard";
 import { useNotifications } from "../contexts/NotificationContext";
 import {
   uploadProductCatalog,
   uploadRecipeBOM,
+  logActivity,
   type ProductCatalogUploadResult,
   type RecipeBOMUploadResult,
 } from "../lib/api";
@@ -36,6 +38,12 @@ export default function IngredientsPage() {
       if (isProductCatalog) {
         addToast(t("uploadSuccess"), t("productCatalogSuccess"));
       }
+      logActivity({
+        action_type: "file_upload",
+        page_path: "/inventory/ingredients",
+        file_name: file?.name ?? "",
+        description: isProductCatalog ? "رفع قائمة المنتجات" : "رفع الوصفات (BOM)",
+      });
     } catch (err: unknown) {
       setResult({
         errors: [{ row: 0, error: err instanceof Error ? err.message : "Upload failed" }],
@@ -48,21 +56,43 @@ export default function IngredientsPage() {
   const bomResult = result as RecipeBOMUploadResult;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div>
-        <div className="text-sm text-slate-500 dark:text-slate-400">
-          Recipe & Inventory Management
+        <div className="text-sm font-medium uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          Recipe & Inventory
         </div>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight dark:text-white">
+        <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-800 dark:text-white">
           Bill of Materials (BOM)
         </h1>
         <p className="mt-2 text-sm text-slate-600 dark:text-slate-400">
-          Manage products, ingredients, and recipe mappings. Upload Product Catalog first, then
-          link ingredients via BOM.
+          Manage products, ingredients, and recipe mappings.
         </p>
       </div>
 
-      <div className="glass-card rounded-2xl p-4">
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+        <FolderCard
+          to="/inventory/manage-ingredients"
+          title={t("manageIngredients") ?? "Manage Ingredients"}
+          subtitle="IU1002/IU1003 - Raw materials, packaging, units"
+        />
+        <FolderCard
+          to="/inventory/manage-ingredients?system_group=raw_materials"
+          title={t("rawMaterials") ?? "Raw Materials"}
+          subtitle="RM items - milk, beans, syrups"
+        />
+        <FolderCard
+          to="/inventory/manage-ingredients?system_group=packaging"
+          title={t("packaging") ?? "Packaging"}
+          subtitle="Cups, lids, sleeves"
+        />
+        <FolderCard
+          to="/inventory/manage-ingredients?system_group=other"
+          title={t("other") ?? "Other"}
+          subtitle="Miscellaneous ingredients"
+        />
+      </div>
+
+      <div className="float-card overflow-hidden rounded-[24px] p-6">
         <div className="mb-4 flex gap-2">
           <button
             type="button"
@@ -72,10 +102,10 @@ export default function IngredientsPage() {
               setResult(null);
               setStatus("idle");
             }}
-            className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
+            className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${
               uploadType === "product_catalog"
-                ? "bg-[#00b074]/20 text-[#00b074] dark:bg-emerald-500/30 dark:text-emerald-200"
-                : "bg-white/5 text-white/70 hover:bg-white/10"
+                ? "bg-emerald-500/20 text-emerald-600 dark:bg-emerald-500/30 dark:text-emerald-200"
+                : "text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700"
             }`}
           >
             {t("productCatalogUpload")}
@@ -88,10 +118,10 @@ export default function IngredientsPage() {
               setResult(null);
               setStatus("idle");
             }}
-            className={`rounded-xl px-4 py-2 text-sm font-medium transition ${
+            className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${
               uploadType === "bom"
-                ? "bg-[#00b074]/20 text-[#00b074] dark:bg-emerald-500/30 dark:text-emerald-200"
-                : "bg-white/5 text-white/70 hover:bg-white/10"
+                ? "bg-emerald-500/20 text-emerald-600 dark:bg-emerald-500/30 dark:text-emerald-200"
+                : "text-slate-500 hover:bg-slate-100 dark:text-slate-400 dark:hover:bg-slate-700"
             }`}
           >
             {t("bomUpload")}
@@ -113,7 +143,8 @@ export default function IngredientsPage() {
               BOM / Recipe (Product → Ingredient mappings)
             </h2>
             <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-              Template columns: Product | Ingredient | Qty | Unit (e.g. g, kg, pcs, ml, l)
+              Template: Product | Product SKU (optional) | Ingredient | Ingredient Code (optional) | Qty | Unit.
+              Product SKU links to ProductSale; Ingredient Code saved as serial.
             </p>
           </>
         )}
@@ -177,9 +208,7 @@ export default function IngredientsPage() {
             ) : null}
           </div>
         )}
-      </div>
-
-      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400">
+        <div className="mt-4 rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-sm text-slate-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400">
         <strong>
           {isProductCatalog ? "Product Catalog template (Excel):" : "BOM template (Excel):"}
         </strong>
@@ -188,13 +217,12 @@ export default function IngredientsPage() {
             ? `المنتج        | الوحدة | كود تعريف المنتج | السعر غير شامل الضريبة
 قهوة عربية   | pcs   | COFFEE-001       | 15.00 SAR
 شاي أخضر     | pcs   | TEA-002         | 12.50`
-            : `Product    | Ingredient | Qty   | Unit
-Burger     | Bun       | 1     | pcs
-Burger     | Beef      | 150   | g
-Burger     | Sauce     | 20    | g
-Coffee     | Beans     | 18    | g
-Coffee     | Milk      | 100   | ml`}
+            : `Product  | Product SKU | Ingredient | Ingredient Code | Qty   | Unit
+Pudding  | sku-0108   | Milk       | ING-MILK-01   | 100   | ml
+Pudding  | sku-0108   | Cocoa      | ING-COCOA-02  | 20    | g
+Coffee   |             | Beans      |               | 18    | g`}
         </pre>
+        </div>
       </div>
     </div>
   );

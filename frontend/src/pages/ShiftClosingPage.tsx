@@ -544,36 +544,57 @@ export default function ShiftClosingPage() {
               </div>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <Field
-                  label="System Cash"
-                  value={m.systemCash}
-                  onChange={(v) => setM((p) => ({ ...p, systemCash: v }))}
+                  label={t("shiftTotalSpan")}
+                  value={m.systemNetwork}
+                  onChange={(v) => setM((p) => ({ ...p, systemNetwork: v }))}
                   disabled={isSubmitted}
                 />
                 <Field
-                  label="System Network"
-                  value={m.systemNetwork}
-                  onChange={(v) => setM((p) => ({ ...p, systemNetwork: v }))}
+                  label={t("foodicsCash")}
+                  value={m.systemCash}
+                  onChange={(v) => setM((p) => ({ ...p, systemCash: v }))}
                   disabled={isSubmitted}
                 />
               </div>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 <div className="rounded-xl bg-slate-50 p-3">
-                  <div className="text-xs font-medium text-slate-500">{t("variance")} — {t("network")}</div>
-                  <div className="mt-1 text-lg font-semibold">{formatSAR(varianceNetwork)}</div>
-                  <div className="mt-1 text-xs text-slate-500">Manual network − System network</div>
-                </div>
-                <div className="rounded-xl bg-slate-50 p-3">
-                  <div className="text-xs font-medium text-slate-500">Status</div>
-                  <div className="mt-1 text-sm text-slate-700">
-                    {Math.abs(varianceCash) > 50 || Math.abs(varianceNetwork) > 50 ? (
-                      <span className="font-semibold text-rose-600">Flag: review required</span>
+                  <div className="text-xs font-medium text-slate-500">{t("shiftFoodicsNetwork")}</div>
+                  <div
+                    className={`mt-1 text-lg font-semibold ${Math.abs(varianceNetwork) > 0.5 ? "text-rose-600" : ""}`}
+                  >
+                    {formatSAR(varianceNetwork)}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    Manual network total − {t("shiftTotalSpan")}
+                  </div>
+                  <div className="mt-2 text-xs">
+                    {Math.abs(varianceNetwork) > 0.5 ? (
+                      <span className="font-semibold text-rose-600">{t("shiftStatusMismatch")}</span>
                     ) : (
-                      <span className="font-semibold text-emerald-700">OK</span>
+                      <span className="font-semibold text-emerald-700">{t("shiftStatusOK")}</span>
                     )}
                   </div>
-                  <div className="mt-1 text-xs text-slate-500">Threshold (MVP): 50 SAR</div>
+                </div>
+                <div className="rounded-xl bg-slate-50 p-3">
+                  <div className="text-xs font-medium text-slate-500">{t("shiftFoodicsCash")}</div>
+                  <div
+                    className={`mt-1 text-lg font-semibold ${Math.abs(varianceCash) > 0.5 ? "text-rose-600" : ""}`}
+                  >
+                    {formatSAR(varianceCash)}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-500">
+                    Manual cash − System cash
+                  </div>
+                  <div className="mt-2 text-xs">
+                    {Math.abs(varianceCash) > 0.5 ? (
+                      <span className="font-semibold text-rose-600">{t("shiftStatusMismatch")}</span>
+                    ) : (
+                      <span className="font-semibold text-emerald-700">{t("shiftStatusOK")}</span>
+                    )}
+                  </div>
                 </div>
               </div>
+              <div className="mt-1 text-xs text-slate-500">{t("shiftThresholdLabel")}</div>
             </div>
           </div>
         </section>

@@ -12,12 +12,13 @@ import {
   Cell,
 } from "recharts";
 
-const FALLBACK_COLORS = [
-  "rgb(16 185 129)",
-  "rgb(99 102 241)",
-  "rgb(245 158 11)",
-  "rgb(236 72 153)",
-  "rgb(6 182 212)",
+/* Aqua Emerald gradient shades for terminal theme */
+const AQUA_SHADES = [
+  "#00ffcc",
+  "#00d4aa",
+  "#00aa88",
+  "#008866",
+  "#006655",
 ];
 
 type Props = {
@@ -50,7 +51,7 @@ export default function TopProductsChart({
         .map((d, i) => ({
           ...d,
           name: d.product_name?.slice(0, 30) || "—",
-          fill: FALLBACK_COLORS[i % FALLBACK_COLORS.length],
+          fill: AQUA_SHADES[i % AQUA_SHADES.length],
         })),
     [data]
   );
@@ -62,7 +63,7 @@ export default function TopProductsChart({
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        className="page-card flex flex-col items-center justify-center rounded-2xl"
+        className="float-card flex flex-col items-center justify-center rounded-2xl"
         style={{ minHeight: containerHeight }}
       >
         <p className="text-sm [color:var(--glass-text-muted)]">No product sales data</p>
@@ -76,7 +77,7 @@ export default function TopProductsChart({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.5 }}
-      className="page-card flex flex-col rounded-2xl [color:var(--glass-text)]"
+      className="float-card flex flex-col rounded-2xl [color:var(--glass-text)]"
       style={{ minHeight: containerHeight }}
     >
       <div className="p-5 pb-2">

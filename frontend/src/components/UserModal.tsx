@@ -11,6 +11,8 @@ type UserData = {
   role: string;
   brand_id: number | null;
   branch_id: number | null;
+  brand_ids?: number[];
+  all_brands?: boolean;
 };
 
 type Props = {
@@ -27,10 +29,19 @@ type Props = {
     role: string;
     brand_ids?: number[];
     branch_ids?: number[];
+    all_brands?: boolean;
   }) => Promise<unknown>;
   updateUser: (
     id: number,
-    p: Partial<{ role: string; brand_id: number | null; branch_id: number | null; password: string; email: string }>
+    p: Partial<{
+      role: string;
+      brand_id: number | null;
+      branch_id: number | null;
+      brand_ids: number[];
+      all_brands: boolean;
+      password: string;
+      email: string;
+    }>
   ) => Promise<unknown>;
 };
 
@@ -50,6 +61,8 @@ export default function UserModal({
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<string>("branch_supervisor");
   const [brandId, setBrandId] = useState<number | "">("");
+  const [brandIds, setBrandIds] = useState<number[]>([]);
+  const [allBrands, setAllBrands] = useState(false);
   const [branchId, setBranchId] = useState<number | "">("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -65,6 +78,8 @@ export default function UserModal({
         setEmail(editingUser.email || "");
         setRole(editingUser.role || "branch_supervisor");
         setBrandId(editingUser.brand_id ?? "");
+        setBrandIds(editingUser.brand_ids || []);
+        setAllBrands(editingUser.all_brands || false);
         setBranchId(editingUser.branch_id ?? "");
       } else {
         setUsername("");
@@ -72,6 +87,8 @@ export default function UserModal({
         setEmail("");
         setRole("branch_supervisor");
         setBrandId("");
+        setBrandIds([]);
+        setAllBrands(false);
         setBranchId("");
       }
       setError(null);
@@ -84,13 +101,21 @@ export default function UserModal({
     setSubmitting(true);
     try {
       if (isEdit && editingUser?.id) {
-        await updateUser(editingUser.id, {
+        const payload: Parameters<typeof updateUser>[1] = {
           role,
-          brand_id: brandId ? Number(brandId) : null,
-          branch_id: branchId ? Number(branchId) : null,
           password: password || undefined,
           email: email.trim() || undefined,
-        });
+        };
+        if (role === "brand_manager") {
+          payload.all_brands = allBrands;
+          payload.brand_ids = allBrands ? [] : brandIds;
+          payload.brand_id = null;
+          payload.branch_id = null;
+        } else {
+          payload.brand_id = brandId ? Number(brandId) : null;
+          payload.branch_id = branchId ? Number(branchId) : null;
+        }
+        await updateUser(editingUser.id, payload);
       } else {
         if (!password) {
           setError("Password required");
@@ -102,8 +127,18 @@ export default function UserModal({
           password,
           email: email.trim() || undefined,
           role,
-          brand_ids: brandId ? [Number(brandId)] : undefined,
-          branch_ids: branchId ? [Number(branchId)] : undefined,
+          brand_ids:
+            role === "brand_manager" && !allBrands
+              ? brandIds.length
+                ? brandIds
+                : brandId
+                  ? [Number(brandId)]
+                  : undefined
+              : role === "branch_supervisor" && brandId
+                ? [Number(brandId)]
+                : undefined,
+          all_brands: role === "brand_manager" ? allBrands : undefined,
+          branch_ids: role !== "brand_manager" && branchId ? [Number(branchId)] : undefined,
         });
       }
       onSuccess();
@@ -203,37 +238,85 @@ export default function UserModal({
               </select>
             </div>
 
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-white/80">{t("assignedBrands")}</label>
-              <select
-                value={brandId}
-                onChange={(e) => setBrandId(e.target.value ? Number(e.target.value) : "")}
-                className="glass-input w-full rounded-xl px-4 py-2.5 text-white"
-              >
-                <option value="">{t("selectBrand")}</option>
-                {brands.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {role === "brand_manager" && (
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="all_brands"
+                  checked={allBrands}
+                  onChange={(e) => {
+                    setAllBrands(e.target.checked);
+                    if (e.target.checked) setBrandIds([]);
+                  }}
+                  className="h-4 w-4 rounded border-white/30 bg-white/10 text-[#7c3aed] focus:ring-[#7c3aed]"
+                />
+                <label htmlFor="all_brands" className="text-sm font-medium text-white/80">
+                  {t("allBrands") ?? "All brands (General Manager)"}
+                </label>
+              </div>
+            )}
 
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-white/80">{t("assignedBranches")}</label>
+            {role === "brand_manager" && !allBrands && (
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-white/80">
+                  {t("assignedBrands")} ({t("multiSelect") ?? "Select one or more"})
+                </label>
+                <select
+                  multiple
+                  value={brandIds.map(String)}
+                  onChange={(e) => {
+                    const opts = Array.from(e.target.selectedOptions, (o) => Number(o.value));
+                    setBrandIds(opts);
+                  }}
+                  className="glass-input min-h-[100px] w-full rounded-xl px-4 py-2.5 text-white"
+                >
+                  {brands.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {(role === "branch_supervisor" || role === "owner") && (
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-white/80">{t("assignedBrands")}</label>
+                <select
+                  value={brandId}
+                  onChange={(e) => {
+                    setBrandId(e.target.value ? Number(e.target.value) : "");
+                    setBranchId("");
+                  }}
+                  className="glass-input w-full rounded-xl px-4 py-2.5 text-white"
+                >
+                  <option value="">{t("selectBrand")}</option>
+                  {brands.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {(role === "branch_supervisor" || role === "owner") && (
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-white/80">{t("assignedBranches")}</label>
               <select
                 value={branchId}
                 onChange={(e) => setBranchId(e.target.value ? Number(e.target.value) : "")}
                 className="glass-input w-full rounded-xl px-4 py-2.5 text-white"
               >
                 <option value="">{t("selectBranch")}</option>
-                {branches.map((b) => (
+                {(brandId ? branches.filter((b) => b.brand?.id === Number(brandId)) : branches).map((b) => (
                   <option key={b.id} value={b.id}>
                     {branchDisplayName(b, lang)} ({b.brand?.name})
                   </option>
                 ))}
               </select>
-            </div>
+              </div>
+            )}
 
             <div className="flex gap-3 pt-4">
               <button

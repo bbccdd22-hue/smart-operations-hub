@@ -1,12 +1,24 @@
 """
 Accounting & Reconciliation API.
 """
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
 
 from django.http import HttpResponse
-from rest_framework import permissions, response, views
+from rest_framework import permissions, response, status, views
+from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
+
+from core.permissions import (
+    can_delete_chart_or_users,
+    can_manage_chart_accounts,
+    can_upload_or_modify_data,
+    get_user_profile,
+    is_read_only_role,
+)
 
 from accounting.daily_report import generate_daily_report_excel
+from accounting.models import ChartAccount
+from accounting.serializers import ChartAccountSerializer
 from accounting.services import (
     get_daily_reconciliation,
     get_cash_to_bank,
@@ -342,3 +354,104 @@ class ExportReconciliationView(views.APIView):
         resp = HttpResponse(buffer.read(), content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         resp["Content-Disposition"] = f'attachment; filename="reconciliation_{target}.xlsx"'
         return resp
+
+
+
+
+def _chart_account_has_balance(account):
+    """قاعدة سيف: لا يمكن حذف حساب له رصيد أو حركات."""
+    return bool(getattr(account, "balance", None) and float(account.balance) != 0)
+
+
+class ChartAccountListView(views.APIView):
+    """دليل الشجرة المحاسبية – قائمة + إنشاء."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        qs = ChartAccount.objects.filter(is_active=True).order_by("code")
+        data = ChartAccountSerializer(qs, many=True).data
+        return response.Response(data)
+
+    def post(self, request):
+        if not can_manage_chart_accounts(request.user):
+            return response.Response({"detail": "سيف أو المدير العام فقط"}, status=status.HTTP_403_FORBIDDEN)
+        ser = ChartAccountSerializer(data=request.data)
+        if not ser.is_valid():
+            return response.Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
+        ser.save()
+        return response.Response(ser.data, status=status.HTTP_201_CREATED)
+
+
+class ChartAccountImportBalancesView(views.APIView):
+    """
+    محرك رفع البيانات المالي – تحديث أرصدة الحسابات من ملف الإكسل.
+    POST body: { "balances": { "01": 1000.50, "010201": 500, ... } }
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        if not can_upload_or_modify_data(request.user) or is_read_only_role(get_user_profile(request.user)):
+            return response.Response({"detail": "صلاحية الرفع مطلوبة"}, status=status.HTTP_403_FORBIDDEN)
+        balances = request.data.get("balances")
+        if not isinstance(balances, dict):
+            return response.Response(
+                {"detail": "balances must be an object: { code: amount }"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        updated = 0
+        not_found = []
+        errors = []
+        for code, val in balances.items():
+            code = str(code).strip()
+            if not code:
+                continue
+            try:
+                amount = Decimal(str(val))
+            except (InvalidOperation, TypeError, ValueError):
+                errors.append(f"{code}: invalid amount")
+                continue
+            try:
+                acc = ChartAccount.objects.get(code=code, is_active=True)
+                acc.balance = amount
+                acc.save(update_fields=["balance", "updated_at"])
+                updated += 1
+            except ChartAccount.DoesNotExist:
+                not_found.append(code)
+        return response.Response({
+            "updated": updated,
+            "not_found": not_found[:50],
+            "errors": errors[:20],
+        })
+
+
+class ChartAccountDetailView(views.APIView):
+    """تعديل / حذف حساب (مع فحص الرصيد)."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, pk):
+        if not can_manage_chart_accounts(request.user):
+            return response.Response({"detail": "سيف أو المدير العام – تعديل الشجرة"}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            acc = ChartAccount.objects.get(pk=pk)
+        except ChartAccount.DoesNotExist:
+            return response.Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+        ser = ChartAccountSerializer(acc, data=request.data, partial=True)
+        if not ser.is_valid():
+            return response.Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
+        ser.save()
+        return response.Response(ser.data)
+
+    def delete(self, request, pk):
+        if not can_delete_chart_or_users(request.user):
+            return response.Response({"detail": "سيف فقط – صلاحية حذف الحسابات"}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            acc = ChartAccount.objects.get(pk=pk)
+        except ChartAccount.DoesNotExist:
+            return response.Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+        if _chart_account_has_balance(acc):
+            return response.Response(
+                {"detail": "لا يمكن حذف حساب حقيقي به رصيد أو حركات مالية."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        acc.delete()
+        return response.Response(status=status.HTTP_204_NO_CONTENT)

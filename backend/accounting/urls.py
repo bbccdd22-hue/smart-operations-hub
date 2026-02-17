@@ -3,6 +3,9 @@ from django.urls import path
 from accounting import views
 
 urlpatterns = [
+    path("chart/", views.ChartAccountListView.as_view()),
+    path("chart/import-balances/", views.ChartAccountImportBalancesView.as_view()),
+    path("chart/<int:pk>/", views.ChartAccountDetailView.as_view()),
     path("daily/", views.DailyReconciliationView.as_view()),
     path("cash-to-bank/", views.CashToBankView.as_view()),
     path("discrepancy-alerts/", views.DiscrepancyAlertsView.as_view()),

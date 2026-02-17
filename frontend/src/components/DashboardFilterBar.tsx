@@ -156,9 +156,9 @@ export default function DashboardFilterBar({
     <motion.div
       initial={{ opacity: 0, y: -8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="sticky top-14 z-10 -mx-4 -mt-2 mb-6"
+      className="sticky top-14 z-10 -mt-2 mb-6"
     >
-      <div className="page-card flex flex-wrap items-center gap-3 rounded-xl px-4 py-3">
+      <div className="float-card glass-card flex flex-wrap items-center gap-3 rounded-2xl px-4 py-3 backdrop-blur-xl">
         {/* Brand multi-select [Ref: 872afa] Smart positioning, scrollable, mobile bottom sheet */}
         <div ref={brandRef} className="relative flex items-center gap-2">
           <span className="w-12 shrink-0 text-xs font-medium text-slate-600 dark:text-slate-400">{t("brand")}</span>
@@ -188,7 +188,7 @@ export default function DashboardFilterBar({
                   transition={{ type: "tween", duration: 0.25 }}
                   className={`filter-dropdown z-50 rounded-xl py-2 ${
                     isMobile
-                      ? "fixed bottom-0 left-0 right-0 max-h-[70vh] w-full rounded-b-none rounded-t-2xl border-t-2 border-[#7C3AED]/30 shadow-2xl"
+                      ? "fixed bottom-0 left-0 right-0 max-h-[70vh] w-full rounded-b-none rounded-t-2xl border-t-2 border-[#10B981]/30 shadow-2xl"
                       : `absolute top-full mt-1 w-64 ${isRTL ? "right-0" : "left-0"}`
                   }`}
                 >
@@ -196,7 +196,7 @@ export default function DashboardFilterBar({
                     <button
                       type="button"
                       onClick={selectAllBrands}
-                      className="text-xs font-medium text-[#7C3AED] hover:underline"
+                      className="text-xs font-medium text-[#10B981] hover:underline"
                     >
                       {t("all")}
                     </button>
@@ -227,7 +227,7 @@ export default function DashboardFilterBar({
                           type="checkbox"
                           checked={selectedBrands.includes(b.slug)}
                           onChange={() => toggleBrand(b.slug)}
-                          className="h-4 w-4 rounded border-slate-300 text-[#7C3AED] focus:ring-[#7C3AED]"
+                          className="h-4 w-4 rounded border-slate-300 text-[#10B981] focus:ring-[#10B981]"
                         />
                         <span className="text-sm text-slate-700 dark:text-slate-200">{brandDisplayName(b, i18n.language)}</span>
                       </label>
@@ -286,7 +286,7 @@ export default function DashboardFilterBar({
                   transition={{ type: "tween", duration: 0.25 }}
                   className={`filter-dropdown z-50 rounded-xl py-2 ${
                     isMobile
-                      ? "fixed bottom-0 left-0 right-0 max-h-[70vh] w-full rounded-b-none rounded-t-2xl border-t-2 border-[#7C3AED]/30 shadow-2xl"
+                      ? "fixed bottom-0 left-0 right-0 max-h-[70vh] w-full rounded-b-none rounded-t-2xl border-t-2 border-[#10B981]/30 shadow-2xl"
                       : `absolute top-full mt-1 w-64 ${isRTL ? "right-0" : "left-0"}`
                   }`}
                 >
@@ -294,7 +294,7 @@ export default function DashboardFilterBar({
                     <button
                       type="button"
                       onClick={selectAllBranches}
-                      className="text-xs font-medium text-[#7C3AED] hover:underline"
+                      className="text-xs font-medium text-[#10B981] hover:underline"
                     >
                       {t("all")}
                     </button>
@@ -325,11 +325,11 @@ export default function DashboardFilterBar({
                           type="checkbox"
                           checked={selectedBranches.includes(b.id)}
                           onChange={() => toggleBranch(b.id)}
-                          className="h-4 w-4 rounded border-slate-300 text-[#7C3AED] focus:ring-[#7C3AED]"
+                          className="h-4 w-4 rounded border-slate-300 text-[#10B981] focus:ring-[#10B981]"
                         />
                         <span className="text-sm text-slate-700 dark:text-slate-200">{branchDisplayName(b, i18n.language)}</span>
                         {submittedBranchIds.includes(b.id) && (
-                          <span className="text-[#7C3AED]" title="Shift submitted">
+                          <span className="text-[#10B981]" title="Shift submitted">
                             ✓
                           </span>
                         )}
@@ -355,7 +355,7 @@ export default function DashboardFilterBar({
                 whileTap={{ scale: 0.98 }}
                 className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
                   isActive
-                    ? "border-[#7C3AED] bg-[#7C3AED]/12 text-[#7C3AED]"
+                    ? "border-[#10B981] bg-[#10B981]/12 text-[#10B981]"
                     : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
                 }`}
               >
@@ -370,7 +370,7 @@ export default function DashboardFilterBar({
             whileTap={{ scale: 0.98 }}
             className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition ${
               isCustom
-                ? "border-[#7C3AED] bg-[#7C3AED]/12 text-[#7C3AED]"
+                ? "border-[#10B981] bg-[#10B981]/12 text-[#10B981]"
                 : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
             }`}
           >
@@ -414,7 +414,7 @@ export default function DashboardFilterBar({
             disabled={refreshing}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            className="flex items-center gap-2 rounded-lg border border-[#7C3AED] bg-[#7C3AED]/12 px-4 py-2 text-sm font-medium text-[#7C3AED] transition hover:bg-[#7C3AED]/20 disabled:cursor-not-allowed disabled:opacity-70"
+            className="flex items-center gap-2 rounded-lg border border-[#10B981] bg-[#10B981]/12 px-4 py-2 text-sm font-medium text-[#10B981] transition hover:bg-[#10B981]/20 disabled:cursor-not-allowed disabled:opacity-70"
           >
             <RefreshIcon spin={refreshing} className="shrink-0" />
             <span>{refreshing ? t("loading") : t("refreshData")}</span>

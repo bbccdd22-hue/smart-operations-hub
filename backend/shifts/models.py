@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.conf import settings
 from django.db import models
 
+from config.constants import SYSTEM_CODE_SHIFT, SYSTEM_CODE_SHIFT_CLOSING
 from org.models import Branch, TimestampedModel
 
 
@@ -18,6 +19,10 @@ class ShiftType(models.TextChoices):
 
 
 class Shift(TimestampedModel):
+    system_code = models.CharField(
+        max_length=16, default=SYSTEM_CODE_SHIFT, db_index=True,
+        help_text="ERP hierarchy code",
+    )
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name="shifts")
     status = models.CharField(max_length=16, choices=ShiftStatus.choices, default=ShiftStatus.OPEN)
     shift_type = models.CharField(
@@ -51,6 +56,10 @@ class ShiftClosing(TimestampedModel):
     - Variances: cash + network computed separately
     """
 
+    system_code = models.CharField(
+        max_length=16, default=SYSTEM_CODE_SHIFT_CLOSING, db_index=True,
+        help_text="ERP hierarchy code",
+    )
     shift = models.OneToOneField(Shift, on_delete=models.CASCADE, related_name="closing")
 
     # Denominations (SAR)

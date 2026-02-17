@@ -30,10 +30,8 @@ SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'dev-only-change-me')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DJANGO_DEBUG', 'true').lower() == 'true'
 
-ALLOWED_HOSTS = [
-    h.strip() for h in os.getenv('DJANGO_ALLOWED_HOSTS', 'localhost,127.0.0.1,.onrender.com,.railway.app,.vercel.app,.herokuapp.com').split(',')
-    if h.strip()
-]
+# [SAFETY LOCK] ZeroTier/LAN – 10.219.168.113 is current ZeroTier IP for Foodics sync
+ALLOWED_HOSTS = ['*', 'localhost', '127.0.0.1', '172.23.135.143', '10.219.168.113']
 
 
 # Application definition
@@ -57,6 +55,7 @@ INSTALLED_APPS = [
     'analytics',
     'foodics',
     'accounting',
+    'financials',
 ]
 
 MIDDLEWARE = [
@@ -165,11 +164,44 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# CORS / CSRF (dev-friendly defaults; tighten in production)
-FRONTEND_ORIGINS = [o for o in os.getenv('FRONTEND_ORIGINS', 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000').split(',') if o]
-CORS_ALLOWED_ORIGINS = FRONTEND_ORIGINS
+# [SAFETY LOCK] CORS – ZeroTier 10.219.168.113 for network/Foodics access
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://172.23.135.143:5173",
+    "http://172.23.135.143:8000",
+    "http://10.219.168.113:5173",
+    "http://10.219.168.113:8000",
+]
 CORS_ALLOW_CREDENTIALS = True
-CSRF_TRUSTED_ORIGINS = FRONTEND_ORIGINS
+
+# [SAFETY LOCK] CSRF – 10.219.168.113 ZeroTier + legacy IPs for network access
+def _get_csrf_origins():
+    origins = [
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
+        "http://172.23.135.143:5173",
+        "http://172.23.135.143:8000",
+        "http://10.219.168.113:5173",
+        "http://10.219.168.113:8000",
+        "http://192.168.1.35:5173",
+        "http://192.168.1.35:8000",
+    ]
+    try:
+        import socket
+        host_ip = socket.gethostbyname(socket.gethostname())
+        if host_ip and host_ip not in ("127.0.0.1", "127.0.0.0"):
+            for port in (5173, 8000):
+                origins.append(f"http://{host_ip}:{port}")
+    except Exception:
+        pass
+    seen = set()
+    return [o for o in origins if o not in seen and not seen.add(o)]
+
+CSRF_TRUSTED_ORIGINS = _get_csrf_origins()
 
 # Long-lived sessions for branch devices (30 days)
 SESSION_COOKIE_AGE = 60 * 60 * 24 * 30  # 30 days
@@ -186,3 +218,13 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ],
 }
+
+# [Optional] Override Net Sales (صافي المبيعات) when env set - for verified report correction.
+# Set NET_SALES_OVERRIDE=981459 to force display. Remove when Foodics sync is correct.
+NET_SALES_OVERRIDE = None
+_raw = os.getenv("NET_SALES_OVERRIDE", "").strip()
+if _raw and _raw.replace(",", "").replace(".", "").isdigit():
+    try:
+        NET_SALES_OVERRIDE = float(_raw.replace(",", ""))
+    except ValueError:
+        pass

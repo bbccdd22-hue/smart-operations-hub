@@ -9,6 +9,8 @@ import {
   deleteBrand,
   type Brand,
 } from "../lib/api";
+import { dispatchOrgsChanged } from "../contexts/OrgsContext";
+import { getBrandDisplayName } from "../lib/localization";
 import AddBrandModal from "../components/AddBrandModal";
 
 export default function BrandsPage() {
@@ -43,6 +45,7 @@ export default function BrandsPage() {
     try {
       await deleteBrand(id);
       setBrands((prev) => prev.filter((b) => b.id !== id));
+      dispatchOrgsChanged();
     } catch {
       // Error could be shown via toast
     } finally {
@@ -85,9 +88,6 @@ export default function BrandsPage() {
                 <th className="w-24 shrink-0 px-4 py-3 text-right font-semibold text-white/90">
                   {lang === "ar" ? "إجراءات" : t("actions")}
                 </th>
-                <th className="min-w-[5rem] px-4 py-3 text-right font-semibold text-white/90">
-                  {lang === "ar" ? "كود العلامة" : "Brand Code"}
-                </th>
                 <th className="min-w-[8rem] px-4 py-3 text-right font-semibold text-white/90">
                   {lang === "ar" ? "الاسم" : t("name")}
                 </th>
@@ -98,14 +98,14 @@ export default function BrandsPage() {
             </thead>
             <tbody>
               {loading ? (
+                  <tr>
+                    <td colSpan={3} className="px-4 py-12 text-center text-white/60">
+                      Loading…
+                    </td>
+                  </tr>
+                ) : brands.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-12 text-center text-white/60">
-                    Loading…
-                  </td>
-                </tr>
-              ) : brands.length === 0 ? (
-                <tr>
-                  <td colSpan={4} className="px-4 py-12 text-center text-white/60">
+                  <td colSpan={3} className="px-4 py-12 text-center text-white/60">
                     No brands found
                   </td>
                 </tr>
@@ -132,7 +132,7 @@ export default function BrandsPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDelete(b.id, b.name)}
+                          onClick={() => handleDelete(b.id, getBrandDisplayName(b, lang))}
                           disabled={deletingId === b.id}
                           className="rounded-lg p-2 text-white/60 transition hover:bg-rose-500/20 hover:text-rose-300 disabled:opacity-50"
                           title={t("delete")}
@@ -143,11 +143,8 @@ export default function BrandsPage() {
                         </button>
                       </div>
                     </td>
-                    <td className="min-w-[5rem] px-4 py-3 text-right font-mono text-white/90">
-                      {(b as { brand_code?: string }).brand_code || "—"}
-                    </td>
                     <td className="min-w-[8rem] px-4 py-3 text-right font-medium text-white/95">
-                      {b.name}
+                      {getBrandDisplayName(b, lang)}
                     </td>
                     <td className="min-w-[6rem] px-4 py-3 text-right text-white/70">
                       {b.slug}
@@ -163,7 +160,7 @@ export default function BrandsPage() {
       <AddBrandModal
         open={modalOpen}
         onClose={handleModalClose}
-        onSuccess={loadBrands}
+        onSuccess={() => { loadBrands(); dispatchOrgsChanged(); }}
         editingBrand={editingBrand}
         createBrand={createBrand}
         updateBrand={updateBrand}

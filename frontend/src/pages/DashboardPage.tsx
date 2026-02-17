@@ -68,9 +68,9 @@ function daysToDateRange(days: number): DateRange {
 }
 
 export default function DashboardPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user } = useAuth();
-  const isSAIF = user?.username?.toLowerCase() === "saif" && user?.role === "owner";
+  const isSAIF = user?.username === "SAIF" && user?.role === "owner";
   const defaultViewLoaded = useRef(false);
 
   const [brandsRaw, setBrandsRaw] = useState<Awaited<ReturnType<typeof fetchBrands>>>([]);
@@ -200,6 +200,9 @@ export default function DashboardPage() {
   }, [refreshKey, selectedBrands, selectedReportType, dateFrom, dateTo, selectedBranches]);
 
   const netSales = summary?.totals?.system_total_sales ?? 0;
+  const financial = summary?.financial_summary;
+  /** Net Sales for display: prefer financial_summary.total_sales (payments report) when available, else system_total_sales */
+  const displayNetSales = financial?.total_sales ?? netSales;
   const ordersCount = summary?.totals?.orders_count ?? 0;
   const shiftsCount = summary?.totals?.shifts_count ?? 0;
   const totalVariance = summary?.totals?.total_variance ?? 0;
@@ -219,20 +222,13 @@ export default function DashboardPage() {
     (netSales === 0 || netSales == null) &&
     (summary?.totals?.shifts_count ?? 0) === 0;
 
-  const financial = summary?.financial_summary;
-
   return (
-    <div className="min-h-[calc(100vh-8rem)] w-full space-y-6">
-      <div className="flex items-end justify-between">
-        <div>
-          <div className="text-sm [color:var(--glass-text-muted)]">{t("dashboard")}</div>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight [color:var(--glass-text)]">
-            {t("appName")}
-          </h1>
-        </div>
-      </div>
-
-      <DashboardFilterBar
+    <div
+      className="dashboard-viewport flex w-full max-w-full flex-col gap-1.5 overflow-x-hidden md:gap-2"
+      style={{ width: "100%", margin: "0 auto", minHeight: 0 }}
+    >
+      <div className="shrink-0">
+        <DashboardFilterBar
         brands={brands}
         branches={branches}
         selectedBrands={selectedBrands}
@@ -251,13 +247,14 @@ export default function DashboardPage() {
         onDateRangeChange={setDateRange}
         onRefresh={handleRefresh}
         onApplySavedView={handleApplySavedView}
-      />
+        />
+      </div>
 
       {error && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="page-card rounded-2xl border-amber-200 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:text-amber-200"
+          className="shrink-0 float-card rounded-2xl border-amber-200 px-4 py-3 text-sm text-amber-800 dark:border-amber-800 dark:text-amber-200"
         >
           {error}
         </motion.div>
@@ -267,70 +264,39 @@ export default function DashboardPage() {
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="page-card rounded-2xl px-6 py-8 text-center"
+          className="flex flex-1 items-center justify-center float-card rounded-2xl px-6 py-8 text-center"
         >
-          <div className="text-4xl">📊</div>
-          <h3 className="mt-3 text-lg font-semibold [color:var(--glass-text)]">{t("dashboard")}</h3>
-          <p className="mt-2 text-sm [color:var(--glass-text-muted)]">{t("noDataForSelection")}</p>
-          <p className="mt-1 text-xs [color:var(--glass-text-subtle)]">{t("noDataHint")}</p>
+          <div>
+            <div className="text-4xl">📊</div>
+            <h3 className="mt-3 text-lg font-semibold [color:var(--glass-text)]">{t("dashboard")}</h3>
+            <p className="mt-2 text-sm [color:var(--glass-text-muted)]">{t("noDataForSelection")}</p>
+            <p className="mt-1 text-xs [color:var(--glass-text-subtle)]">{t("noDataHint")}</p>
+          </div>
         </motion.div>
       )}
 
-      {/* Insights Section */}
-      {insights.length > 0 && (
-        <motion.section
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="page-card rounded-xl p-5"
-        >
-          <h2 className="text-sm font-semibold [color:var(--glass-text)]">{t("insights")}</h2>
-          <p className="mt-0.5 text-xs [color:var(--glass-text-muted)]">{t("insightsSubtitle")}</p>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {insights.map((ins, i) => {
-              const title = ins.title_key ? t(ins.title_key) : (ins as { title?: string }).title || "";
-              const msg = ins.message_key
-                ? t(ins.message_key, ins.params || {})
-                : (ins as { message?: string }).message || "";
-              return (
-                <div
-                  key={i}
-                  className={`page-card rounded-xl px-4 py-3 text-sm ${
-                    ins.type === "success"
-                      ? "border-emerald-200"
-                      : ins.type === "alert"
-                        ? "border-rose-200"
-                        : ins.type === "warning"
-                          ? "border-amber-200"
-                          : "border-slate-200"
-                  }`}
-                >
-                  <div className="font-semibold [color:var(--glass-text)]">{title}</div>
-                  <div className="mt-1 text-xs [color:var(--glass-text-muted)]">
-                    {msg || (ins.title_key === "insightZeroVarianceNone" ? t("insightZeroVarianceNoneMsg") : "")}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </motion.section>
-      )}
-
+      {/* Main content: overflow-y auto on data only; header/footer remain visible */}
+      {!hasNoData && (
+        <div className="dashboard-scroll flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto overflow-x-hidden md:gap-2" style={{ width: "100%", margin: "0 auto" }}>
+          <div className="dashboard-data flex min-h-0 flex-1 flex-col gap-1.5 md:gap-2">
+      {/* Metrics block: Financial Summary + KPI (locked ~20% min-height) */}
+      <div className="dashboard-metrics flex flex-col gap-1.5 md:gap-2">
       {/* Financial Summary - Payments Report ONLY [Ref: 86561c, 873374, 874561] */}
       {financial && (
         <motion.section
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          className="w-full"
+          className="w-full shrink-0"
         >
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold [color:var(--glass-text)]">{t("financialSummary")}</h2>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-1.5">
+            <h2 className="text-xs font-semibold text-slate-300">{t("financialSummary")}</h2>
             <div className="flex gap-1 rounded-lg border border-[var(--glass-border)] bg-[var(--glass-bg)] p-0.5">
               <button
                 type="button"
                 onClick={() => setDeliveryViewMode("total")}
                 className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
                   deliveryViewMode === "total"
-                    ? "bg-[#7C3AED] text-white"
+                    ? "bg-[#00ffcc] text-slate-900"
                     : "[color:var(--glass-text-muted)] hover:[color:var(--glass-text)]"
                 }`}
               >
@@ -341,7 +307,7 @@ export default function DashboardPage() {
                 onClick={() => setDeliveryViewMode("detailed")}
                 className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
                   deliveryViewMode === "detailed"
-                    ? "bg-[#7C3AED] text-white"
+                    ? "bg-[#00ffcc] text-slate-900"
                     : "[color:var(--glass-text-muted)] hover:[color:var(--glass-text)]"
                 }`}
               >
@@ -349,46 +315,46 @@ export default function DashboardPage() {
               </button>
             </div>
           </div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 md:gap-2">
             {deliveryViewMode === "total" ? (
               <>
-                <div className="page-card flex flex-col rounded-2xl p-4 sm:min-h-[100px]">
-                  <div className="text-xs font-medium uppercase tracking-wider [color:var(--glass-text-muted)]">
+                <div className="float-card flex flex-col rounded-2xl p-3 sm:min-h-[60px]">
+                  <div className="text-xs font-medium uppercase tracking-wider text-slate-400">
                     {t("foodicsCash")}
                   </div>
-                  <div className="mt-2 text-xl font-bold [color:var(--glass-text)]">
+                  <div className="metric-glow mt-2 text-xl font-bold text-slate-100">
                     {sar(financial?.cash_foodics ?? 0)}
                   </div>
                 </div>
-                <div className="page-card flex flex-col rounded-2xl p-4 sm:min-h-[100px]">
-                  <div className="text-xs font-medium uppercase tracking-wider [color:var(--glass-text-muted)]">
+                <div className="float-card flex flex-col rounded-2xl p-3 sm:min-h-[60px]">
+                  <div className="text-xs font-medium uppercase tracking-wider text-slate-400">
                     {t("span")}
                   </div>
-                  <div className="mt-2 text-xl font-bold [color:var(--glass-text)]">
+                  <div className="metric-glow mt-2 text-xl font-bold text-slate-100">
                     {sar(financial?.span ?? 0)}
                   </div>
                 </div>
-                <div className="page-card flex flex-col rounded-2xl p-4 sm:min-h-[100px]">
-                  <div className="text-xs font-medium uppercase tracking-wider [color:var(--glass-text-muted)]">
+                <div className="float-card flex flex-col rounded-2xl p-3 sm:min-h-[60px]">
+                  <div className="text-xs font-medium uppercase tracking-wider text-slate-400">
                     {t("netSalesLabel")}
                   </div>
-                  <div className="mt-2 text-xl font-bold [color:var(--glass-text)]">
+                  <div className="metric-glow mt-2 text-xl font-bold text-slate-100">
                     {sar(financial?.total_sales ?? netSales)}
                   </div>
                 </div>
               </>
             ) : (
               <>
-                <div className="page-card flex flex-col rounded-2xl p-4 sm:min-h-[100px]">
-                  <div className="text-xs font-medium uppercase tracking-wider [color:var(--glass-text-muted)]">
+                <div className="float-card flex flex-col rounded-2xl p-3 sm:min-h-[60px]">
+                  <div className="text-xs font-medium uppercase tracking-wider text-slate-400">
                     {t("foodicsCash")}
                   </div>
-                  <div className="mt-2 text-xl font-bold [color:var(--glass-text)]">
+                  <div className="metric-glow mt-2 text-xl font-bold text-slate-100">
                     {sar(financial?.cash_foodics ?? 0)}
                   </div>
                   {(financial?.cash_foodics_breakdown ?? []).length > 0 && (
                     <div className="mt-2 space-y-1 border-t border-[var(--glass-border)] pt-2">
-                      {financial.cash_foodics_breakdown.map((b) => (
+                      {(financial?.cash_foodics_breakdown ?? []).map((b) => (
                         <div
                           key={`cash-${b.branch_id}`}
                           className="flex justify-between text-xs [color:var(--glass-text-muted)]"
@@ -400,16 +366,16 @@ export default function DashboardPage() {
                     </div>
                   )}
                 </div>
-                <div className="page-card flex flex-col rounded-2xl p-4 sm:min-h-[100px]">
-                  <div className="text-xs font-medium uppercase tracking-wider [color:var(--glass-text-muted)]">
+                <div className="float-card flex flex-col rounded-2xl p-3 sm:min-h-[60px]">
+                  <div className="text-xs font-medium uppercase tracking-wider text-slate-400">
                     {t("span")}
                   </div>
-                  <div className="mt-2 text-xl font-bold [color:var(--glass-text)]">
+                  <div className="metric-glow mt-2 text-xl font-bold text-slate-100">
                     {sar(financial?.span ?? 0)}
                   </div>
                   {(financial?.span_breakdown ?? []).length > 0 && (
                     <div className="mt-2 space-y-1 border-t border-[var(--glass-border)] pt-2">
-                      {financial.span_breakdown!.map((b) => (
+                      {(financial?.span_breakdown ?? []).map((b) => (
                         <div
                           key={`span-${b.branch_id}`}
                           className="flex justify-between text-xs [color:var(--glass-text-muted)]"
@@ -421,16 +387,16 @@ export default function DashboardPage() {
                     </div>
                   )}
                 </div>
-                <div className="page-card flex flex-col rounded-2xl p-4 sm:min-h-[100px]">
-                  <div className="text-xs font-medium uppercase tracking-wider [color:var(--glass-text-muted)]">
+                <div className="float-card flex flex-col rounded-2xl p-3 sm:min-h-[60px]">
+                  <div className="text-xs font-medium uppercase tracking-wider text-slate-400">
                     {t("netSalesLabel")}
                   </div>
-                  <div className="mt-2 text-xl font-bold [color:var(--glass-text)]">
+                  <div className="metric-glow mt-2 text-xl font-bold text-slate-100">
                     {sar(financial?.total_sales ?? netSales)}
                   </div>
                   {(financial?.total_sales_breakdown ?? []).length > 0 && (
                     <div className="mt-2 space-y-1 border-t border-[var(--glass-border)] pt-2">
-                      {financial.total_sales_breakdown!.map((b) => (
+                      {(financial?.total_sales_breakdown ?? []).map((b) => (
                         <div
                           key={`sales-${b.branch_id}`}
                           className="flex justify-between text-xs [color:var(--glass-text-muted)]"
@@ -445,11 +411,11 @@ export default function DashboardPage() {
               </>
             )}
             {deliveryViewMode === "total" ? (
-              <div className="page-card flex flex-col rounded-2xl p-4 sm:min-h-[100px]">
-                <div className="text-xs font-medium uppercase tracking-wider [color:var(--glass-text-muted)]">
+              <div className="float-card flex flex-col rounded-2xl p-3 sm:min-h-[60px]">
+                <div className="text-xs font-medium uppercase tracking-wider text-slate-400">
                   {t("deliveryApps")}
                 </div>
-                <div className="mt-2 text-xl font-bold [color:var(--glass-text)]">
+                <div className="metric-glow mt-2 text-xl font-bold text-slate-100">
                   {sar(financial?.delivery_apps ?? 0)}
                 </div>
               </div>
@@ -457,17 +423,17 @@ export default function DashboardPage() {
               (financial?.delivery_apps_breakdown ?? []).map((app) => (
                 <div
                   key={app.app_name}
-                  className="page-card flex flex-col rounded-2xl p-4 sm:min-h-[100px]"
+                  className="float-card flex flex-col rounded-2xl p-3 sm:min-h-[60px]"
                 >
-                  <div className="text-xs font-medium uppercase tracking-wider [color:var(--glass-text-muted)]">
+                  <div className="text-xs font-medium uppercase tracking-wider text-slate-400">
                     {app.app_name}
                   </div>
-                  <div className="mt-2 text-xl font-bold [color:var(--glass-text)]">
+                  <div className="metric-glow mt-2 text-xl font-bold text-slate-100">
                     {sar(app.total)}
                   </div>
-                  {app.by_branch.length > 0 && (
+                  {(app.by_branch ?? []).length > 0 && (
                     <div className="mt-2 space-y-1 border-t border-[var(--glass-border)] pt-2">
-                      {app.by_branch.map((b) => (
+                      {(app.by_branch ?? []).map((b) => (
                         <div
                           key={`${app.app_name}-${b.branch_id}`}
                           className="flex justify-between text-xs [color:var(--glass-text-muted)]"
@@ -485,7 +451,7 @@ export default function DashboardPage() {
           {deliveryViewMode === "detailed" &&
             (financial?.delivery_apps_breakdown ?? []).length === 0 &&
             (financial?.delivery_apps ?? 0) > 0 && (
-              <div className="page-card mt-3 rounded-2xl p-4">
+              <div className="float-card mt-3 rounded-2xl p-4">
                 <div className="text-xs font-medium [color:var(--glass-text-muted)]">{t("deliveryApps")}</div>
                 <div className="mt-2 text-xl font-bold [color:var(--glass-text)]">
                   {sar(financial?.delivery_apps ?? 0)}
@@ -495,12 +461,12 @@ export default function DashboardPage() {
         </motion.section>
       )}
 
-      {/* KPI Cards - Total Sales first, symmetrical grid */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 [&>*]:min-h-[120px]">
+      {/* KPI Cards */}
+      <div className="grid shrink-0 grid-cols-2 gap-1.5 md:grid-cols-4 md:gap-2 [&>*]:min-h-[56px] md:[&>*]:min-h-[60px]">
         <KPICard
-          label={t("totalSales")}
-          value={netSales}
-          formatter={(n) => sar(n)}
+          label={t("netSalesLabel")}
+          value={displayNetSales}
+          formatter={(n) => new Intl.NumberFormat(i18n.language || undefined, { style: "currency", currency: "SAR", maximumFractionDigits: 0 }).format(n)}
           sparklineData={sparklineSales}
           trend={sparklineSales.length > 1 && sparklineSales[0] < sparklineSales[sparklineSales.length - 1] ? "up" : "neutral"}
           delay={0}
@@ -527,61 +493,63 @@ export default function DashboardPage() {
           delay={0.15}
         />
       </div>
+      </div>
+      {/* end dashboard-metrics */}
 
-      {/* Charts Row */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
+      {/* Charts Row – Sales vs AI Forecast + Revenue Distribution (locked 40% min) */}
+      <div className="dashboard-charts grid shrink-0 grid-cols-1 gap-2 md:grid-cols-2 md:gap-3 lg:grid-cols-3">
+        <div className="min-w-0 md:col-span-2 lg:col-span-2">
           <SalesVsForecastChart
             data={chartData?.daily_series ?? []}
-            height={320}
+            height={280}
             showFooter={isSAIF}
             variant="white"
           />
         </div>
-        <div>
+        <div className="min-w-0 flex flex-col">
           <RevenueSplitChart
             data={chartData?.revenue_split ?? []}
-            height={320}
+            height={280}
             showFooter={isSAIF}
             variant="white"
           />
         </div>
       </div>
 
-      {/* Product Analytics Charts - Top 5, Branch Donut, Sales vs Qty */}
-      <div className="grid gap-6 lg:grid-cols-3">
+      {/* Product Analytics Charts */}
+      <div className="grid min-h-0 shrink-0 grid-cols-1 gap-1.5 md:grid-cols-2 md:gap-2 lg:grid-cols-3">
         <TopProductsChart
           data={chartData?.top_products ?? []}
-          height={280}
+          height={220}
           showFooter={isSAIF}
           variant="white"
         />
         <BranchPerformanceDonutChart
           data={chartData?.branch_performance ?? []}
-          height={280}
+          height={220}
           showFooter={isSAIF}
           variant="white"
         />
         <SalesVsQuantityChart
           data={chartData?.sales_vs_qty_trend ?? []}
-          height={280}
+          height={220}
           showFooter={isSAIF}
           variant="white"
         />
       </div>
 
       {/* Alerts & Brand Table */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid min-h-0 shrink-0 grid-cols-1 gap-1.5 md:grid-cols-2 md:gap-2">
         <motion.section
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.2 }}
-          className="page-card rounded-xl p-5"
+          className="float-card rounded-xl p-3"
         >
-          <h2 className="text-sm font-semibold [color:var(--glass-text)]">{t("brandPerformance")}</h2>
-          <div className="mt-4 overflow-hidden rounded-xl border-[var(--glass-border)]">
+          <h2 className="text-xs font-semibold text-slate-300">{t("brandPerformance")}</h2>
+          <div className="mt-2 overflow-hidden rounded-xl border border-white/10">
             <table className="w-full text-sm">
-              <thead className="[background:var(--glass-bg)] text-xs [color:var(--glass-text-muted)]">
+              <thead className="bg-white/5 text-xs text-slate-400">
                 <tr>
                   <th className="px-3 py-2 text-left">{t("brand")}</th>
                   <th className="px-3 py-2 text-right">{t("sales")}</th>
@@ -597,10 +565,10 @@ export default function DashboardPage() {
                   </tr>
                 ) : (
                   (summary?.by_brand ?? []).map((r) => (
-                    <tr key={r.shift__branch__brand__slug} className="border-t [border-color:var(--glass-border-subtle)]">
-                      <td className="px-3 py-2 [color:var(--glass-text)]">{r.shift__branch__brand__name}</td>
-                      <td className="px-3 py-2 text-right [color:var(--glass-text)]">{sar(r.system_total_sales)}</td>
-                      <td className="px-3 py-2 text-right [color:var(--glass-text)]">{r.shifts}</td>
+                    <tr key={r.shift__branch__brand__slug} className="table-row-hover border-t border-white/5 transition-colors">
+                      <td className="px-3 py-2 text-slate-200">{r.shift__branch__brand__name}</td>
+                      <td className="px-3 py-2 text-right font-medium text-slate-100">{sar(r.system_total_sales)}</td>
+                      <td className="px-3 py-2 text-right text-slate-200">{r.shifts}</td>
                     </tr>
                   ))
                 )}
@@ -613,11 +581,11 @@ export default function DashboardPage() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ delay: 0.25 }}
-          className="page-card rounded-xl p-5"
+          className="float-card rounded-xl p-3"
         >
-          <h2 className="text-sm font-semibold [color:var(--glass-text)]">{t("alerts")}</h2>
-          <div className="mt-4 space-y-3">
-            <div className="rounded-xl border [border-color:var(--glass-border)] [background:var(--glass-bg)] p-3">
+          <h2 className="text-xs font-semibold text-slate-300">{t("alerts")}</h2>
+          <div className="mt-2 space-y-2">
+            <div className="rounded-lg border [border-color:var(--glass-border)] [background:var(--glass-bg)] p-2">
               <div className="text-xs font-medium [color:var(--glass-text-muted)]">{t("cashVariance")}</div>
               {(summary?.alerts?.variance_cash ?? []).length === 0 ? (
                 <div className="mt-2 text-sm [color:var(--glass-text-muted)]">{t("noAlerts")}</div>
@@ -635,7 +603,7 @@ export default function DashboardPage() {
               )}
             </div>
 
-            <div className="rounded-xl border [border-color:var(--glass-border)] [background:var(--glass-bg)] p-3">
+            <div className="rounded-lg border [border-color:var(--glass-border)] [background:var(--glass-bg)] p-2">
               <div className="text-xs font-medium [color:var(--glass-text-muted)]">{t("lowStock")}</div>
               {(summary?.alerts?.low_stock ?? []).length === 0 ? (
                 <div className="mt-2 text-sm [color:var(--glass-text-muted)]">{t("noAlerts")}</div>
@@ -657,6 +625,53 @@ export default function DashboardPage() {
           </div>
         </motion.section>
       </div>
+
+            {/* Insights & Dashboard – footer at bottom, above slim footer */}
+            <motion.section
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="mt-2 shrink-0 space-y-1.5 border-t border-white/5 pt-2"
+            >
+              {insights.length > 0 && (
+                <div className="float-card rounded-lg p-2">
+                  <h2 className="text-[11px] font-semibold [color:var(--glass-text)]">{t("insights")}</h2>
+                  <div className="mt-1.5 grid gap-1.5 grid-cols-1 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3">
+                    {insights.map((ins, i) => {
+                      const title = ins.title_key ? t(ins.title_key) : (ins as { title?: string }).title || "";
+                      const msg = ins.message_key
+                        ? t(ins.message_key, ins.params || {})
+                        : (ins as { message?: string }).message || "";
+                      return (
+                        <div
+                          key={i}
+                          className={`float-card rounded-xl px-4 py-3 text-sm ${
+                            ins.type === "success"
+                              ? "border-[#00ffcc]/30"
+                              : ins.type === "alert"
+                                ? "border-rose-400/30"
+                                : ins.type === "warning"
+                                  ? "border-amber-400/30"
+                                  : "border-white/10"
+                          }`}
+                        >
+                          <div className="font-semibold [color:var(--glass-text)]">{title}</div>
+                          <div className="mt-1 text-xs [color:var(--glass-text-muted)]">
+                            {msg || (ins.title_key === "insightZeroVarianceNone" ? t("insightZeroVarianceNoneMsg") : "")}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              <div className="flex items-center justify-between py-0.5 text-[10px] [color:var(--glass-text-muted)]">
+                <span>{t("dashboard")}</span>
+                <span>{t("appName")}</span>
+              </div>
+            </motion.section>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

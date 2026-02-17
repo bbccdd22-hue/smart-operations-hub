@@ -27,6 +27,7 @@ import {
   fetchUploadAnalytics,
   fetchBrands,
   fetchBranches,
+  logActivity,
   type ParsePreviewResponse,
   type UploadAnalytics,
   type Brand,
@@ -206,6 +207,12 @@ export default function SmartUploadPage() {
       });
       if ((result.summary?.success ?? 0) > 0) {
         addToast(t("uploadSuccess"), t("styledHeaderToast"));
+        logActivity({
+          action_type: "file_upload",
+          page_path: "/admin-hub/smart-upload",
+          file_name: toUpload.map((f) => f.file.name).join(", "),
+          description: `رفع جماعي - ${result.summary?.success ?? 0} ملف`,
+        });
         window.dispatchEvent(new CustomEvent("smart-ops-dashboard-refresh"));
       }
       setShowBatchMode(false);
@@ -246,6 +253,12 @@ export default function SmartUploadPage() {
             ? t("paymentsReportSuccess")
             : t("styledHeaderToast");
       addToast(t("uploadSuccess"), msg);
+      logActivity({
+        action_type: "file_upload",
+        page_path: "/admin-hub/smart-upload",
+        file_name: file?.name ?? "",
+        description: `رفع ${reportType} - ${file?.name ?? ""}`,
+      });
       window.dispatchEvent(new CustomEvent("smart-ops-dashboard-refresh"));
       const analyticsData = await fetchUploadAnalytics(result.id);
       setAnalytics(analyticsData);

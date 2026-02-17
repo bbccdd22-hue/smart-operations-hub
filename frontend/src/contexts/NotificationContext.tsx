@@ -24,7 +24,7 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<AdminNotificationItem[]>([]);
   const [toasts, setToasts] = useState<Array<{ id: number; title: string; message?: string }>>([]);
-  const isSAIF = user?.username?.toLowerCase() === "saif";
+  const isSAIF = user?.username === "SAIF";
   const isOwner = user?.role === "owner";
   const shouldPoll = isSAIF && isOwner;
 

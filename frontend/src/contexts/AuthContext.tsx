@@ -6,8 +6,23 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { API_BASE } from "../lib/api";
 
-export type UserRole = "owner" | "brand_manager" | "branch_supervisor";
+/** Auth uses same API_BASE as rest of app – dev proxy = same-origin for cookies */
+
+export type UserRole =
+  | "owner"
+  | "general_manager"
+  | "brand_manager"
+  | "branch_supervisor"
+  | "external_accountant";
+
+export type UserPermissions = {
+  view_financial_reports?: boolean;
+  upload_files?: boolean;
+  view_activity_log?: boolean;
+  edit_chart_of_accounts?: boolean;
+};
 
 export type AuthUser = {
   id: number;
@@ -18,6 +33,9 @@ export type AuthUser = {
   branch_id: number | null;
   brand_slug?: string | null;
   branch_name?: string | null;
+  employee_id?: string | null;
+  display_name?: string | null;
+  permissions?: UserPermissions;
 };
 
 type AuthState = {
@@ -27,14 +45,18 @@ type AuthState = {
 };
 
 type AuthContextValue = AuthState & {
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<AuthUser | null>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
 };
 
-const AuthContext = createContext<AuthContextValue | null>(null);
+/** Returns true if user has Operations Mode (prefix A or B). */
+export function isOperationsUser(user: AuthUser | null): boolean {
+  const eid = (user?.employee_id || "").toUpperCase();
+  return /^A\d+$/.test(eid) || /^B\d+$/.test(eid);
+}
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000/api";
+const AuthContext = createContext<AuthContextValue | null>(null);
 
 function getCsrfToken(): string | null {
   const match = document.cookie.match(/csrftoken=([^;]+)/);
@@ -72,7 +94,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const login = useCallback(async (username: string, password: string) => {
+  const login = useCallback(async (username: string, password: string): Promise<AuthUser | null> => {
     setState((s) => ({ ...s, loading: true, error: null }));
     try {
       const res = await fetchWithCsrf(`${API_BASE}/auth/login/`, {
@@ -83,7 +105,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (!res.ok) {
         throw new Error(data.detail || "Login failed");
       }
-      setState({ user: data.user, loading: false, error: null });
+      const user = data.user as AuthUser;
+      setState({ user, loading: false, error: null });
+      return user;
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       const isNetworkError =
@@ -109,6 +133,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       await fetchWithCsrf(`${API_BASE}/auth/logout/`, { method: "POST" });
     } finally {
       setState({ user: null, loading: false, error: null });
+      window.location.href = "/login";
     }
   }, []);
 

@@ -1,0 +1,14 @@
+# Paste into backend/config/settings.py – replace the corresponding sections
+
+ALLOWED_HOSTS = ['*', 'localhost', '127.0.0.1', '172.23.135.143']
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://172.23.135.143:5173",
+    "http://172.23.135.143:8000",
+]
+
+# In _get_csrf_origins(), ensure these are in the origins list:
+# "http://172.23.135.143:5173"
+# "http://172.23.135.143:8000"

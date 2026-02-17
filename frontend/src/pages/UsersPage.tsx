@@ -1,10 +1,12 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
+import { useAuth } from "../contexts/AuthContext";
 import { motion } from "framer-motion";
 import UserModal from "../components/UserModal";
 import Switch from "../components/ui/Switch";
 import {
+  API_BASE,
   fetchBrands,
   fetchBranches,
   createUser,
@@ -14,8 +16,6 @@ import {
   type Branch,
 } from "../lib/api";
 
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000/api";
-
 type UserRow = {
   id: number;
   username: string;
@@ -23,17 +23,21 @@ type UserRow = {
   role: string;
   brand_id: number | null;
   branch_id: number | null;
+  brand_ids?: number[];
+  all_brands?: boolean;
+  employee_id?: string;
   is_staff: boolean;
   is_active: boolean;
 };
 
 export default function UsersPage() {
   const { t, i18n } = useTranslation();
-  const lang = i18n.language;
+  const { user } = useAuth();
+  const isSuperAdmin = user?.username === "SAIF";
   const location = useLocation();
-  const isAdminHub = location.pathname.startsWith("/admin-hub");
-  const backTo = isAdminHub ? "/admin-hub" : "/settings";
-  const backLabel = isAdminHub ? t("adminDashboard") : t("settings");
+  const lang = i18n.language;
+  const backTo = "/admin-hub";
+  const backLabel = t("adminDashboard");
 
   const [users, setUsers] = useState<UserRow[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
@@ -74,7 +78,7 @@ export default function UsersPage() {
   };
 
   const handleDelete = async (id: number, username: string) => {
-    if (username.toLowerCase() === "saif") return;
+    if (username === "SAIF") return;
     if (!confirm(t("delete") + " " + username + "?")) return;
     setDeletingId(id);
     try {
@@ -88,7 +92,7 @@ export default function UsersPage() {
   };
 
   const handleToggleActive = async (u: UserRow) => {
-    if (u.username.toLowerCase() === "saif") return;
+    if (u.username === "SAIF") return;
     setTogglingId(u.id);
     try {
       await updateUser(u.id, { is_active: !u.is_active });
@@ -146,6 +150,9 @@ export default function UsersPage() {
                 <th className="min-w-[5rem] px-4 py-3 text-right font-semibold text-white/90">
                   {t("roles")}
                 </th>
+                <th className="min-w-[4rem] px-4 py-3 text-right font-semibold text-white/90">
+                  {lang === "ar" ? "المعرّف" : "ID"}
+                </th>
                 <th className="min-w-[4rem] px-4 py-3 text-center font-semibold text-white/90">
                   {t("webAccess")}
                 </th>
@@ -166,13 +173,13 @@ export default function UsersPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-white/60">
+                  <td colSpan={8} className="px-4 py-12 text-center text-white/60">
                     Loading…
                   </td>
                 </tr>
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-white/60">
+                  <td colSpan={8} className="px-4 py-12 text-center text-white/60">
                     No users found.
                   </td>
                 </tr>
@@ -184,28 +191,32 @@ export default function UsersPage() {
                   >
                     <td className="w-24 shrink-0 px-4 py-3 text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleEdit(u)}
-                          className="rounded-lg p-2 text-white/60 transition hover:bg-white/10 hover:text-white"
-                          title={t("edit")}
-                        >
-                          <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
-                        {u.username.toLowerCase() !== "saif" && (
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(u.id, u.username)}
-                            disabled={deletingId === u.id}
-                            className="rounded-lg p-2 text-white/60 transition hover:bg-rose-500/20 hover:text-rose-300 disabled:opacity-50"
-                            title={t("delete")}
-                          >
-                            <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
+                        {isSuperAdmin && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleEdit(u)}
+                              className="rounded-lg p-2 text-white/60 transition hover:bg-white/10 hover:text-white"
+                              title={t("edit")}
+                            >
+                              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+                            {u.username !== "SAIF" && (
+                              <button
+                                type="button"
+                                onClick={() => handleDelete(u.id, u.username)}
+                                disabled={deletingId === u.id}
+                                className="rounded-lg p-2 text-white/60 transition hover:bg-rose-500/20 hover:text-rose-300 disabled:opacity-50"
+                                title={t("delete")}
+                              >
+                                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            )}
+                          </>
                         )}
                       </div>
                     </td>
@@ -213,6 +224,9 @@ export default function UsersPage() {
                       <span className="rounded-lg bg-white/10 px-2 py-1 text-xs text-white/80">
                         {roleLabel(u.role)}
                       </span>
+                    </td>
+                    <td className="min-w-[4rem] px-4 py-3 text-right font-mono text-xs text-white/70">
+                      {u.employee_id || "—"}
                     </td>
                     <td className="min-w-[4rem] px-4 py-3 text-center">
                       <span
@@ -234,7 +248,7 @@ export default function UsersPage() {
                     </td>
                     <td className="min-w-[7rem] px-4 py-3">
                       <div className="flex items-center justify-center">
-                        {u.username.toLowerCase() === "saif" ? (
+                        {u.username === "SAIF" ? (
                           <Switch
                             checked
                             onChange={() => {}}
@@ -257,7 +271,7 @@ export default function UsersPage() {
                       {u.email || "—"}
                     </td>
                     <td className="min-w-[10rem] px-4 py-3 text-right">
-                      {isAdminHub ? (
+                      {location.pathname.startsWith("/admin-hub") ? (
                         <Link
                           to={`/admin-hub/users/${u.id}`}
                           className="font-medium text-white/95 hover:text-emerald-300 hover:underline"

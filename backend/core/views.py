@@ -47,9 +47,15 @@ def login_view(request):
         return JsonResponse({"detail": "Account disabled"}, status=401)
 
     login(request, user)
+    from core.activity_log import log_activity
+    from core.permissions import is_super_admin
+
+    log_activity(user, "login", "تسجيل دخول", request=request)
     profile = get_user_profile(user)
     branch = profile.branch if profile else None
     brand = (branch.brand if branch else profile.brand) if profile else None
+    display_name = f"{(getattr(user, 'first_name', '') or '').strip()} {(getattr(user, 'last_name', '') or '').strip()}".strip() or user.username
+    perms = {k: True for k in ["view_financial_reports", "upload_files", "view_activity_log", "edit_chart_of_accounts"]} if is_super_admin(user) else _get_role_permissions(profile)
     return JsonResponse({
         "user": {
             "id": user.id,
@@ -60,6 +66,9 @@ def login_view(request):
             "branch_id": branch.id if branch else None,
             "brand_slug": brand.slug if brand else None,
             "branch_name": branch.name if branch else None,
+            "employee_id": profile.employee_id if profile else "",
+            "display_name": display_name,
+            "permissions": perms,
         }
     })
 
@@ -71,15 +80,31 @@ def logout_view(request):
     return JsonResponse({"detail": "Logged out"})
 
 
+def _get_role_permissions(profile):
+    """صلاحيات الدور – تُضاف لـ auth/me للتطبيق الفوري."""
+    from core.permissions import _role_has_permission
+    if not profile:
+        return {}
+    return {
+        "view_financial_reports": _role_has_permission(profile, "view_financial_reports"),
+        "upload_files": _role_has_permission(profile, "upload_files"),
+        "view_activity_log": _role_has_permission(profile, "view_activity_log"),
+        "edit_chart_of_accounts": _role_has_permission(profile, "edit_chart_of_accounts"),
+    }
+
+
 class CurrentUserView(APIView):
     """Returns current authenticated user and role."""
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        from core.permissions import is_super_admin
         user = request.user
         profile = get_user_profile(user)
         branch = profile.branch if profile else None
         brand = (branch.brand if branch else profile.brand) if profile else None
+        display_name = f"{(getattr(user, 'first_name', '') or '').strip()} {(getattr(user, 'last_name', '') or '').strip()}".strip() or user.username
+        perms = {k: True for k in ["view_financial_reports", "upload_files", "view_activity_log", "edit_chart_of_accounts"]} if is_super_admin(user) else _get_role_permissions(profile)
         return Response({
             "user": {
                 "id": user.id,
@@ -90,5 +115,8 @@ class CurrentUserView(APIView):
                 "branch_id": branch.id if branch else None,
                 "brand_slug": brand.slug if brand else None,
                 "branch_name": branch.name if branch else None,
+                "employee_id": profile.employee_id if profile else "",
+                "display_name": display_name,
+                "permissions": perms,
             }
         })

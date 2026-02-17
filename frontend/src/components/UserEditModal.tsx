@@ -36,13 +36,15 @@ export default function UserEditModal({
   const [loginCode, setLoginCode] = useState("");
   const [role, setRole] = useState("branch_supervisor");
   const [brandId, setBrandId] = useState<number | "">("");
+  const [brandIds, setBrandIds] = useState<number[]>([]);
+  const [allBrands, setAllBrands] = useState(false);
   const [branchId, setBranchId] = useState<number | "">("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const lang = i18n.language;
-  const isSAIF = user?.username?.toLowerCase() === "saif";
+  const isSAIF = user?.username === "SAIF";
 
   useEffect(() => {
     if (open && user) {
@@ -55,6 +57,8 @@ export default function UserEditModal({
       setLoginCode(user.login_code || "");
       setRole(user.role || "branch_supervisor");
       setBrandId(user.brand_id ?? "");
+      setBrandIds(user.brand_ids || []);
+      setAllBrands(user.all_brands || false);
       setBranchId(user.branch_id ?? "");
       setPassword("");
       setError(null);
@@ -76,9 +80,16 @@ export default function UserEditModal({
         preferred_language: preferredLanguage,
         login_code: loginCode.trim() || undefined,
         role: isSAIF ? undefined : role,
-        brand_id: brandId ? Number(brandId) : null,
-        branch_id: branchId ? Number(branchId) : null,
       };
+      if (role === "brand_manager") {
+        payload.all_brands = allBrands;
+        payload.brand_ids = allBrands ? [] : brandIds;
+        payload.brand_id = null;
+        payload.branch_id = null;
+      } else {
+        payload.brand_id = brandId ? Number(brandId) : null;
+        payload.branch_id = branchId ? Number(branchId) : null;
+      }
       if (password) payload.password = password;
       await updateUser(user.id, payload);
       onSuccess();
@@ -252,34 +263,80 @@ export default function UserEditModal({
                     <option value="branch_supervisor">{t("staff")}</option>
                   </select>
                 </div>
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-white/80">{t("assignedBrands")}</label>
-                  <select
-                    value={brandId}
-                    onChange={(e) => setBrandId(e.target.value ? Number(e.target.value) : "")}
-                    className="glass-input w-full rounded-xl px-4 py-2.5 text-white"
-                  >
-                    <option value="">{t("selectBrand")}</option>
-                    {brands.map((b) => (
-                      <option key={b.id} value={b.id}>{b.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-white/80">{t("assignedBranches")}</label>
-                  <select
-                    value={branchId}
-                    onChange={(e) => setBranchId(e.target.value ? Number(e.target.value) : "")}
-                    className="glass-input w-full rounded-xl px-4 py-2.5 text-white"
-                  >
-                    <option value="">{t("selectBranch")}</option>
-                    {branches.map((b) => (
-                      <option key={b.id} value={b.id}>
-                        {branchDisplayName(b, lang)} ({b.brand?.name})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {role === "brand_manager" && (
+                  <>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        id="all_brands_edit"
+                        checked={allBrands}
+                        onChange={(e) => {
+                          setAllBrands(e.target.checked);
+                          if (e.target.checked) setBrandIds([]);
+                        }}
+                        className="h-4 w-4 rounded border-white/30 bg-white/10 text-[#7c3aed]"
+                      />
+                      <label htmlFor="all_brands_edit" className="text-sm font-medium text-white/80">
+                        {t("allBrands")}
+                      </label>
+                    </div>
+                    {!allBrands && (
+                      <div>
+                        <label className="mb-1.5 block text-sm font-medium text-white/80">
+                          {t("assignedBrands")} ({t("multiSelect")})
+                        </label>
+                        <select
+                          multiple
+                          value={brandIds.map(String)}
+                          onChange={(e) => {
+                            const opts = Array.from(e.target.selectedOptions, (o) => Number(o.value));
+                            setBrandIds(opts);
+                          }}
+                          className="glass-input min-h-[100px] w-full rounded-xl px-4 py-2.5 text-white"
+                        >
+                          {brands.map((b) => (
+                            <option key={b.id} value={b.id}>{b.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
+                  </>
+                )}
+                {(role === "branch_supervisor" || role === "owner") && (
+                  <>
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-white/80">{t("assignedBrands")}</label>
+                      <select
+                        value={brandId}
+                        onChange={(e) => {
+                          setBrandId(e.target.value ? Number(e.target.value) : "");
+                          setBranchId("");
+                        }}
+                        className="glass-input w-full rounded-xl px-4 py-2.5 text-white"
+                      >
+                        <option value="">{t("selectBrand")}</option>
+                        {brands.map((b) => (
+                          <option key={b.id} value={b.id}>{b.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-sm font-medium text-white/80">{t("assignedBranches")}</label>
+                      <select
+                        value={branchId}
+                        onChange={(e) => setBranchId(e.target.value ? Number(e.target.value) : "")}
+                        className="glass-input w-full rounded-xl px-4 py-2.5 text-white"
+                      >
+                        <option value="">{t("selectBranch")}</option>
+                        {(brandId ? branches.filter((b) => b.brand?.id === Number(brandId)) : branches).map((b) => (
+                          <option key={b.id} value={b.id}>
+                            {branchDisplayName(b, lang)} ({b.brand?.name})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </>
+                )}
               </>
             )}
 

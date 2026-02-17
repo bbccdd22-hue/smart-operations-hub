@@ -2,26 +2,82 @@ from decimal import Decimal
 
 from django.db import models
 
+from config.constants import (
+    SYSTEM_CODE_BRANCH_STOCK,
+    SYSTEM_CODE_INGREDIENT,
+    SYSTEM_CODE_PRODUCT,
+    SYSTEM_CODE_RECIPE,
+    SYSTEM_CODE_RECIPE_LINE,
+    SYSTEM_CODE_STOCK_MOVEMENT,
+    SYSTEM_CODE_UNIT,
+    SYSTEM_CODE_WASTE_LOG,
+)
 from org.models import Branch, TimestampedModel
 
 
 class Unit(TimestampedModel):
     """
     Units for recipes/inventory: g, kg, ml, l, pcs, etc.
+    IU1002 - Prep List (PR1002) fetches inventory units from this source.
+    Multi-unit conversion: base_unit + factor_to_base (1 L = 1000 ML).
     """
 
+    system_code = models.CharField(
+        max_length=16, default=SYSTEM_CODE_UNIT, db_index=True,
+        help_text="ERP hierarchy code (IU1002)",
+    )
     code = models.CharField(max_length=16, unique=True)  # e.g. "g", "pcs"
     name_en = models.CharField(max_length=64)
     name_ar = models.CharField(max_length=64, blank=True, default="")
+    base_unit = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.SET_NULL, related_name="derived_units"
+    )
+    factor_to_base = models.DecimalField(
+        max_digits=18, decimal_places=6, default=Decimal("1"),
+        help_text="1 unit = factor_to_base of base unit (e.g. 1 L = 1000 ML)",
+    )
 
     def __str__(self) -> str:
         return self.code
 
 
 class Ingredient(TimestampedModel):
+    system_code = models.CharField(
+        max_length=16, default=SYSTEM_CODE_INGREDIENT, db_index=True,
+        help_text="ERP hierarchy code",
+    )
     name_en = models.CharField(max_length=200, unique=True)
     name_ar = models.CharField(max_length=200, blank=True, default="")
     base_unit = models.ForeignKey(Unit, on_delete=models.PROTECT, related_name="ingredients")
+    # PR1002 workable units: e.g. 1 carton = 12 base units
+    package_conversion_factor = models.DecimalField(
+        max_digits=18, decimal_places=6, null=True, blank=True,
+        help_text="Base units per package (e.g. 12 for 12 pcs per carton)",
+    )
+    package_name_en = models.CharField(max_length=64, blank=True, default="")
+    package_name_ar = models.CharField(max_length=64, blank=True, default="")
+    # Override for Unit column: exact display string when set (e.g. "علبة (2.8 لتر)")
+    workable_unit_label_ar = models.CharField(max_length=128, blank=True, default="")
+    workable_unit_label_en = models.CharField(max_length=128, blank=True, default="")
+    serial_code = models.CharField(
+        max_length=64, blank=True, default="", db_index=True,
+        help_text="Unique serial/code from Excel import",
+    )
+    system_group = models.CharField(
+        max_length=32,
+        choices=[
+            ("raw_materials", "Raw Materials"),
+            ("packaging", "Packaging"),
+            ("other", "Other"),
+        ],
+        default="raw_materials",
+        db_index=True,
+        blank=True,
+    )
+    unit_cost = models.DecimalField(
+        max_digits=14, decimal_places=4, null=True, blank=True, default=None,
+        help_text="Cost per base unit (SAR)",
+    )
     is_active = models.BooleanField(default=True)
 
     def __str__(self) -> str:
@@ -34,6 +90,10 @@ class FoodicsProduct(TimestampedModel):
     Ingredients are raw materials; Products are sold items.
     """
 
+    system_code = models.CharField(
+        max_length=16, default=SYSTEM_CODE_PRODUCT, db_index=True,
+        help_text="ERP hierarchy code",
+    )
     foodics_product_id = models.CharField(max_length=64, unique=True)
     name = models.CharField(max_length=255)
     is_active = models.BooleanField(default=True)
@@ -50,9 +110,13 @@ class FoodicsProduct(TimestampedModel):
 
 class Recipe(TimestampedModel):
     """
-    Bill of Materials (BOM) for a Foodics product.
+    Bill of Materials (BOM) for a Foodics product. Part of Prep List (PR1002).
     """
 
+    system_code = models.CharField(
+        max_length=16, default=SYSTEM_CODE_RECIPE, db_index=True,
+        help_text="ERP hierarchy code",
+    )
     product = models.OneToOneField(FoodicsProduct, on_delete=models.CASCADE, related_name="recipe")
     yield_qty = models.DecimalField(max_digits=12, decimal_places=4, default=Decimal("1.0000"))
     yield_unit = models.ForeignKey(Unit, on_delete=models.PROTECT, related_name="recipes")
@@ -62,6 +126,10 @@ class Recipe(TimestampedModel):
 
 
 class RecipeLine(TimestampedModel):
+    system_code = models.CharField(
+        max_length=16, default=SYSTEM_CODE_RECIPE_LINE, db_index=True,
+        help_text="ERP hierarchy code",
+    )
     recipe = models.ForeignKey(Recipe, on_delete=models.CASCADE, related_name="lines")
     ingredient = models.ForeignKey(Ingredient, on_delete=models.PROTECT, related_name="recipe_lines")
     qty = models.DecimalField(max_digits=12, decimal_places=4)
@@ -77,6 +145,10 @@ class RecipeLine(TimestampedModel):
 
 
 class BranchStock(TimestampedModel):
+    system_code = models.CharField(
+        max_length=16, default=SYSTEM_CODE_BRANCH_STOCK, db_index=True,
+        help_text="ERP hierarchy code",
+    )
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name="stock_items")
     ingredient = models.ForeignKey(Ingredient, on_delete=models.PROTECT, related_name="branch_stocks")
 
@@ -99,6 +171,10 @@ class StockMovementType(models.TextChoices):
 
 
 class StockMovement(TimestampedModel):
+    system_code = models.CharField(
+        max_length=16, default=SYSTEM_CODE_STOCK_MOVEMENT, db_index=True,
+        help_text="ERP hierarchy code",
+    )
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, related_name="stock_movements")
     ingredient = models.ForeignKey(Ingredient, on_delete=models.PROTECT, related_name="stock_movements")
     movement_type = models.CharField(max_length=16, choices=StockMovementType.choices)
@@ -107,3 +183,43 @@ class StockMovement(TimestampedModel):
 
     def __str__(self) -> str:
         return f"{self.branch} {self.ingredient} {self.qty_delta}"
+
+
+class WasteLog(TimestampedModel):
+    """Waste tracking: theoretical (from Prep List) vs actual usage per ingredient per date."""
+
+    system_code = models.CharField(
+        max_length=16, default=SYSTEM_CODE_WASTE_LOG, db_index=True,
+    )
+    ingredient = models.ForeignKey(Ingredient, on_delete=models.PROTECT, related_name="waste_logs")
+    date = models.DateField(db_index=True)
+    theoretical_usage = models.DecimalField(
+        max_digits=14, decimal_places=4, default=Decimal("0"),
+        help_text="Expected usage from Prep List (base units)",
+    )
+    actual_usage = models.DecimalField(
+        max_digits=14, decimal_places=4, default=Decimal("0"),
+        help_text="Actual usage recorded (base units)",
+    )
+    variance = models.DecimalField(
+        max_digits=10, decimal_places=2, null=True, blank=True,
+        help_text="Variance %: ((actual - theoretical) / theoretical) * 100",
+    )
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["ingredient", "date"],
+                name="uniq_waste_log_ingredient_date",
+            ),
+        ]
+        ordering = ["-date", "ingredient__name_en"]
+
+    def __str__(self) -> str:
+        return f"{self.ingredient} {self.date}: {self.theoretical_usage} vs {self.actual_usage}"
+
+
+class WasteEntry(WasteLog):
+    """Alias for WasteLog (Date, Ingredient, ExpectedQty, ActualQty, Variance). Same table."""
+    class Meta:
+        proxy = True

@@ -2,15 +2,15 @@ import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { motion, AnimatePresence } from "framer-motion";
 
-type BrandEdit = { id: number; name: string; slug: string; brand_code?: string } | null;
+type BrandEdit = { id: number; name: string; name_ar?: string; slug: string; brand_code?: string } | null;
 
 type Props = {
   open: boolean;
   onClose: () => void;
   onSuccess: () => void;
   editingBrand: BrandEdit;
-  createBrand: (name: string, brand_code?: string) => Promise<unknown>;
-  updateBrand: (id: number, payload: Partial<{ name: string; brand_code: string }>) => Promise<unknown>;
+  createBrand: (p: { name: string; name_ar?: string; brand_code?: string }) => Promise<unknown>;
+  updateBrand: (id: number, payload: Partial<{ name: string; name_ar: string; brand_code: string }>) => Promise<unknown>;
 };
 
 export default function AddBrandModal({
@@ -21,8 +21,10 @@ export default function AddBrandModal({
   createBrand,
   updateBrand,
 }: Props) {
-  const { t } = useTranslation();
-  const [name, setName] = useState("");
+  const { t, i18n } = useTranslation();
+  const lang = i18n.language;
+  const [nameEn, setNameEn] = useState("");
+  const [nameAr, setNameAr] = useState("");
   const [brandCode, setBrandCode] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -31,8 +33,10 @@ export default function AddBrandModal({
 
   useEffect(() => {
     if (open) {
-      setName(editingBrand?.name ?? "");
-      setBrandCode((editingBrand as { brand_code?: string })?.brand_code ?? "");
+      const b = editingBrand as { name?: string; name_ar?: string; brand_code?: string } | null;
+      setNameEn(b?.name ?? "");
+      setNameAr(b?.name_ar ?? "");
+      setBrandCode(b?.brand_code ?? "");
       setError(null);
     }
   }, [open, editingBrand]);
@@ -43,9 +47,17 @@ export default function AddBrandModal({
     setSubmitting(true);
     try {
       if (isEdit && editingBrand) {
-        await updateBrand(editingBrand.id, { name: name.trim(), brand_code: brandCode.trim() });
+        await updateBrand(editingBrand.id, {
+          name: nameEn.trim(),
+          name_ar: nameAr.trim() || nameEn.trim(),
+          brand_code: brandCode.trim() || "",
+        });
       } else {
-        await createBrand(name.trim(), brandCode.trim() || undefined);
+        await createBrand({
+          name: nameEn.trim(),
+          name_ar: nameAr.trim() || nameEn.trim(),
+          brand_code: brandCode.trim() || undefined,
+        });
       }
       onSuccess();
       onClose();
@@ -93,28 +105,50 @@ export default function AddBrandModal({
             )}
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-white/80">{t("name")} *</label>
+              <label className="mb-1.5 block text-sm font-medium text-white/80">
+                {lang === "ar" ? "الاسم بالإنجليزية" : "Name (English)"} *
+              </label>
               <input
                 type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                value={nameEn}
+                onChange={(e) => setNameEn(e.target.value)}
                 required
                 className="glass-input w-full rounded-xl px-4 py-2.5 text-white"
-                placeholder="e.g. 8OZ"
+                placeholder={lang === "ar" ? "مثال: 8OZ" : "e.g. 8OZ"}
               />
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-white/80">Brand Code</label>
+              <label className="mb-1.5 block text-sm font-medium text-white/80">
+                {lang === "ar" ? "الاسم بالعربية" : "Name (Arabic)"}
+              </label>
               <input
                 type="text"
-                value={brandCode}
-                onChange={(e) => setBrandCode(e.target.value)}
+                value={nameAr}
+                onChange={(e) => setNameAr(e.target.value)}
                 className="glass-input w-full rounded-xl px-4 py-2.5 text-white"
-                placeholder="e.g. 001"
+                placeholder={lang === "ar" ? "مثال: هيمي" : "e.g. هيمي"}
               />
-              <p className="mt-1 text-xs text-white/50">Unique code for Excel mapping (e.g. 001, 002)</p>
             </div>
+
+            <details className="rounded-lg border border-white/10">
+              <summary className="cursor-pointer px-3 py-2 text-xs text-white/60">
+                {lang === "ar" ? "إعدادات النظام (للمطابقة البرمجية فقط)" : "System settings (for matching only)"}
+              </summary>
+              <div className="border-t border-white/10 p-3">
+                <label className="mb-1.5 block text-xs font-medium text-white/60">Brand Code</label>
+                <input
+                  type="text"
+                  value={brandCode}
+                  onChange={(e) => setBrandCode(e.target.value)}
+                  className="glass-input w-full rounded-lg px-3 py-2 text-sm text-white"
+                  placeholder="001"
+                />
+                <p className="mt-1 text-xs text-white/40">
+                  {lang === "ar" ? "للمطابقة الداخلية فقط – لا يظهر للمستخدم" : "Internal matching only – not shown to users"}
+                </p>
+              </div>
+            </details>
 
             <div className="flex gap-3 pt-4">
               <button
@@ -126,7 +160,7 @@ export default function AddBrandModal({
               </button>
               <button
                 type="submit"
-                disabled={submitting || !name.trim()}
+                disabled={submitting || !nameEn.trim()}
                 className="flex-1 rounded-xl bg-[#7c3aed] py-2.5 font-medium text-white transition hover:bg-[#6d28d9] disabled:opacity-50"
               >
                 {submitting ? "…" : t("save")}

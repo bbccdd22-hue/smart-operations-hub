@@ -20,7 +20,7 @@ def _notify_parse_error(user, filename: str, message: str):
     try:
         from org.models import AdminNotification
         saif = user
-        if not saif or saif.username.lower() != "saif":
+        if not saif or saif.username != "SAIF":
             return
         AdminNotification.objects.create(
             user=saif,
@@ -37,7 +37,7 @@ def _notify_excel_upload(user, upload):
     try:
         from org.models import AdminNotification
         saif = user
-        if not saif or saif.username.lower() != "saif":
+        if not saif or saif.username != "SAIF":
             return
         days = 0
         if upload.report_date_from and upload.report_date_to:

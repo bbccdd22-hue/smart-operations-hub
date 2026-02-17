@@ -1,7 +1,16 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { motion, AnimatePresence } from "framer-motion";
-import type { Brand, Branch, City } from "../lib/api";
+import {
+  fetchDistricts,
+  fetchBranchTypes,
+  type Brand,
+  type Branch,
+  type City,
+  type District,
+  type BranchType,
+} from "../lib/api";
+import SearchableSelect from "./SearchableSelect";
 
 type BranchEdit = Branch | null;
 
@@ -15,6 +24,8 @@ type Props = {
   createBranch: (p: {
     brand_id: number;
     city_id: number;
+    district_id?: number | null;
+    branch_type_id?: number | null;
     name: string;
     name_ar?: string;
     code?: string;
@@ -22,7 +33,15 @@ type Props = {
   }) => Promise<unknown>;
   updateBranch: (
     id: number,
-    p: Partial<{ name: string; name_ar: string; brand_id: number; city_id: number; branch_code: string }>
+    p: Partial<{
+      name: string;
+      name_ar: string;
+      brand_id: number;
+      city_id: number;
+      district_id: number | null;
+      branch_type_id: number | null;
+      branch_code: string;
+    }>
   ) => Promise<unknown>;
 };
 
@@ -42,11 +61,30 @@ export default function AddBranchModal({
   const [branchCode, setBranchCode] = useState("");
   const [brandId, setBrandId] = useState<number | "">("");
   const [cityId, setCityId] = useState<number | "">("");
+  const [districtId, setDistrictId] = useState<number | "">("");
+  const [branchTypeId, setBranchTypeId] = useState<number | "">("");
+  const [districts, setDistricts] = useState<District[]>([]);
+  const [branchTypes, setBranchTypes] = useState<BranchType[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const lang = i18n.language;
   const isEdit = !!editingBranch;
+
+  useEffect(() => {
+    if (open) {
+      fetchBranchTypes().then(setBranchTypes);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (cityId) {
+      fetchDistricts(Number(cityId)).then(setDistricts);
+    } else {
+      setDistricts([]);
+      setDistrictId("");
+    }
+  }, [cityId]);
 
   useEffect(() => {
     if (open) {
@@ -56,12 +94,16 @@ export default function AddBranchModal({
         setBranchCode((editingBranch as { branch_code?: string }).branch_code ?? "");
         setBrandId(editingBranch.brand?.id ?? "");
         setCityId(editingBranch.city?.id ?? "");
+        setDistrictId((editingBranch as { district?: { id: number } }).district?.id ?? "");
+        setBranchTypeId((editingBranch as { branch_type?: { id: number } }).branch_type?.id ?? "");
       } else {
         setName("");
         setNameAr("");
         setBranchCode("");
         setBrandId("");
         setCityId("");
+        setDistrictId("");
+        setBranchTypeId("");
       }
       setError(null);
     }
@@ -79,12 +121,16 @@ export default function AddBranchModal({
           name_ar: nameAr.trim() || name.trim(),
           brand_id: Number(brandId),
           city_id: Number(cityId),
+          district_id: districtId ? Number(districtId) : null,
+          branch_type_id: branchTypeId ? Number(branchTypeId) : null,
           branch_code: branchCode.trim() || undefined,
         });
       } else {
         await createBranch({
           brand_id: Number(brandId),
           city_id: Number(cityId),
+          district_id: districtId ? Number(districtId) : null,
+          branch_type_id: branchTypeId ? Number(branchTypeId) : null,
           name: name.trim(),
           name_ar: nameAr.trim() || undefined,
           branch_code: branchCode.trim() || undefined,
@@ -135,74 +181,110 @@ export default function AddBranchModal({
               <div className="rounded-lg bg-rose-500/20 px-4 py-2 text-sm text-rose-200">{error}</div>
             )}
 
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-white/80">{t("brand")} *</label>
-              <select
-                value={brandId}
-                onChange={(e) => setBrandId(e.target.value ? Number(e.target.value) : "")}
-                required
-                className="glass-input w-full rounded-xl px-4 py-2.5 text-white"
-              >
-                <option value="">{t("selectBrand")}</option>
-                {brands.map((b) => (
-                  <option key={b.id} value={b.id}>
-                    {b.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <SearchableSelect
+              label={t("brand")}
+              labelAr="العلامة التجارية"
+              value={brandId}
+              options={brands.map((b) => ({
+                id: b.id,
+                label: b.name ?? "",
+                labelAr: (b as { name_ar?: string }).name_ar ?? "",
+              }))}
+              onChange={setBrandId}
+              placeholder={lang === "ar" ? "اختر العلامة التجارية" : t("selectBrand")}
+              required
+              allowNone={false}
+            />
+
+            <SearchableSelect
+              label={t("city")}
+              labelAr="المدينة"
+              value={cityId}
+              options={cities.map((c) => ({
+                id: c.id,
+                label: c.name_en,
+                labelAr: c.name_ar,
+              }))}
+              onChange={setCityId}
+              placeholder={lang === "ar" ? "اختر المدينة" : "Select city"}
+              required
+              allowNone={false}
+            />
+
+            <SearchableSelect
+              label={lang === "ar" ? "الحي" : "District"}
+              labelAr="الحي"
+              value={districtId}
+              options={districts.map((d) => ({
+                id: d.id,
+                label: d.name_en,
+                labelAr: d.name_ar,
+              }))}
+              onChange={setDistrictId}
+              placeholder={lang === "ar" ? "اختر الحي (حسب المدينة)" : "Select district (by city)"}
+              disabled={!cityId}
+            />
+
+            <SearchableSelect
+              label={lang === "ar" ? "نوع الفرع" : "Branch Type"}
+              labelAr="نوع الفرع"
+              value={branchTypeId}
+              options={branchTypes.map((b) => ({
+                id: b.id,
+                label: b.name_en,
+                labelAr: b.name_ar,
+              }))}
+              onChange={setBranchTypeId}
+              placeholder={lang === "ar" ? "فرع / كشك" : "Branch / Kiosk"}
+            />
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-white/80">{t("city")} *</label>
-              <select
-                value={cityId}
-                onChange={(e) => setCityId(e.target.value ? Number(e.target.value) : "")}
-                required
-                className="glass-input w-full rounded-xl px-4 py-2.5 text-white"
-              >
-                <option value="">Select city</option>
-                {cities.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {lang === "ar" && c.name_ar ? c.name_ar : c.name_en}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-white/80">{t("name")} *</label>
+              <label className="mb-1.5 block text-sm font-medium text-white/80">
+                {lang === "ar" ? "الاسم بالإنجليزية" : "Name (English)"} *
+              </label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
                 className="glass-input w-full rounded-xl px-4 py-2.5 text-white"
-                placeholder="e.g. Al-Roseifa"
+                placeholder={lang === "ar" ? "مثال: Al-Roseifa" : "e.g. Al-Roseifa"}
               />
             </div>
 
             <div>
-              <label className="mb-1.5 block text-sm font-medium text-white/80">{t("name")} (AR)</label>
+              <label className="mb-1.5 block text-sm font-medium text-white/80">
+                {lang === "ar" ? "الاسم بالعربية" : "Name (Arabic)"}
+              </label>
               <input
                 type="text"
                 value={nameAr}
                 onChange={(e) => setNameAr(e.target.value)}
                 className="glass-input w-full rounded-xl px-4 py-2.5 text-white"
-                placeholder="اختياري"
+                placeholder={lang === "ar" ? "اختياري" : "Optional"}
               />
             </div>
 
-            <div>
-              <label className="mb-1.5 block text-sm font-medium text-white/80">Branch Code</label>
-              <input
-                type="text"
-                value={branchCode}
-                onChange={(e) => setBranchCode(e.target.value)}
-                className="glass-input w-full rounded-xl px-4 py-2.5 text-white"
-                placeholder="e.g. B30, B34"
-              />
-              <p className="mt-1 text-xs text-white/50">Unique code for Excel mapping (كود الفرع)</p>
-            </div>
+            <details className="rounded-lg border border-white/10">
+              <summary className="cursor-pointer px-3 py-2 text-xs text-white/60">
+                {lang === "ar" ? "إعدادات النظام (للمطابقة البرمجية فقط)" : "System settings (for matching only)"}
+              </summary>
+              <div className="border-t border-white/10 p-3">
+                <label className="mb-1.5 block text-xs font-medium text-white/60">
+                  {lang === "ar" ? "كود الفرع" : "Branch Code"}
+                </label>
+                <input
+                  type="text"
+                  value={branchCode}
+                  onChange={(e) => setBranchCode(e.target.value)}
+                  className="glass-input w-full rounded-lg px-3 py-2 text-sm text-white"
+                  placeholder="B30, B34"
+                />
+                <p className="mt-1 text-xs text-white/40">
+                  {lang === "ar" ? "للمطابقة الداخلية فقط – لا يظهر للمستخدم" : "Internal matching only – not shown to users"}
+                </p>
+              </div>
+            </details>
 
             <div className="flex gap-3 pt-4">
               <button

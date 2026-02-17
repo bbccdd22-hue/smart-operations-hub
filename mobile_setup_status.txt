@@ -1,0 +1,36 @@
+# Smart Operations Hub – Mobile Setup Status
+# Generated: 2026-02-13 (Pre-sleep save point)
+
+## Current Configuration
+
+**Current IP:** 192.168.195.113
+
+**Frontend:**
+- Port: 5174 (bound to 0.0.0.0)
+- URL: http://192.168.195.113:5174
+- Host binding: vite --host 0.0.0.0 (in package.json dev script)
+
+**Backend:**
+- Port: 8000
+- Binds: 0.0.0.0:8000
+- URL: http://192.168.195.113:8000
+
+**Network Profile:** Set to Private
+
+**Firewall:** SmartHub_Mobile rule (ports 5173, 8000) – run as Admin if not yet applied
+
+## Key Files
+
+- frontend/.env: VITE_API_BASE=http://192.168.195.113:8000/api
+- backend/run_server.bat: FRONTEND_ORIGINS includes 5173 and 5174
+- backend/config/settings.py: ALLOWED_HOSTS=['*'], FRONTEND_ORIGINS includes 192.168.195.113:5173, 192.168.195.113:5174
+
+## Next Session: Troubleshooting Priority
+
+Mobile still cannot connect despite:
+- Firewall rules (ports 5173, 8000)
+- Host binding (0.0.0.0)
+- Network set to Private
+- FRONTEND_ORIGINS and CORS configured
+
+Investigate: Router isolation, VPN, AP isolation, firewall on router, mobile browser cache, CORS preflight, CSRF cookie from different origin.

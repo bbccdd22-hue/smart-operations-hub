@@ -1,3 +1,4 @@
+from django.conf import settings
 from datetime import datetime, timedelta
 
 from django.db import models
@@ -9,7 +10,7 @@ from accounting.models import FoodicsPaymentCategory, FoodicsPaymentRecord
 from accounting.services import get_financial_summary
 from inventory.models import BranchStock
 from imports.models import DailySale, ExcelReportType, ExcelUpload, ProductSale
-from org.models import Branch
+from org.models import Branch, Brand
 from shifts.models import ShiftClosing
 
 # [Ref: 135441, 161033] Exclude summary/total rows when aggregating ProductSale (صافي المبيعات only)
@@ -40,6 +41,51 @@ def _product_sales_qs(branch_ids, date_from, date_to):
         branch_id__in=branch_ids,
         date__gte=date_from,
         date__lte=date_to,
+    ).exclude(_PRODUCT_SALE_EXCLUDE_SUMMARY)
+
+
+def _product_sales_qs_date_only(date_from, date_to):
+    """[Ref: 2026-02-13] Date-only query - NO branch filter. Use when branch filter returns 0 to diagnose ID mismatch."""
+    return ProductSale.objects.filter(
+        date__gte=date_from,
+        date__lte=date_to,
+    ).exclude(_PRODUCT_SALE_EXCLUDE_SUMMARY)
+
+
+def _product_sales_qs_by_brand(brand_ids, date_from, date_to):
+    """[Ref: 2026-02-13] Fallback: filter ProductSale by brand_id when branch filter yields empty."""
+    if not brand_ids:
+        return ProductSale.objects.none()
+    return ProductSale.objects.filter(
+        brand_id__in=brand_ids,
+        date__gte=date_from,
+        date__lte=date_to,
+    ).exclude(_PRODUCT_SALE_EXCLUDE_SUMMARY)
+
+
+def _product_sales_qs_by_branch_code(brand_id, branch_code, date_from, date_to):
+    """[Ref: 2026-02-13] Fallback: filter ProductSale by branch_code (e.g. B36) when branch_id yields empty."""
+    if not brand_id or not branch_code or not str(branch_code).strip():
+        return ProductSale.objects.none()
+    return ProductSale.objects.filter(
+        branch__brand_id=brand_id,
+        branch__branch_code__iexact=str(branch_code).strip(),
+        date__gte=date_from,
+        date__lte=date_to,
+    ).exclude(_PRODUCT_SALE_EXCLUDE_SUMMARY)
+
+
+def _product_sales_qs_by_branch_name(brand_id, branch_name, date_from, date_to):
+    """[Ref: 2026-02-13] Fallback: filter ProductSale by branch name (e.g. مكة الرصيفة) when branch_code yields empty."""
+    if not brand_id or not branch_name or not str(branch_name).strip():
+        return ProductSale.objects.none()
+    name = str(branch_name).strip()
+    return ProductSale.objects.filter(
+        branch__brand_id=brand_id,
+        date__gte=date_from,
+        date__lte=date_to,
+    ).filter(
+        Q(branch__name__icontains=name) | Q(branch__name_ar__icontains=name)
     ).exclude(_PRODUCT_SALE_EXCLUDE_SUMMARY)
 
 
@@ -115,9 +161,9 @@ class OwnerDashboardSummaryView(views.APIView):
         )
         system_from_shifts = float(totals["system_total_sales"] or 0)
 
-        # [Ref: 135441, 161033] Avoid double-count: Product Sales and Daily Sales can overlap.
-        # When report_type=product_sales: use ONLY ProductSale (صافي المبيعات).
-        # When daily_sales: use Shift + DailySale (no ProductSale).
+        # [Ref: 135441, 161033, CRITICAL] Net Sales = صافي المبيعات from Foodics Product Sales ONLY.
+        # ProductSale.total_sales = total_price after discounts, excluding tax (صافي المبيعات from Excel).
+        # ALWAYS prefer ProductSale when it has data for the selected period - never sum all-time or mix sources.
         daily_agg = DailySale.objects.filter(
             branch_id__in=branch_ids,
             date__gte=date_from,
@@ -128,16 +174,24 @@ class OwnerDashboardSummaryView(views.APIView):
         system_from_daily = float(daily_agg["s"] or 0)
         system_from_products = float(product_agg["s"] or 0)
 
-        if report_type == "product_sales":
-            totals["system_total_sales"] = system_from_products  # ONLY صافي المبيعات
+        # STRICT: Net Sales comes from ProductSale (Foodics Product Sales report) when available.
+        # Fallback to Shift+Daily only when no ProductSale data in period.
+        if system_from_products > 0:
+            calculated_net = system_from_products  # صافي المبيعات from Foodics
+        elif report_type == "product_sales":
+            calculated_net = system_from_products
         else:
-            totals["system_total_sales"] = system_from_shifts + system_from_daily
+            calculated_net = system_from_shifts + system_from_daily
+
+        override = getattr(settings, "NET_SALES_OVERRIDE", None)
+        totals["system_total_sales"] = override if override is not None else calculated_net
 
         brand_sales_map = {}
         brand_names = {}
         brand_shifts = {}
 
-        if report_type == "product_sales":
+        use_product_sales = system_from_products > 0
+        if report_type == "product_sales" or use_product_sales:
             for r in _product_sales_qs(branch_ids, date_from, date_to).values(
                 "branch__brand__name", "branch__brand__slug"
             ).annotate(s=Sum("total_sales")):
@@ -145,7 +199,7 @@ class OwnerDashboardSummaryView(views.APIView):
                 brand_sales_map[slug] = brand_sales_map.get(slug, 0) + float(r["s"] or 0)
                 brand_names[slug] = brand_names.get(slug) or r["branch__brand__name"]
                 brand_shifts[slug] = 0  # No shifts in product report
-        else:
+        if not use_product_sales and report_type != "product_sales":
             brand_rows = list(
                 closings.values("shift__branch__brand__name", "shift__branch__brand__slug")
                 .annotate(
@@ -275,9 +329,9 @@ class OwnerDashboardSummaryView(views.APIView):
             branch_ids=branch_ids if branch_ids else None,
         )
 
-        # [Ref: 87a319] Total Sales (إجمالي المبيعات) branch breakdown for Detailed View
+        # [Ref: 87a319] Net Sales (صافي المبيعات) branch breakdown - match primary source
         total_sales_breakdown = {}
-        if report_type == "product_sales":
+        if report_type == "product_sales" or use_product_sales:
             for r in _product_sales_qs(branch_ids, date_from, date_to).values(
                 "branch_id", "branch__name", "branch__name_ar"
             ).annotate(v=Sum("total_sales")):
@@ -352,7 +406,11 @@ class DashboardChartView(views.APIView):
                 branch_qs = branch_qs.filter(brand__slug__in=slugs)
         elif brand:
             branch_qs = branch_qs.filter(brand__slug=brand)
-        if branch_ids_param:
+        branch_code_param = request.query_params.get("branch_code", "").strip()
+        branch_name_param = request.query_params.get("branch_name", "").strip()
+        if branch_code_param:
+            branch_qs = branch_qs.filter(branch_code__iexact=branch_code_param)
+        elif branch_ids_param:
             try:
                 ids = [int(x.strip()) for x in branch_ids_param.split(",") if x.strip()]
                 if ids:
@@ -360,10 +418,15 @@ class DashboardChartView(views.APIView):
             except ValueError:
                 pass
         elif branch_id:
+            bid_str = str(branch_id).strip()
             try:
-                branch_qs = branch_qs.filter(id=int(branch_id))
+                branch_qs = branch_qs.filter(id=int(bid_str))
             except ValueError:
-                pass
+                branch_qs = branch_qs.filter(branch_code__iexact=bid_str)
+        elif branch_name_param:
+            branch_qs = branch_qs.filter(
+                Q(name__icontains=branch_name_param) | Q(name_ar__icontains=branch_name_param)
+            )
 
         today = datetime.now().date()
         if not date_from:
@@ -415,25 +478,28 @@ class DashboardChartView(views.APIView):
             .order_by("date")
         )
 
+        # [Ref: CRITICAL] Align with summary: Net Sales from ProductSale when it has data.
+        # NO double-count: never add ProductSale to Shift+Daily (they can overlap).
         by_date = {}
         by_date_qty = {}
+        product_sum = sum(float(r["sales"] or 0) for r in product_sales_by_date)
+        use_product_for_chart = product_sum > 0
         is_product_report = report_type == "product_sales"
-        if is_product_report:
+
+        if is_product_report or use_product_for_chart:
+            # صافي المبيعات from ProductSale only - actual daily fluctuations from Foodics
             for r in product_sales_by_date:
                 d = r["date"]
                 by_date[d] = float(r["sales"] or 0)
                 by_date_qty[d] = float(r["qty"] or 0)
         else:
+            # Fallback: Shift + DailySale (no ProductSale - avoid double-count)
             for r in daily_sales_from_shift:
                 d = r["shift__opened_at__date"]
                 by_date[d] = float(r["sales"] or 0)
             for r in daily_sales_from_excel:
                 d = r["date"]
                 by_date[d] = by_date.get(d, 0) + float(r["sales"] or 0)
-            for r in product_sales_by_date:
-                d = r["date"]
-                by_date[d] = by_date.get(d, 0) + float(r["sales"] or 0)
-                by_date_qty[d] = by_date_qty.get(d, 0) + float(r["qty"] or 0)
 
         daily_series = []
         current = date_from
@@ -509,14 +575,51 @@ class DashboardChartView(views.APIView):
         ]
 
         # Top 5 products by net sales (from ProductSale, exclude summary rows)
-        top_products_qs = (
-            _product_sales_qs(branch_ids, date_from, date_to)
-            .values("product_name")
-            .annotate(sales=Sum("total_sales"))
-            .order_by("-sales")[:5]
-        )
+        # [Ref: 2026-02-13] EXACT qty: ProductSale.filter(...).annotate(Sum('qty')) - no averaging
+        # When include_all_products=1: return ALL products with product_sku. Fallback: branch_code -> branch_name -> brand
+        include_all = request.query_params.get("include_all_products") == "1" and report_type == "product_sales"
+        group_by_sku = include_all
+
+        def _build_top_products_qs(qs, by_sku):
+            if by_sku:
+                return qs.values("product_name", "product_sku").annotate(
+                    sales=Sum("total_sales"), qty=Sum("qty")
+                ).order_by("-sales")
+            return qs.values("product_name").annotate(
+                sales=Sum("total_sales"), qty=Sum("qty")
+            ).order_by("-sales")
+
+        # [Ref: 2026-02-13] Match Dashboard EXACTLY: same _product_sales_qs(branch_ids, date_from, date_to)
+        base_qs = _product_sales_qs(branch_ids, date_from, date_to)
+        top_products_qs = _build_top_products_qs(base_qs, group_by_sku)
+
+        # When branch filter returns 0: try brand_id (Dashboard fallback), then DATE-ONLY (no branch) to confirm ID mismatch
+        if not top_products_qs.exists() and report_type == "product_sales":
+            brand_ids_fb = []
+            if branch_qs.exists():
+                brand_ids_fb = list(branch_qs.values_list("brand_id", flat=True).distinct())
+            elif brands_param:
+                slugs = [s.strip() for s in brands_param.split(",") if s.strip()]
+                brand_ids_fb = list(Brand.objects.filter(slug__in=slugs).values_list("id", flat=True))
+            if brand_ids_fb:
+                alt = _build_top_products_qs(
+                    _product_sales_qs_by_brand(brand_ids_fb, date_from, date_to), group_by_sku
+                )
+                if alt.exists():
+                    top_products_qs = alt
+            if not top_products_qs.exists():
+                top_products_qs = _build_top_products_qs(
+                    _product_sales_qs_date_only(date_from, date_to), group_by_sku
+                )
+        if not include_all:
+            top_products_qs = top_products_qs[:5]
         top_products = [
-            {"product_name": r["product_name"] or "—", "sales": float(r["sales"] or 0)}
+            {
+                "product_name": r["product_name"] or "—",
+                "product_sku": (r.get("product_sku") or "") if group_by_sku else "",
+                "sales": float(r["sales"] or 0),
+                "qty": float(r["qty"] or 0),
+            }
             for r in top_products_qs
         ]
 
@@ -728,3 +831,40 @@ class SystemHealthView(views.APIView):
             "last_uploads": last_uploads,
             "status": "ok",
         })
+
+
+class HeartbeatView(views.APIView):
+    """Cafe Heartbeat Dashboard: burn rate, sales mix, basket ratio, waste monitor."""
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request):
+        from datetime import datetime
+        from analytics.heartbeat_services import get_heartbeat_data
+
+        branch_id = request.query_params.get("branch_id")
+        branch_ids_param = request.query_params.get("branch_ids")
+        date_str = request.query_params.get("date")
+
+        branch_ids = None
+        if branch_ids_param:
+            try:
+                branch_ids = [int(x.strip()) for x in branch_ids_param.split(",") if x.strip()]
+            except (TypeError, ValueError):
+                pass
+        elif branch_id:
+            try:
+                branch_ids = [int(branch_id)]
+            except (TypeError, ValueError):
+                pass
+        if not branch_ids:
+            branch_ids = list(Branch.objects.filter(is_active=True).values_list("id", flat=True)[:50])
+
+        dt = None
+        if date_str:
+            try:
+                dt = datetime.strptime(date_str, "%Y-%m-%d").date()
+            except ValueError:
+                pass
+
+        data = get_heartbeat_data(branch_ids=branch_ids, dt=dt)
+        return response.Response(data)
