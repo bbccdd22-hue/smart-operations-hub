@@ -167,10 +167,23 @@ class IngredientListView(views.APIView):
         serial_code = (data.get("serial_code") or "").strip()
         system_group = data.get("system_group") or "raw_materials"
         pkg_factor = data.get("package_conversion_factor")
+        try:
+            parsed_pkg_factor = Decimal(str(pkg_factor)) if pkg_factor else None
+        except Exception:
+            return response.Response({"detail": "Invalid package_conversion_factor"}, status=400)
         pkg_name_en = (data.get("package_name_en") or "").strip()
         pkg_name_ar = (data.get("package_name_ar") or "").strip()
+        package_is_active = bool(data.get("package_is_active", True))
         default_display_unit = str(data.get("default_display_unit") or "").strip().lower()
         if default_display_unit not in ("base", "package"):
+            default_display_unit = "base"
+        has_active_package = (
+            parsed_pkg_factor is not None
+            and parsed_pkg_factor > 0
+            and bool(pkg_name_en or pkg_name_ar)
+            and package_is_active
+        )
+        if default_display_unit == "package" and not has_active_package:
             default_display_unit = "base"
         ing = Ingredient.objects.create(
             name_en=name_en,
@@ -178,9 +191,10 @@ class IngredientListView(views.APIView):
             base_unit=base_unit,
             serial_code=serial_code,
             system_group=system_group,
-            package_conversion_factor=Decimal(str(pkg_factor)) if pkg_factor else None,
+            package_conversion_factor=parsed_pkg_factor,
             package_name_en=pkg_name_en or "",
             package_name_ar=pkg_name_ar or "",
+            package_is_active=package_is_active,
             default_display_unit=default_display_unit,
         )
         return response.Response({
@@ -230,6 +244,7 @@ class IngredientDetailView(views.APIView):
         if not ing:
             return response.Response({"detail": "Not found"}, status=404)
         data = request.data
+        requested_default_display_unit = None
         if "name_en" in data and data["name_en"]:
             ing.name_en = str(data["name_en"]).strip()
         if "name_ar" in data:
@@ -244,7 +259,10 @@ class IngredientDetailView(views.APIView):
             ing.system_group = data["system_group"] or "raw_materials"
         if "package_conversion_factor" in data:
             val = data["package_conversion_factor"]
-            new_factor = Decimal(str(val)) if val else None
+            try:
+                new_factor = Decimal(str(val)) if val else None
+            except Exception:
+                return response.Response({"detail": "Invalid package_conversion_factor"}, status=400)
             if new_factor is None and (ing.package_conversion_factor or ing.package_name_en or ing.package_name_ar):
                 has_trans = (
                     StockMovement.objects.filter(ingredient=ing).exists()
@@ -270,7 +288,23 @@ class IngredientDetailView(views.APIView):
             if v is not None:
                 vs = str(v).strip().lower()
                 if vs in ("base", "package"):
+                    requested_default_display_unit = vs
                     ing.default_display_unit = vs
+        has_active_package = (
+            bool(ing.package_conversion_factor and ing.package_conversion_factor > 0)
+            and bool((ing.package_name_en or "").strip() or (ing.package_name_ar or "").strip())
+            and bool(getattr(ing, "package_is_active", True))
+        )
+        if requested_default_display_unit == "package" and not has_active_package:
+            return response.Response(
+                {
+                    "detail": "invalid_default_display_unit",
+                    "message": "Package default requires active package name and conversion factor.",
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if ing.default_display_unit == "package" and not has_active_package:
+            ing.default_display_unit = "base"
         if "unit_cost" in data:
             val = data.get("unit_cost")
             ing.unit_cost = Decimal(str(val)) if val is not None and str(val).strip() else None

@@ -339,6 +339,11 @@ export default function ItemFilePage() {
 
   const hasTransactions = currentIngredient?.has_transactions ?? false;
   const packageIsActive = form.package_is_active;
+  const hasPackageName = (form.package_name_en || "").trim().length > 0 || (form.package_name_ar || "").trim().length > 0;
+  const packageOptionEnabled = factor > 0 && hasPackageName && packageIsActive;
+  const packageDefaultLabel = isRTL
+    ? `عبوة مرتبطة (${form.package_name_ar || form.package_name_en || "—"})`
+    : `Linked Package (${form.package_name_en || form.package_name_ar || "—"})`;
 
   const unitsGridRows = useMemo(() => {
     const rows: Array<{
@@ -380,6 +385,14 @@ export default function ItemFilePage() {
   const handleSetDefaultUnit = useCallback(
     async (type: "base" | "package") => {
       const val = type;
+      if (val === "package" && !packageOptionEnabled) {
+        setError(
+          isRTL
+            ? "لا يمكن اختيار العبوة كوحدة افتراضية قبل تعريف العبوة وتفعيلها."
+            : "Package cannot be default before setting package details and enabling it.",
+        );
+        return;
+      }
       const prevVal = formRef.current.default_display_unit;
       if (val === prevVal) return;
       setError(null);
@@ -417,7 +430,7 @@ export default function ItemFilePage() {
         setSavingDefaultUnit(false);
       }
     },
-    [currentId, isRTL, addToast, loadIngredients],
+    [currentId, isRTL, addToast, loadIngredients, packageOptionEnabled],
   );
 
   const handleDeletePackage = async () => {
@@ -434,8 +447,16 @@ export default function ItemFilePage() {
         package_conversion_factor: null,
         package_name_en: "",
         package_name_ar: "",
+        default_display_unit: "base",
       });
-      setForm((f) => ({ ...f, package_conversion_factor: "", package_name_en: "", package_name_ar: "" }));
+      formRef.current = { ...formRef.current, default_display_unit: "base" };
+      setForm((f) => ({
+        ...f,
+        package_conversion_factor: "",
+        package_name_en: "",
+        package_name_ar: "",
+        default_display_unit: "base",
+      }));
       setDirty(false);
       loadIngredients();
     } catch (err) {
@@ -450,8 +471,9 @@ export default function ItemFilePage() {
     setSaving(true);
     setError(null);
     try {
-      await updateIngredient(currentId, { package_is_active: false });
-      setForm((f) => ({ ...f, package_is_active: false }));
+      await updateIngredient(currentId, { package_is_active: false, default_display_unit: "base" });
+      formRef.current = { ...formRef.current, default_display_unit: "base" };
+      setForm((f) => ({ ...f, package_is_active: false, default_display_unit: "base" }));
       setDirty(false);
       loadIngredients();
     } catch (err) {
@@ -771,6 +793,35 @@ export default function ItemFilePage() {
               <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 {isRTL ? "تحويل العبوة" : "Package Conversion"}
               </h3>
+              <div className="mb-4 max-w-md">
+                <label className="mb-1 block text-xs text-slate-500">
+                  {isRTL ? "الوحدة الافتراضية للعرض" : "Default Display Unit"}
+                </label>
+                <select
+                  value={form.default_display_unit}
+                  onChange={(e) => {
+                    void handleSetDefaultUnit(e.target.value as "base" | "package");
+                  }}
+                  disabled={savingDefaultUnit}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                >
+                  <option value="base">
+                    {isRTL
+                      ? `الوحدة الأساسية (${baseUnit?.code || "—"})`
+                      : `Base Unit (${baseUnit?.code || "—"})`}
+                  </option>
+                  <option value="package" disabled={!packageOptionEnabled}>
+                    {packageDefaultLabel}
+                  </option>
+                </select>
+                {!packageOptionEnabled && (
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    {isRTL
+                      ? "لتفعيل خيار العبوة: أدخل اسم العبوة + معامل التحويل وتأكد أنها مفعلة."
+                      : "To enable package default: set package name + conversion factor and keep package active."}
+                  </p>
+                )}
+              </div>
               <div className="flex flex-wrap items-center gap-3">
                 <span className="text-slate-600 dark:text-slate-400">
                   {isRTL ? "كل 1" : "Every 1"}
@@ -892,7 +943,7 @@ export default function ItemFilePage() {
                               (row.type === "base" && form.default_display_unit === "base") ||
                               (row.type === "package" && form.default_display_unit === "package")
                             }
-                            disabled={savingDefaultUnit}
+                            disabled={savingDefaultUnit || (row.type === "package" && !packageOptionEnabled)}
                             onClick={() => handleSetDefaultUnit(row.type)}
                             className="flex w-full cursor-pointer items-center justify-center gap-1 rounded p-1.5 transition hover:bg-slate-100 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
                           >
