@@ -35,7 +35,7 @@ export default function SmartPurchasePage() {
   }, []);
 
   const load = useCallback(async () => {
-    if (!branchId || branchId === "") return;
+    if (branchId === "") return;
     setLoading(true);
     setError(null);
     try {

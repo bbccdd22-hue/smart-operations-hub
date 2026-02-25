@@ -247,7 +247,7 @@ export default function ExecutiveDashboardPage() {
                         background: dark ? "rgba(15,23,42,0.95)" : "rgba(255,255,255,0.98)",
                         color: dark ? "#f1f5f9" : "#1e293b",
                       }}
-                      formatter={(v: number) => [sar(v), ""]}
+                      formatter={(v: number | string | undefined) => [sar(Number(v ?? 0)), ""]}
                       labelFormatter={(l) => l}
                     />
                     <Legend />

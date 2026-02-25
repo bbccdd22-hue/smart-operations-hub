@@ -39,6 +39,21 @@ const SYSTEM_GROUPS = [
 ] as const;
 
 type SortOrder = "asc" | "desc";
+type SystemGroup = (typeof SYSTEM_GROUPS)[number]["value"];
+type DefaultDisplayUnit = "base" | "package";
+type ItemFormState = {
+  name_en: string;
+  name_ar: string;
+  base_unit_id: number;
+  serial_code: string;
+  system_group: SystemGroup;
+  package_conversion_factor: string | number;
+  package_name_en: string;
+  package_name_ar: string;
+  package_is_active: boolean;
+  default_display_unit: DefaultDisplayUnit;
+  unit_cost: string | number;
+};
 
 /** تحويل الأرقام العربية (٠١٢٣...) إلى إنجليزية (0123...) لقبول كلاهما */
 function normalizeNumericInput(val: string): string {
@@ -66,18 +81,18 @@ export default function ItemFilePage() {
   const [searchBy, setSearchBy] = useState<"serial" | "name">("name");
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isAddingNew, setIsAddingNew] = useState(false);
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<ItemFormState>({
     name_en: "",
     name_ar: "",
     base_unit_id: 0,
     serial_code: "",
-    system_group: "raw_materials" as const,
-    package_conversion_factor: "" as string | number,
+    system_group: "raw_materials",
+    package_conversion_factor: "",
     package_name_en: "",
     package_name_ar: "",
     package_is_active: true,
-    default_display_unit: "base" as "base" | "package",
-    unit_cost: "" as string | number,
+    default_display_unit: "base",
+    unit_cost: "",
   });
   const packageConversionRef = useRef<HTMLDivElement>(null);
   const packageNameEnRef = useRef<HTMLInputElement>(null);
@@ -166,7 +181,7 @@ export default function ItemFilePage() {
         name_ar: currentIngredient.name_ar || "",
         base_unit_id: currentIngredient.base_unit_id ?? units[0]?.id ?? 0,
         serial_code: currentIngredient.serial_code || "",
-        system_group: (currentIngredient.system_group as "raw_materials" | "packaging" | "other") || "raw_materials",
+        system_group: (currentIngredient.system_group as SystemGroup) || "raw_materials",
         package_conversion_factor: currentIngredient.package_conversion_factor ?? "",
         package_name_en: currentIngredient.package_name_en || "",
         package_name_ar: currentIngredient.package_name_ar || "",
@@ -244,7 +259,7 @@ export default function ItemFilePage() {
           name_ar: detail.name_ar || "",
           base_unit_id: detail.base_unit_id ?? units[0]?.id ?? 0,
           serial_code: detail.serial_code || "",
-          system_group: (detail.system_group as "raw_materials" | "packaging" | "other") || "raw_materials",
+          system_group: (detail.system_group as SystemGroup) || "raw_materials",
           package_conversion_factor: detail.package_conversion_factor ?? "",
           package_name_en: detail.package_name_en || "",
           package_name_ar: detail.package_name_ar || "",
