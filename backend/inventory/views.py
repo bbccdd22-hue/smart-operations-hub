@@ -169,6 +169,9 @@ class IngredientListView(views.APIView):
         pkg_factor = data.get("package_conversion_factor")
         pkg_name_en = (data.get("package_name_en") or "").strip()
         pkg_name_ar = (data.get("package_name_ar") or "").strip()
+        default_display_unit = str(data.get("default_display_unit") or "").strip().lower()
+        if default_display_unit not in ("base", "package"):
+            default_display_unit = "base"
         ing = Ingredient.objects.create(
             name_en=name_en,
             name_ar=name_ar,
@@ -178,6 +181,7 @@ class IngredientListView(views.APIView):
             package_conversion_factor=Decimal(str(pkg_factor)) if pkg_factor else None,
             package_name_en=pkg_name_en or "",
             package_name_ar=pkg_name_ar or "",
+            default_display_unit=default_display_unit,
         )
         return response.Response({
             "id": ing.id,
@@ -186,6 +190,7 @@ class IngredientListView(views.APIView):
             "name_ar": ing.name_ar,
             "system_code": ing.system_code,
             "base_unit_code": ing.base_unit.code,
+            "default_display_unit": ing.default_display_unit,
         }, status=status.HTTP_201_CREATED)
 
 

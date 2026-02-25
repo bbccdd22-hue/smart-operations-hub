@@ -304,6 +304,7 @@ export default function ItemFilePage() {
           : undefined,
         package_name_en: form.package_name_en?.trim(),
         package_name_ar: form.package_name_ar?.trim(),
+        default_display_unit: form.default_display_unit,
       });
       setDirty(false);
       setIsAddingNew(false);
@@ -364,13 +365,17 @@ export default function ItemFilePage() {
   const handleSetDefaultUnit = useCallback(
     async (type: "base" | "package") => {
       const val = type;
-      if (!currentId) return;
-      const prevVal = form.default_display_unit;
+      const prevVal = formRef.current.default_display_unit;
       if (val === prevVal) return;
       setError(null);
       formRef.current = { ...formRef.current, default_display_unit: val };
       setForm((f) => ({ ...f, default_display_unit: val }));
       setDirty(true);
+
+      // أثناء إضافة صنف جديد لا يوجد currentId بعد؛ نكتفي بتحديث الفورم
+      // وسيتم حفظ القيمة ضمن payload عند الإنشاء.
+      if (!currentId) return;
+
       setSavingDefaultUnit(true);
       try {
         await updateIngredient(currentId, { default_display_unit: val });
@@ -397,7 +402,7 @@ export default function ItemFilePage() {
         setSavingDefaultUnit(false);
       }
     },
-    [currentId, form.default_display_unit, isRTL, addToast, loadIngredients],
+    [currentId, isRTL, addToast, loadIngredients],
   );
 
   const handleDeletePackage = async () => {
