@@ -1,5 +1,6 @@
 from datetime import date
 from decimal import Decimal
+import uuid
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase
@@ -19,17 +20,25 @@ from procurement.purchase_suggestion_services import get_purchase_suggestions
 
 class PurchaseSuggestionDisplayUnitTests(TestCase):
     def setUp(self):
-        self.base_unit = Unit.objects.create(code="ml", name_en="Milliliter", name_ar="مل")
-        self.city = City.objects.create(name_en="Riyadh", code="riyadh")
-        self.brand = Brand.objects.create(name="Demo Brand", slug="demo-brand")
+        self.base_unit, _ = Unit.objects.get_or_create(
+            code="ml",
+            defaults={"name_en": "Milliliter", "name_ar": "مل"},
+        )
+        uniq = uuid.uuid4().hex[:8]
+        self.city = City.objects.create(name_en=f"Riyadh {uniq}", code=f"riyadh-{uniq}")
+        self.brand = Brand.objects.create(
+            name=f"Demo Brand {uniq}",
+            slug=f"demo-brand-{uniq}",
+            brand_code=f"BR-{uniq}",
+        )
         self.branch = Branch.objects.create(
             brand=self.brand,
             city=self.city,
-            name="Main Branch",
-            code="main-branch",
+            name=f"Main Branch {uniq}",
+            code=f"main-branch-{uniq}",
         )
         self.ingredient = Ingredient.objects.create(
-            name_en="Milk",
+            name_en=f"Milk-{uniq}",
             name_ar="حليب",
             base_unit=self.base_unit,
             package_conversion_factor=Decimal("12000"),
@@ -44,7 +53,7 @@ class PurchaseSuggestionDisplayUnitTests(TestCase):
             on_hand=Decimal("6000"),
             reorder_level=Decimal("0"),
         )
-        product = FoodicsProduct.objects.create(foodics_product_id="SKU-MILK-1", name="Latte")
+        product = FoodicsProduct.objects.create(foodics_product_id=f"SKU-MILK-{uniq}", name=f"Latte {uniq}")
         recipe = Recipe.objects.create(
             product=product,
             yield_qty=Decimal("1"),

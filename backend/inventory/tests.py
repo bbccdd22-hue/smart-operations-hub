@@ -1,4 +1,5 @@
 import json
+import uuid
 
 from django.contrib.auth import get_user_model
 from django.test import TestCase
@@ -11,9 +12,12 @@ class DefaultDisplayUnitPersistenceTests(TestCase):
         user_model = get_user_model()
         self.user = user_model.objects.create_user(username="tester", password="123")
         self.client.force_login(self.user)
-        self.base_unit = Unit.objects.create(code="ml", name_en="Milliliter", name_ar="مل")
+        self.base_unit, _ = Unit.objects.get_or_create(
+            code="ml",
+            defaults={"name_en": "Milliliter", "name_ar": "مل"},
+        )
         self.ingredient = Ingredient.objects.create(
-            name_en="Milk",
+            name_en=f"Milk-{uuid.uuid4().hex[:8]}",
             name_ar="حليب",
             base_unit=self.base_unit,
             package_conversion_factor="12000",
