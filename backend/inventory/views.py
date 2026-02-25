@@ -28,6 +28,20 @@ from inventory.profit_services import get_profit_summary
 from .product_catalog_parser import parse_product_catalog_excel
 
 
+def _coerce_bool(value, default: bool = True) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        v = value.strip().lower()
+        if v in {"1", "true", "yes", "on"}:
+            return True
+        if v in {"0", "false", "no", "off"}:
+            return False
+    return bool(value)
+
+
 class ProductsWithRecipesView(views.APIView):
     """List products that have a BOM (for Production Planner dropdown)."""
     permission_classes = [permissions.IsAuthenticated]
@@ -173,14 +187,13 @@ class IngredientListView(views.APIView):
             return response.Response({"detail": "Invalid package_conversion_factor"}, status=400)
         pkg_name_en = (data.get("package_name_en") or "").strip()
         pkg_name_ar = (data.get("package_name_ar") or "").strip()
-        package_is_active = bool(data.get("package_is_active", True))
+        package_is_active = _coerce_bool(data.get("package_is_active", True), default=True)
         default_display_unit = str(data.get("default_display_unit") or "").strip().lower()
         if default_display_unit not in ("base", "package"):
             default_display_unit = "base"
         has_active_package = (
             parsed_pkg_factor is not None
             and parsed_pkg_factor > 0
-            and bool(pkg_name_en or pkg_name_ar)
             and package_is_active
         )
         if default_display_unit == "package" and not has_active_package:
@@ -282,7 +295,7 @@ class IngredientDetailView(views.APIView):
         if "package_name_ar" in data:
             ing.package_name_ar = str(data.get("package_name_ar") or "").strip()
         if "package_is_active" in data:
-            ing.package_is_active = bool(data.get("package_is_active", True))
+            ing.package_is_active = _coerce_bool(data.get("package_is_active", True), default=True)
         if "default_display_unit" in data:
             v = data.get("default_display_unit")
             if v is not None:
@@ -292,17 +305,19 @@ class IngredientDetailView(views.APIView):
                     ing.default_display_unit = vs
         has_active_package = (
             bool(ing.package_conversion_factor and ing.package_conversion_factor > 0)
-            and bool((ing.package_name_en or "").strip() or (ing.package_name_ar or "").strip())
             and bool(getattr(ing, "package_is_active", True))
         )
-        if requested_default_display_unit == "package" and not has_active_package:
-            return response.Response(
-                {
-                    "detail": "invalid_default_display_unit",
-                    "message": "Package default requires active package name and conversion factor.",
-                },
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        if requested_default_display_unit == "package":
+            if not has_active_package:
+                return response.Response(
+                    {
+                        "detail": "invalid_default_display_unit",
+                        "message": "Package default requires active package and conversion factor > 0.",
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+            # Force update when package is active and conversion factor is valid.
+            ing.default_display_unit = "package"
         if ing.default_display_unit == "package" and not has_active_package:
             ing.default_display_unit = "base"
         if "unit_cost" in data:

@@ -54,3 +54,23 @@ class DefaultDisplayUnitPersistenceTests(TestCase):
 
         self.ingredient.refresh_from_db()
         self.assertEqual(self.ingredient.default_display_unit, "base")
+
+    def test_patch_allows_package_default_when_active_and_factor_valid(self):
+        ing = Ingredient.objects.create(
+            name_en=f"Milk2-{uuid.uuid4().hex[:8]}",
+            name_ar="",
+            base_unit=self.base_unit,
+            package_conversion_factor="12000",
+            package_name_en="",
+            package_name_ar="",
+            package_is_active=True,
+            default_display_unit="base",
+        )
+        patch_res = self.client.patch(
+            f"/api/inventory/ingredients/{ing.id}/",
+            data=json.dumps({"default_display_unit": "package"}),
+            content_type="application/json",
+        )
+        self.assertEqual(patch_res.status_code, 200, patch_res.content)
+        ing.refresh_from_db()
+        self.assertEqual(ing.default_display_unit, "package")

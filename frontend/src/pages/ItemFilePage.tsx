@@ -339,8 +339,7 @@ export default function ItemFilePage() {
 
   const hasTransactions = currentIngredient?.has_transactions ?? false;
   const packageIsActive = form.package_is_active;
-  const hasPackageName = (form.package_name_en || "").trim().length > 0 || (form.package_name_ar || "").trim().length > 0;
-  const packageOptionEnabled = factor > 0 && hasPackageName && packageIsActive;
+  const packageOptionEnabled = factor > 0 && packageIsActive;
   const packageDefaultLabel = isRTL
     ? `عبوة مرتبطة (${form.package_name_ar || form.package_name_en || "—"})`
     : `Linked Package (${form.package_name_en || form.package_name_ar || "—"})`;
@@ -817,8 +816,8 @@ export default function ItemFilePage() {
                 {!packageOptionEnabled && (
                   <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                     {isRTL
-                      ? "لتفعيل خيار العبوة: أدخل اسم العبوة + معامل التحويل وتأكد أنها مفعلة."
-                      : "To enable package default: set package name + conversion factor and keep package active."}
+                      ? "لتفعيل خيار العبوة: أدخل معامل تحويل أكبر من صفر وتأكد أن حالة العبوة مفعلة."
+                      : "To enable package default: set conversion factor > 0 and keep package active."}
                   </p>
                 )}
               </div>
