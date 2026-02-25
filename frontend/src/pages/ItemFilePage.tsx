@@ -405,7 +405,20 @@ export default function ItemFilePage() {
 
       setSavingDefaultUnit(true);
       try {
-        await updateIngredient(currentId, { default_display_unit: val });
+        const nextPayload = val === "package"
+          ? {
+              // Save package fields with default in one PATCH to avoid lock
+              // when package edits are still unsaved in the form.
+              package_conversion_factor: formRef.current.package_conversion_factor
+                ? Number(formRef.current.package_conversion_factor)
+                : null,
+              package_name_en: (formRef.current.package_name_en || "").trim(),
+              package_name_ar: (formRef.current.package_name_ar || "").trim(),
+              package_is_active: formRef.current.package_is_active,
+              default_display_unit: val,
+            }
+          : { default_display_unit: val };
+        await updateIngredient(currentId, nextPayload);
         skipFormSyncRef.current = true;
         lastSyncedIngredientIdRef.current = currentId;
         const detail = await fetchIngredientDetail(currentId, true);

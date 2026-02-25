@@ -74,3 +74,41 @@ class DefaultDisplayUnitPersistenceTests(TestCase):
         self.assertEqual(patch_res.status_code, 200, patch_res.content)
         ing.refresh_from_db()
         self.assertEqual(ing.default_display_unit, "package")
+
+    def test_patch_accepts_package_name_alias_for_default_display_unit(self):
+        patch_res = self.client.patch(
+            f"/api/inventory/ingredients/{self.ingredient.id}/",
+            data=json.dumps({"default_display_unit": "case*12"}),
+            content_type="application/json",
+        )
+        self.assertEqual(patch_res.status_code, 200, patch_res.content)
+        self.ingredient.refresh_from_db()
+        self.assertEqual(self.ingredient.default_display_unit, "package")
+
+    def test_patch_can_set_package_and_default_in_single_request(self):
+        ing = Ingredient.objects.create(
+            name_en=f"Milk3-{uuid.uuid4().hex[:8]}",
+            name_ar="",
+            base_unit=self.base_unit,
+            package_conversion_factor=None,
+            package_name_en="",
+            package_name_ar="",
+            package_is_active=True,
+            default_display_unit="base",
+        )
+        patch_res = self.client.patch(
+            f"/api/inventory/ingredients/{ing.id}/",
+            data=json.dumps(
+                {
+                    "package_conversion_factor": "1000",
+                    "package_name_en": "Bottle 1L",
+                    "package_is_active": True,
+                    "default_display_unit": "package",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(patch_res.status_code, 200, patch_res.content)
+        ing.refresh_from_db()
+        self.assertEqual(str(ing.package_conversion_factor), "1000.000000")
+        self.assertEqual(ing.default_display_unit, "package")

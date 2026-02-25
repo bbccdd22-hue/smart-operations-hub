@@ -42,6 +42,25 @@ def _coerce_bool(value, default: bool = True) -> bool:
     return bool(value)
 
 
+def _resolve_default_display_unit(value: str | None, package_name_en: str = "", package_name_ar: str = "") -> str | None:
+    if value is None:
+        return None
+    v = str(value).strip().lower()
+    if v in ("base", "package"):
+        return v
+    aliases = {
+        str(package_name_en or "").strip().lower(),
+        str(package_name_ar or "").strip().lower(),
+        "pkg",
+        "pack",
+        "package_unit",
+        "added_unit",
+    }
+    if v and v in aliases:
+        return "package"
+    return None
+
+
 class ProductsWithRecipesView(views.APIView):
     """List products that have a BOM (for Production Planner dropdown)."""
     permission_classes = [permissions.IsAuthenticated]
@@ -188,8 +207,12 @@ class IngredientListView(views.APIView):
         pkg_name_en = (data.get("package_name_en") or "").strip()
         pkg_name_ar = (data.get("package_name_ar") or "").strip()
         package_is_active = _coerce_bool(data.get("package_is_active", True), default=True)
-        default_display_unit = str(data.get("default_display_unit") or "").strip().lower()
-        if default_display_unit not in ("base", "package"):
+        default_display_unit = _resolve_default_display_unit(
+            data.get("default_display_unit"),
+            package_name_en=pkg_name_en,
+            package_name_ar=pkg_name_ar,
+        )
+        if default_display_unit is None:
             default_display_unit = "base"
         has_active_package = (
             parsed_pkg_factor is not None
@@ -297,12 +320,14 @@ class IngredientDetailView(views.APIView):
         if "package_is_active" in data:
             ing.package_is_active = _coerce_bool(data.get("package_is_active", True), default=True)
         if "default_display_unit" in data:
-            v = data.get("default_display_unit")
-            if v is not None:
-                vs = str(v).strip().lower()
-                if vs in ("base", "package"):
-                    requested_default_display_unit = vs
-                    ing.default_display_unit = vs
+            vs = _resolve_default_display_unit(
+                data.get("default_display_unit"),
+                package_name_en=ing.package_name_en,
+                package_name_ar=ing.package_name_ar,
+            )
+            if vs in ("base", "package"):
+                requested_default_display_unit = vs
+                ing.default_display_unit = vs
         has_active_package = (
             bool(ing.package_conversion_factor and ing.package_conversion_factor > 0)
             and bool(getattr(ing, "package_is_active", True))
