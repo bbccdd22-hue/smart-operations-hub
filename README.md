@@ -7,6 +7,21 @@ Cloud ERP (SaaS) for multi-brand F&B operations in KSA, designed to integrate wi
 - `backend/`: Django + DRF (PostgreSQL schema, shift reconciliation, inventory BOM engine)
 - `frontend/`: React + Tailwind (Owner Dashboard + Shift Closing UI, RTL/Arabic supported)
 
+## Cloud Agent environment setup
+
+For a fresh cloud agent machine, run one command from repo root:
+
+```bash
+./setup_cloud_agent_env.sh
+```
+
+This script will:
+
+- install backend Python dependencies from `backend/requirements.txt`
+- install frontend dependencies via `npm ci` in `frontend/`
+- verify backend with `python3 manage.py check`
+- verify frontend with `npm run build`
+
 ## Backend (Django)
 
 ### Environment
