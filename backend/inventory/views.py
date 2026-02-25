@@ -6,8 +6,20 @@ from decimal import Decimal
 from rest_framework import permissions, response, status, views
 from rest_framework.exceptions import PermissionDenied
 
-from core.permissions import get_user_scope
-from inventory.models import FoodicsProduct, Ingredient, Unit, WasteLog
+from core.permissions import can_view_cost_price, get_user_scope
+from analytics.views import _apply_branch_scope
+from org.models import Branch
+from inventory.models import (
+    BranchStock,
+    FoodicsProduct,
+    Ingredient,
+    StockMovement,
+    StockTransfer,
+    StockTransferLine,
+    StockTransferStatus,
+    Unit,
+    WasteLog,
+)
 from inventory.recipe_upload import parse_recipe_excel
 from inventory.services import production_plan_requirements
 
@@ -109,6 +121,13 @@ class IngredientListView(views.APIView):
         qs = Ingredient.objects.filter(is_active=True).select_related("base_unit").order_by("name_en")
         if system_group and system_group in ("raw_materials", "packaging", "other"):
             qs = qs.filter(system_group=system_group)
+        ing_ids_with_movements = set(
+            StockMovement.objects.values_list("ingredient_id", flat=True).distinct()
+        )
+        ing_ids_with_transfers = set(
+            StockTransferLine.objects.values_list("ingredient_id", flat=True).distinct()
+        )
+        all_with_transactions = ing_ids_with_movements | ing_ids_with_transfers
         out = []
         for ing in qs:
             bu = ing.base_unit
@@ -126,6 +145,9 @@ class IngredientListView(views.APIView):
                 "package_conversion_factor": str(ing.package_conversion_factor) if ing.package_conversion_factor else None,
                 "package_name_en": ing.package_name_en or "",
                 "package_name_ar": ing.package_name_ar or "",
+                "package_is_active": getattr(ing, "package_is_active", True),
+                "default_display_unit": getattr(ing, "default_display_unit", "base"),
+                "has_transactions": ing.id in all_with_transactions,
                 "unit_cost": str(ing.unit_cost) if ing.unit_cost is not None else None,
             })
         return response.Response(out)
@@ -176,6 +198,10 @@ class IngredientDetailView(views.APIView):
         if not ing:
             return response.Response({"detail": "Not found"}, status=404)
         bu = ing.base_unit
+        has_transactions = (
+            StockMovement.objects.filter(ingredient=ing).exists()
+            or StockTransferLine.objects.filter(ingredient=ing).exists()
+        )
         return response.Response({
             "id": ing.id,
             "serial_code": ing.serial_code or "",
@@ -188,6 +214,9 @@ class IngredientDetailView(views.APIView):
             "package_conversion_factor": str(ing.package_conversion_factor) if ing.package_conversion_factor else None,
             "package_name_en": ing.package_name_en or "",
             "package_name_ar": ing.package_name_ar or "",
+            "package_is_active": getattr(ing, "package_is_active", True),
+            "default_display_unit": getattr(ing, "default_display_unit", "base"),
+            "has_transactions": has_transactions,
             "unit_cost": str(ing.unit_cost) if ing.unit_cost is not None else None,
         })
 
@@ -210,11 +239,33 @@ class IngredientDetailView(views.APIView):
             ing.system_group = data["system_group"] or "raw_materials"
         if "package_conversion_factor" in data:
             val = data["package_conversion_factor"]
-            ing.package_conversion_factor = Decimal(str(val)) if val else None
+            new_factor = Decimal(str(val)) if val else None
+            if new_factor is None and (ing.package_conversion_factor or ing.package_name_en or ing.package_name_ar):
+                has_trans = (
+                    StockMovement.objects.filter(ingredient=ing).exists()
+                    or StockTransferLine.objects.filter(ingredient=ing).exists()
+                )
+                if has_trans:
+                    return response.Response(
+                        {"detail": "has_transactions", "message": "لا يمكن حذف العبوة لوجود حركات مخزنية. يمكن إيقافها فقط."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            ing.package_conversion_factor = new_factor
+            if new_factor is None:
+                ing.package_name_en = ""
+                ing.package_name_ar = ""
         if "package_name_en" in data:
             ing.package_name_en = str(data.get("package_name_en") or "").strip()
         if "package_name_ar" in data:
             ing.package_name_ar = str(data.get("package_name_ar") or "").strip()
+        if "package_is_active" in data:
+            ing.package_is_active = bool(data.get("package_is_active", True))
+        if "default_display_unit" in data:
+            v = data.get("default_display_unit")
+            if v is not None:
+                vs = str(v).strip().lower()
+                if vs in ("base", "package"):
+                    ing.default_display_unit = vs
         if "unit_cost" in data:
             val = data.get("unit_cost")
             ing.unit_cost = Decimal(str(val)) if val is not None and str(val).strip() else None
@@ -226,6 +277,7 @@ class IngredientDetailView(views.APIView):
             "name_ar": ing.name_ar,
             "base_unit_code": bu.code if bu else "",
             "package_conversion_factor": str(ing.package_conversion_factor) if ing.package_conversion_factor else None,
+            "default_display_unit": getattr(ing, "default_display_unit", "base"),
         })
 
     def delete(self, request, pk):
@@ -266,12 +318,13 @@ class ProfitSummaryView(views.APIView):
     """
     Profit summary: Total Sales, COGS, Gross Profit.
     Query params: branch_id or branch_ids, date_from, date_to. Optional: brands.
+    [Ref: Audit] فلترة حسب صلاحيات المستخدم – لا يرى سوى الفروع المخصصة له.
     """
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         from datetime import datetime
-        from org.models import Branch
+        from org.models import Branch, Brand
 
         branch_id = request.query_params.get("branch_id")
         branch_ids_param = request.query_params.get("branch_ids")
@@ -279,28 +332,34 @@ class ProfitSummaryView(views.APIView):
         date_from_s = request.query_params.get("date_from")
         date_to_s = request.query_params.get("date_to")
 
-        branch_ids = None
+        branch_qs = Branch.objects.filter(is_active=True).order_by("name")
         brand_ids = None
 
         if branch_ids_param:
             try:
-                branch_ids = [int(x.strip()) for x in branch_ids_param.split(",") if x.strip()]
+                ids = [int(x.strip()) for x in branch_ids_param.split(",") if x.strip()]
+                if ids:
+                    branch_qs = branch_qs.filter(id__in=ids)
             except (TypeError, ValueError):
                 pass
         elif branch_id:
             try:
-                branch_ids = [int(branch_id)]
+                branch_qs = branch_qs.filter(id=int(branch_id))
             except (TypeError, ValueError):
                 pass
 
         if brands_param:
-            from org.models import Brand
             slugs = [s.strip() for s in brands_param.split(",") if s.strip()]
             if slugs:
                 brand_ids = list(Brand.objects.filter(slug__in=slugs).values_list("id", flat=True))
+                if brand_ids:
+                    branch_qs = branch_qs.filter(brand_id__in=brand_ids)
 
-        if not branch_ids and not brand_ids:
-            branch_ids = list(Branch.objects.filter(is_active=True).values_list("id", flat=True)[:50])
+        if not (branch_ids_param or branch_id or brands_param):
+            branch_qs = branch_qs[:50]
+
+        branch_qs = _apply_branch_scope(request, branch_qs)
+        branch_ids = list(branch_qs.values_list("id", flat=True))
 
         today = datetime.now().date()
         try:
@@ -318,6 +377,15 @@ class ProfitSummaryView(views.APIView):
             date_to=date_to,
             brand_ids=brand_ids if not branch_ids else None,
         )
+        if not can_view_cost_price(request.user):
+            result = {
+                "total_sales": result.get("total_sales", "0"),
+                "total_cogs": None,
+                "gross_profit": None,
+                "ingredients_with_cost": [],
+                "flagged_for_review": [],
+                **({"error": result["error"]} if "error" in result else {}),
+            }
         return response.Response(result)
 
 
@@ -369,6 +437,11 @@ class WasteReportView(views.APIView):
                 pass
 
         qs = WasteLog.objects.filter(date=log_date).select_related("ingredient", "ingredient__base_unit")
+        if branch_id:
+            try:
+                qs = qs.filter(branch_id=int(branch_id))
+            except (ValueError, TypeError):
+                pass
         seen_ids = set()
         out = []
         for wl in qs:
@@ -419,6 +492,7 @@ class WasteReportView(views.APIView):
         except ValueError:
             log_date = datetime.now().date()
 
+        branch_id = data.get("branch_id")
         saved = 0
         for e in entries:
             ing_id = e.get("ingredient_id")
@@ -436,6 +510,7 @@ class WasteReportView(views.APIView):
             WasteLog.objects.update_or_create(
                 ingredient_id=ing_id,
                 date=log_date,
+                branch_id=branch_id,
                 defaults={
                     "theoretical_usage": theoretical,
                     "actual_usage": actual,
@@ -445,3 +520,258 @@ class WasteReportView(views.APIView):
             saved += 1
 
         return response.Response({"saved": saved, "date": log_date.isoformat()}, status=status.HTTP_201_CREATED)
+
+
+class CentralKitchenTransfersView(views.APIView):
+    """شاشة المطبخ المركزي – طلبات التحويل الواردة من الفروع."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        central_branches = Branch.objects.filter(
+            is_central_kitchen=True, is_active=True
+        )
+        scope = get_user_scope(request.user)
+        if scope["branch_ids"] is not None:
+            central_branches = central_branches.filter(id__in=scope["branch_ids"])
+        central_ids = list(central_branches.values_list("id", flat=True))
+        if not central_ids:
+            return response.Response({"transfers": []})
+
+        qs = StockTransfer.objects.filter(
+            to_branch_id__in=central_ids,
+            status=StockTransferStatus.PENDING,
+        ).select_related(
+            "from_branch", "to_branch", "requested_by"
+        ).prefetch_related("lines__ingredient").order_by("-requested_at")[:50]
+
+        out = []
+        for t in qs:
+            lines = [
+                {
+                    "ingredient_id": l.ingredient_id,
+                    "ingredient_name": l.ingredient.name_en,
+                    "qty": str(l.qty),
+                }
+                for l in t.lines.all()
+            ]
+            out.append({
+                "id": t.id,
+                "uuid": str(t.uuid),
+                "from_branch_id": t.from_branch_id,
+                "from_branch_name": t.from_branch.name,
+                "from_branch_name_ar": t.from_branch.name_ar or "",
+                "to_branch_id": t.to_branch_id,
+                "to_branch_name": t.to_branch.name,
+                "status": t.status,
+                "requested_at": t.requested_at.isoformat() if t.requested_at else None,
+                "requested_by": t.requested_by.username if t.requested_by else None,
+                "lines": lines,
+                "notes": t.notes or "",
+            })
+        return response.Response({"transfers": out})
+
+
+class StockTransferListCreateView(views.APIView):
+    """قائمة طلبات التحويل بين الفروع."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from inventory.transfer_services import notify_stale_transfers_if_any
+        notify_stale_transfers_if_any()
+        scope = get_user_scope(request.user)
+        qs = StockTransfer.objects.select_related(
+            "from_branch", "to_branch", "requested_by", "confirmed_by"
+        ).prefetch_related("lines__ingredient")
+        if scope["branch_ids"] is not None:
+            qs = qs.filter(
+                Q(from_branch_id__in=scope["branch_ids"])
+                | Q(to_branch_id__in=scope["branch_ids"])
+            )
+        from_branch = request.query_params.get("from_branch")
+        to_branch = request.query_params.get("to_branch")
+        status_filter = request.query_params.get("status")
+        if from_branch:
+            try:
+                qs = qs.filter(from_branch_id=int(from_branch))
+            except (ValueError, TypeError):
+                pass
+        if to_branch:
+            try:
+                qs = qs.filter(to_branch_id=int(to_branch))
+            except (ValueError, TypeError):
+                pass
+        if status_filter:
+            qs = qs.filter(status=status_filter)
+        qs = qs.order_by("-requested_at")[:100]
+        out = []
+        for t in qs:
+            lines = [
+                {
+                    "ingredient_id": l.ingredient_id,
+                    "ingredient_name": l.ingredient.name_en,
+                    "qty": str(l.qty),
+                }
+                for l in t.lines.all()
+            ]
+            out.append({
+                "id": t.id,
+                "uuid": str(t.uuid),
+                "from_branch_id": t.from_branch_id,
+                "from_branch_name": t.from_branch.name,
+                "to_branch_id": t.to_branch_id,
+                "to_branch_name": t.to_branch.name,
+                "status": t.status,
+                "requested_at": t.requested_at.isoformat() if t.requested_at else None,
+                "confirmed_at": t.confirmed_at.isoformat() if t.confirmed_at else None,
+                "lines": lines,
+                "notes": t.notes or "",
+            })
+        return response.Response({"transfers": out})
+
+    def post(self, request):
+        from_branch_id = request.data.get("from_branch_id")
+        to_branch_id = request.data.get("to_branch_id")
+        lines = request.data.get("lines") or []
+        notes = request.data.get("notes", "")
+        if not from_branch_id or not to_branch_id:
+            return response.Response(
+                {"detail": "from_branch_id and to_branch_id are required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if from_branch_id == to_branch_id:
+            return response.Response(
+                {"detail": "الفرع المرسل والمستلم يجب أن يكونا مختلفين"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            from_branch_id = int(from_branch_id)
+            to_branch_id = int(to_branch_id)
+        except (TypeError, ValueError):
+            return response.Response({"detail": "Invalid branch IDs"}, status=400)
+        scope = get_user_scope(request.user)
+        if scope["branch_ids"] is not None and from_branch_id not in (scope["branch_ids"] or []):
+            raise PermissionDenied("لا يمكنك إنشاء تحويل من فرع غير معين لك")
+        valid_lines = []
+        for L in lines:
+            ing_id = L.get("ingredient_id")
+            qty = L.get("qty")
+            if not ing_id or not qty:
+                continue
+            try:
+                qty_val = Decimal(str(qty))
+                if qty_val <= 0:
+                    continue
+            except Exception:
+                continue
+            if not Ingredient.objects.filter(pk=int(ing_id)).exists():
+                continue
+            valid_lines.append((int(ing_id), qty_val))
+        if not valid_lines:
+            return response.Response(
+                {"detail": "يجب إضافة سطر واحد على الأقل (ingredient_id, qty)"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        from django.db import transaction
+        from org.models import Branch
+
+        try:
+            Branch.objects.get(pk=from_branch_id)
+            Branch.objects.get(pk=to_branch_id)
+        except Branch.DoesNotExist:
+            return response.Response({"detail": "Branch not found"}, status=404)
+
+        from core.error_logging import log_system_error
+        from inventory.transfer_services import process_transfer_departure
+
+        try:
+            with transaction.atomic():
+                transfer = StockTransfer.objects.create(
+                    from_branch_id=from_branch_id,
+                    to_branch_id=to_branch_id,
+                    status=StockTransferStatus.PENDING,
+                    requested_by=request.user,
+                    notes=notes,
+                )
+                for ing_id, qty in valid_lines:
+                    StockTransferLine.objects.create(
+                        transfer=transfer,
+                        ingredient_id=ing_id,
+                        qty=qty,
+                    )
+                process_transfer_departure(transfer)
+        except Exception as e:
+            log_system_error(
+                "transfer_failed",
+                str(e),
+                user=request.user,
+                context={"from_branch_id": from_branch_id, "to_branch_id": to_branch_id},
+                exc=e,
+            )
+            return response.Response(
+                {"detail": str(e)[:500]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return response.Response(
+            {"id": transfer.id, "uuid": str(transfer.uuid), "status": transfer.status},
+            status=status.HTTP_201_CREATED,
+        )
+
+
+class StockTransferConfirmView(views.APIView):
+    """تأكيد استلام التحويل."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, uuid):
+        try:
+            transfer = StockTransfer.objects.get(uuid=uuid)
+        except StockTransfer.DoesNotExist:
+            return response.Response({"detail": "Transfer not found"}, status=404)
+        if transfer.status == StockTransferStatus.CONFIRMED:
+            return response.Response(
+                {"detail": "التحويل مؤكد مسبقاً"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        scope = get_user_scope(request.user)
+        if scope["branch_ids"] is not None:
+            if transfer.to_branch_id not in (scope["branch_ids"] or []):
+                raise PermissionDenied("لا يمكنك تأكيد تحويل لفرع غير معين لك")
+        from core.error_logging import log_system_error
+        from inventory.transfer_services import confirm_transfer
+
+        try:
+            confirm_transfer(transfer, confirmed_by=request.user)
+        except Exception as e:
+            log_system_error("transfer_failed", str(e), user=request.user, context={"transfer_id": transfer.id}, exc=e)
+            raise
+        return response.Response({"status": "confirmed", "id": transfer.id, "uuid": str(transfer.uuid)})
+
+
+class StockTransferRejectView(views.APIView):
+    """رفض استلام التحويل – عكس الحركة من قيد النقل إلى الفرع المرسل."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, uuid):
+        try:
+            transfer = StockTransfer.objects.get(uuid=uuid)
+        except StockTransfer.DoesNotExist:
+            return response.Response({"detail": "Transfer not found"}, status=404)
+        if transfer.status != StockTransferStatus.PENDING:
+            return response.Response(
+                {"detail": "لا يمكن رفض تحويل مؤكد أو مرفوض مسبقاً"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        scope = get_user_scope(request.user)
+        if scope["branch_ids"] is not None:
+            if transfer.to_branch_id not in (scope["branch_ids"] or []):
+                raise PermissionDenied("لا يمكنك رفض تحويل لفرع غير معين لك")
+        from core.error_logging import log_system_error
+        from inventory.transfer_services import reject_transfer
+
+        try:
+            reject_transfer(transfer, rejected_by=request.user)
+        except ValueError as e:
+            return response.Response({"detail": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            log_system_error("transfer_failed", str(e), user=request.user, context={"transfer_id": transfer.id}, exc=e)
+            raise
+        return response.Response({"status": "rejected", "id": transfer.id, "uuid": str(transfer.uuid)})

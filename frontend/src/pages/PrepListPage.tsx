@@ -2,6 +2,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../contexts/AuthContext";
+import { useDateRange } from "../contexts/DateRangeContext";
+import ReportDateFilter from "../components/ReportDateFilter";
 import {
   fetchBranches,
   fetchPredictForDate,
@@ -21,10 +23,6 @@ import {
   type ExportOption,
 } from "../lib/prepListExport";
 
-function toISODate(d: Date) {
-  return d.toISOString().slice(0, 10);
-}
-
 /** Display product: real catalog product or stub from ProductSale. Format: [Code] - [Name] | Qty */
 type DisplayProduct = Pick<ProductWithRecipe, "id" | "name"> & {
   foodics_product_id?: string;
@@ -40,10 +38,8 @@ export default function PrepListPage() {
   const [selectedBranchId, setSelectedBranchId] = useState<number | "">("");
   const branchId = userBranchId ?? (selectedBranchId !== "" ? Number(selectedBranchId) : null);
 
-  const today = toISODate(new Date());
+  const { dateFrom, dateTo } = useDateRange();
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [dateFrom, setDateFrom] = useState(today);
-  const [dateTo, setDateTo] = useState(today);
   const [forecastMethod, setForecastMethod] = useState<ForecastMethod>("last_week");
   const [products, setProducts] = useState<ProductWithRecipe[]>([]);
   const [prepItems, setPrepItems] = useState<PrepItem[]>([]);
@@ -385,22 +381,8 @@ export default function PrepListPage() {
             </label>
           )}
           <label className="block">
-            <span className="mb-1 block text-white/70">{t("forecastDateRangeStart")}</span>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="glass-input min-h-[44px] w-full rounded-xl px-4 py-3 text-white"
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-white/70">{t("forecastDateRangeEnd")}</span>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="glass-input min-h-[44px] w-full rounded-xl px-4 py-3 text-white"
-            />
+            <span className="mb-1 block text-white/70">{t("date")}</span>
+            <ReportDateFilter />
           </label>
           <label className="block">
             <span className="mb-1 block text-white/70">{t("forecastMethod")}</span>
@@ -768,11 +750,15 @@ export default function PrepListPage() {
                       const unitStr = i18n.language === "ar"
                         ? (i.workable_unit_ar ?? i.display_unit_label ?? i.unit_code)
                         : (i.workable_unit_en ?? i.display_unit_label ?? i.unit_code);
+                      const primaryDisplay = i18n.language === "ar"
+                        ? (i.primary_display_ar ?? i.workable_display_ar)
+                        : (i.primary_display_en ?? i.workable_display_en);
                       const rawQty = parseFloat(i.workable_qty ?? i.display_qty ?? i.required_qty ?? "0") || 0;
                       const pkgQty = Math.ceil(rawQty).toString();
                       const exactTooltip = i.exact_required && i.exact_unit_label
                         ? `${i.exact_required} ${i.exact_unit_label}`
                         : null;
+                      const qtyDisplay = primaryDisplay ?? pkgQty;
                       return (
                         <tr
                           key={i.ingredient_id}
@@ -786,7 +772,7 @@ export default function PrepListPage() {
                             className="p-2 text-end font-medium"
                             title={exactTooltip ?? undefined}
                           >
-                            {pkgQty}
+                            {qtyDisplay}
                           </td>
                         </tr>
                       );
@@ -884,11 +870,15 @@ export default function PrepListPage() {
                       const unitStr = i18n.language === "ar"
                         ? (i.workable_unit_ar ?? i.display_unit_label ?? i.unit_code)
                         : (i.workable_unit_en ?? i.display_unit_label ?? i.unit_code);
+                      const primaryDisplay = i18n.language === "ar"
+                        ? (i.primary_display_ar ?? i.workable_display_ar)
+                        : (i.primary_display_en ?? i.workable_display_en);
                       const rawQty = parseFloat(i.workable_qty ?? i.display_qty ?? i.required_qty ?? "0") || 0;
                       const pkgQty = Math.ceil(rawQty).toString();
                       const exactTooltip = i.exact_required && i.exact_unit_label
                         ? `${i.exact_required} ${i.exact_unit_label}`
                         : null;
+                      const qtyDisplay = primaryDisplay ?? pkgQty;
                       return (
                         <tr
                           key={i.ingredient_id}
@@ -902,7 +892,7 @@ export default function PrepListPage() {
                             className="p-2 text-end font-medium"
                             title={exactTooltip ?? undefined}
                           >
-                            {pkgQty}
+                            {qtyDisplay}
                           </td>
                         </tr>
                       );

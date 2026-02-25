@@ -20,6 +20,8 @@ type Props = {
   delay?: number;
   hint?: string;
   variant?: "glass" | "white";
+  /** قيمة الفترة السابقة للمقارنة – تُعرض نسبة التغيير (أخضر ↑ أو أحمر ↓) */
+  previousValue?: number | null;
 };
 
 export default function KPICard({
@@ -31,6 +33,7 @@ export default function KPICard({
   delay = 0,
   hint,
   variant = "white",
+  previousValue,
 }: Props) {
   const uid = useId();
   const [mounted, setMounted] = useState(false);
@@ -71,9 +74,27 @@ export default function KPICard({
       <div className="text-xs font-medium uppercase tracking-wider text-slate-400">
         {label}
       </div>
-      <div className="metric-glow mt-2 text-2xl font-bold tracking-tight text-slate-100">
+      <div className="metric-glow mt-2 text-2xl font-bold tracking-tight text-slate-800 dark:text-slate-100">
         {mounted ? formatter(displayValue) : "—"}
       </div>
+      {previousValue != null && previousValue !== 0 && (
+        <div className="mt-1.5 flex items-center gap-1.5 text-sm">
+          {((displayValue - previousValue) / previousValue) * 100 >= 0 ? (
+            <span className="font-medium text-emerald-400">▲</span>
+          ) : (
+            <span className="font-medium text-rose-400">▼</span>
+          )}
+          <span
+            className={
+              ((displayValue - previousValue) / previousValue) * 100 >= 0
+                ? "text-emerald-400"
+                : "text-rose-400"
+            }
+          >
+            {(((displayValue - previousValue) / previousValue) * 100).toFixed(1)}%
+          </span>
+        </div>
+      )}
       {hint && (
         <div className="mt-1 text-[10px] text-slate-500">{hint}</div>
       )}

@@ -548,6 +548,18 @@ def parse_hourly_sales(
         d_min = dt_val if d_min is None or dt_val < d_min else d_min
         d_max = dt_val if d_max is None or dt_val > d_max else d_max
 
+    # [Idempotency] Reject duplicate hourly sales for same branch+date+hour from other uploads
+    if rows:
+        triples = list({(r.branch_id, r.date, r.hour) for r in rows})
+        for bid, d, h in triples:
+            if HourlySale.objects.filter(branch_id=bid, date=d, hour=h).exclude(upload=upload).exists():
+                from org.models import Branch
+                br = Branch.objects.filter(pk=bid).first()
+                name = br.name if br else str(bid)
+                raise ParseError(
+                    f"بيانات المبيعات بالساعة مكررة: يوجد بالفعل بيانات لـ {name} في {d} الساعة {h}"
+                )
+
     HourlySale.objects.bulk_create(rows, batch_size=500)
     return ParsedMeta(date_from=d_min, date_to=d_max)
 
@@ -604,6 +616,7 @@ def parse_daily_sales(
 
     DailySale.objects.filter(upload=upload).delete()
 
+    # [Idempotency] Collect (branch_id, date) from rows first for duplicate check
     rows: list[DailySale] = []
     d_min: date | None = None
     d_max: date | None = None
@@ -743,6 +756,32 @@ def parse_daily_sales(
         d_min = dt_val if d_min is None or dt_val < d_min else d_min
         d_max = dt_val if d_max is None or dt_val > d_max else d_max
 
+    # [Idempotency] Reject duplicate sales for same branch+date from other uploads
+    if rows:
+        pairs = {(r.branch_id, r.date) for r in rows}
+        branch_ids = [p[0] for p in pairs]
+        dates = [p[1] for p in pairs]
+        existing = DailySale.objects.filter(
+            branch_id__in=branch_ids,
+            date__in=dates,
+        ).exclude(upload=upload).values_list("branch_id", "date").distinct()
+        existing_set = set(existing)
+        duplicates = [(b, d) for b, d in pairs if (b, d) in existing_set]
+        if duplicates:
+            from org.models import Branch
+            parts = []
+            for bid, d in duplicates[:5]:
+                br = Branch.objects.filter(pk=bid).first()
+                name = br.name if br else str(bid)
+                parts.append(f"{name} على {d}")
+            msg = (
+                "بيانات مبيعات مكررة: يوجد بالفعل بيانات لنفس الفرع واليوم. "
+                "الفروع والتواريخ المكررة: " + "؛ ".join(parts)
+            )
+            if len(duplicates) > 5:
+                msg += f" (و{len(duplicates) - 5} أخرى)"
+            raise ParseError(msg)
+
     DailySale.objects.bulk_create(rows, batch_size=500)
     return ParsedMeta(date_from=d_min, date_to=d_max)
 
@@ -784,12 +823,26 @@ def parse_product_sales(
 
     fallback_brand = _resolve_fallback_brand(brand, filename)
 
+    if hasattr(upload, "progress_pct"):
+        upload.progress_pct = 0
+        upload.progress_message = "بدء القراءة..."
+        upload.save(update_fields=["progress_pct", "progress_message"])
+
     ProductSale.objects.filter(upload=upload).delete()
 
     rows: list[ProductSale] = []
     branches_in_file: set[int] = set()
     dates_seen: set[date] = set()
     new_products_count = 0
+    total_df_rows = len(df)
+    progress_interval = max(500, total_df_rows // 20)  # تحديث كل 500 صف أو 5% تقريباً
+
+    def _update_parse_progress(parsed: int):
+        if hasattr(upload, "progress_pct") and total_df_rows:
+            pct = min(95, int(50 * parsed / total_df_rows))  # 0–50% خلال القراءة
+            upload.progress_pct = pct
+            upload.progress_message = f"قراءة {parsed}/{total_df_rows} صف"
+            upload.save(update_fields=["progress_pct", "progress_message"])
 
     for idx in range(len(df)):
         p_raw = _scalar(prod_name_col, idx)
@@ -883,15 +936,54 @@ def parse_product_sales(
                 upload=upload,
             )
         )
+        if (idx + 1) % progress_interval == 0:
+            _update_parse_progress(idx + 1)
 
-    # [Ref: 161033] Replace existing Product Sale for same branches+dates (re-upload fix)
+    # [Idempotency] Reject duplicate product sales for same branch+date from other uploads
     if branches_in_file and dates_seen:
-        ProductSale.objects.filter(
-            date__in=dates_seen,
+        existing = ProductSale.objects.filter(
             branch_id__in=branches_in_file,
-        ).exclude(upload=upload).delete()
+            date__in=dates_seen,
+        ).exclude(upload=upload).values_list("branch_id", "date").distinct()
+        existing_set = set(existing)
+        if existing_set:
+            from org.models import Branch
+            parts = []
+            for bid, d in list(existing_set)[:5]:
+                br = Branch.objects.filter(pk=bid).first()
+                name = br.name if br else str(bid)
+                parts.append(f"{name} على {d}")
+            msg = (
+                "بيانات مبيعات المنتجات مكررة: يوجد بالفعل بيانات لنفس الفرع واليوم. "
+                "الفروع والتواريخ المكررة: " + "؛ ".join(parts)
+            )
+            if len(existing_set) > 5:
+                msg += f" (و{len(existing_set) - 5} أخرى)"
+            raise ParseError(msg)
 
-    ProductSale.objects.bulk_create(rows, batch_size=1000)
+    # [Atomicity] حفظ المبيعات + خصم المخزون في عملية واحدة – إذا فشل الخصم يُلغى الرفع بالكامل
+    # [Chunked] bulk_create بالأجزاء مع تحديث progress_pct لشريط التقدم
+    from django.db import transaction
+    from inventory.depletion_services import process_product_sale_depletion
+
+    total_rows = len(rows)
+    chunk_size = 1000
+    processed = 0
+
+    def _update_progress(pct: int, msg: str = ""):
+        if hasattr(upload, "progress_pct"):
+            upload.progress_pct = min(100, pct)
+            upload.progress_message = msg[:200] if msg else ""
+            upload.save(update_fields=["progress_pct", "progress_message"])
+
+    with transaction.atomic():
+        for i in range(0, total_rows, chunk_size):
+            batch = rows[i : i + chunk_size]
+            ProductSale.objects.bulk_create(batch, batch_size=chunk_size)
+            processed += len(batch)
+            _update_progress(int(100 * processed / total_rows) if total_rows else 100, f"حفظ {processed}/{total_rows} صف")
+        process_product_sale_depletion(upload)
+        _update_progress(100, "اكتمل")
 
     d_min = min(dates_seen) if dates_seen else None
     d_max = max(dates_seen) if dates_seen else None
@@ -1045,6 +1137,32 @@ FIELD_TO_PARSER_COL = {
 }
 
 
+# [Ref: Audit] حماية من CSV/Excel Formula Injection – خلايا تبدأ بـ =, +, -, @
+DANGEROUS_PREFIXES = ("=", "+", "-", "@")
+
+
+def _sanitize_cell_value(val) -> str | float | int | None:
+    """تعطيل صيغ CSV/Excel الخبيثة: خلايا تبدأ بـ =, +, -, @ تُسبق بفاصلة علوية."""
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return val
+    s = str(val).strip()
+    if not s:
+        return val
+    if s.startswith(DANGEROUS_PREFIXES):
+        return "'" + s  # Excel: ' يجعل الخلية نصاً ولا يُنفّذ الصيغة
+    return val
+
+
+def sanitize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
+    """تعطيل خلايا قد تحتوي صيغاً خبيثة (CSV/Excel Injection)."""
+    if df.empty:
+        return df
+    result = df.copy()
+    for col in result.columns:
+        result[col] = result[col].apply(_sanitize_cell_value)
+    return result
+
+
 def apply_column_mapping(df: pd.DataFrame, mapping: dict[str, str | None]) -> pd.DataFrame:
     """Rename columns using mapping so parser finds them. [Ref: 125212] Strict checks only."""
     rename = {}
@@ -1094,6 +1212,8 @@ def parse_excel_upload(upload, *, report_type: str, column_mapping: dict | None 
     df.dropna(how="all", inplace=True)
     df.dropna(axis=1, how="all", inplace=True)
     df.reset_index(drop=True, inplace=True)
+
+    df = sanitize_dataframe(df)
 
     def _norm_col(c):
         if c is None:

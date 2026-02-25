@@ -7,6 +7,8 @@
  * [FIN-009] ربط البيانات بالواجهة – التقرير النهائي
  */
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { useDateRange } from "../../contexts/DateRangeContext";
+import ReportDateFilter from "../../components/ReportDateFilter";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -16,6 +18,7 @@ import { fetchChartAccounts, importChartBalances, logActivity, type ChartAccount
 import { parseExcelToBalancesWithValidation, downloadSaifIncomeTemplate } from "../../lib/excelParser";
 import { useNotifications } from "../../contexts/NotificationContext";
 import { useOrgs } from "../../contexts/OrgsContext";
+import UnifiedFilterSelect from "../../components/UnifiedFilterSelect";
 import { getBrandChartCodes } from "../../lib/brandChartMapping";
 import { getBrandDisplayName, getBranchDisplayName } from "../../lib/localization";
 import { applyParentChildAggregation, validateAggregationMismatches } from "../../lib/chartAggregation";
@@ -150,12 +153,10 @@ export default function IncomeStatementPage() {
   const isRTL = i18n.language === "ar";
   const [accounts, setAccounts] = useState<ChartAccount[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterBrand, setFilterBrand] = useState<string | number>("all");
-  const [filterBranch, setFilterBranch] = useState<string | number>("all");
-  const [filterDate, setFilterDate] = useState(() => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-  });
+  const [filterBrand, setFilterBrand] = useState<string | "">("");
+  const [filterBranch, setFilterBranch] = useState<number | "">("");
+  const { dateFrom } = useDateRange();
+  const filterDate = dateFrom.slice(0, 7); // YYYY-MM للتوافق
   const [filterLevel, setFilterLevel] = useState<number>(2);
   const levelClamped = Math.min(5, Math.max(1, filterLevel));
   const [isUpdating, setIsUpdating] = useState(false);
@@ -170,7 +171,7 @@ export default function IncomeStatementPage() {
   };
 
   /** بوابة الرفع الذكية – يشترط تحديد البراند والفرع والفترة أولاً */
-  const canUpload = filterBrand !== "all" && filterBranch !== "all" && !!filterDate;
+  const canUpload = !!filterBrand && filterBranch !== "" && !!filterDate;
 
   const processUploadFile = useCallback(
     async (file: File) => {
@@ -186,7 +187,7 @@ export default function IncomeStatementPage() {
       setAggregationMismatches([]);
       setUploadInProgress(true);
       try {
-        const [chartAccounts, { balances: parsed, nameErrors }] = await Promise.all([
+        const [chartAccounts, { balances: parsed, rows, nameErrors }] = await Promise.all([
           fetchChartAccounts(),
           parseExcelToBalancesWithValidation(file, orgBrands.flatMap((b) => {
             const ar = (b.name_ar ?? "").trim();
@@ -219,7 +220,10 @@ export default function IncomeStatementPage() {
           setUploadError(msg);
           return;
         }
-        await importChartBalances(parsed);
+        await importChartBalances(parsed, {
+          rows: rows?.map((r) => ({ code: r.code, account_name: r.account_name, amount: r.amount, description: r.description })),
+          source_file: file?.name,
+        });
         logActivity({
           action_type: "file_upload",
           page_path: "/finance/income-statement",
@@ -276,50 +280,45 @@ export default function IncomeStatementPage() {
 
   /** القوائم: العرض بالأسماء العربية، التخزين البرمجي بالمعرفات (لا أكواد رقمية في الواجهة) */
   const selectedBrand = useMemo(
-    () => (filterBrand !== "all" && typeof filterBrand === "number" ? orgBrands.find((b) => b.id === filterBrand) : null),
+    () => (filterBrand ? orgBrands.find((b) => (b.slug ?? b.brand_code ?? String(b.id)) === filterBrand) : null),
     [orgBrands, filterBrand]
   );
   const selectedBranch = useMemo(
-    () => (filterBranch !== "all" && typeof filterBranch === "number" ? orgBranches.find((b) => b.id === filterBranch) : null),
+    () => (filterBranch !== "" ? orgBranches.find((b) => b.id === filterBranch) : null),
     [orgBranches, filterBranch]
   );
   const lang = i18n.language;
-  const brandOptions = useMemo(
-    () => orgBrands.map((b) => ({ id: b.id, label: getBrandDisplayName(b, lang) })).sort((a, b) => a.label.localeCompare(b.label, "ar")),
-    [orgBrands, lang]
-  );
   const branchesForBrand = useMemo(
-    () => (filterBrand !== "all" && typeof filterBrand === "number" ? (branchesByBrandId[filterBrand] ?? []) : orgBranches),
-    [filterBrand, branchesByBrandId, orgBranches]
-  );
-  const branchOptions = useMemo(
-    () => branchesForBrand.map((b) => ({ id: b.id, label: getBranchDisplayName(b, lang) })).sort((a, b) => a.label.localeCompare(b.label, "ar")),
-    [branchesForBrand, lang]
+    () =>
+      filterBrand && selectedBrand
+        ? (branchesByBrandId[selectedBrand.id] ?? [])
+        : orgBranches,
+    [filterBrand, selectedBrand, branchesByBrandId, orgBranches]
   );
 
   useEffect(() => {
-    if (filterBrand !== "all" && typeof filterBrand === "number" && !orgBrands.some((b) => b.id === filterBrand)) {
-      setFilterBrand("all");
+    if (filterBrand && !orgBrands.some((b) => (b.slug ?? b.brand_code ?? String(b.id)) === filterBrand)) {
+      setFilterBrand("");
     }
-    if (filterBrand === "all") {
-      setFilterBranch("all");
-    } else if (filterBranch !== "all" && typeof filterBranch === "number" && !branchOptions.some((b) => b.id === filterBranch)) {
-      setFilterBranch("all");
+    if (!filterBrand) {
+      setFilterBranch("");
+    } else if (filterBranch !== "" && !branchesForBrand.some((b) => b.id === filterBranch)) {
+      setFilterBranch("");
     }
-  }, [filterBrand, filterBranch, orgBrands, branchOptions]);
+  }, [filterBrand, filterBranch, orgBrands, branchesForBrand]);
 
-  const confirmSelectionText = `${filterBrand === "all" ? (isRTL ? "الكل" : "All") : (selectedBrand ? getBrandDisplayName(selectedBrand, lang) : "")} - ${filterBranch === "all" ? (isRTL ? "كافة الفروع" : "All Branches") : (selectedBranch ? getBranchDisplayName(selectedBranch, lang) : "")} - ${isRTL ? "فترة" : "Period"} ${filterDate}`;
+  const confirmSelectionText = `${!filterBrand ? (isRTL ? "الكل" : "All") : (selectedBrand ? getBrandDisplayName(selectedBrand, lang) : "")} - ${filterBranch === "" ? (isRTL ? "كافة الفروع" : "All Branches") : (selectedBranch ? getBranchDisplayName(selectedBranch, lang) : "")} - ${isRTL ? "فترة" : "Period"} ${filterDate}`;
 
   const hasApiData = accountsSafe.some((a) => a?.code?.startsWith("04") || a?.code?.startsWith("05"));
   const matchBrand = (code: string, isRevenue: boolean) => {
-    if (filterBrand === "all") return true;
+    if (!filterBrand) return true;
     if (!selectedBrand) return false;
     const codes = getBrandChartCodes(selectedBrand);
     if (!codes) return false;
     return isRevenue ? code.startsWith(codes.rev) : code.startsWith(codes.exp);
   };
   const matchBranch = (name: string, nameEn: string) => {
-    if (filterBranch === "all") return true;
+    if (filterBranch === "") return true;
     const n = (name + " " + nameEn).toLowerCase();
     if (selectedBranch) {
       const searchTerms = [
@@ -333,11 +332,6 @@ export default function IncomeStatementPage() {
         const short = t.startsWith("فرع ") ? t.slice(5) : t;
         if (short && n.includes(short)) return true;
       }
-    }
-    if (typeof filterBranch === "string") {
-      const br = filterBranch.toLowerCase();
-      const brShort = br.startsWith("فرع ") ? br.slice(5) : br;
-      return n.includes(br) || n.includes(brShort);
     }
     return false;
   };
@@ -410,9 +404,9 @@ export default function IncomeStatementPage() {
     return format(d, "MMMM yyyy", { locale: isRTL ? ar : undefined });
   })() : prevMonth;
 
-  const reportTitle = filterBrand === "all" ? (isRTL ? "كافة العلامات" : "All Brands") : (selectedBrand ? getBrandDisplayName(selectedBrand, lang) : "");
+  const reportTitle = !filterBrand ? (isRTL ? "كافة العلامات" : "All Brands") : (selectedBrand ? getBrandDisplayName(selectedBrand, lang) : "");
   const metadata = {
-    branch: filterBranch === "all" ? (isRTL ? "كافة الفروع" : "All Branches") : (selectedBranch ? getBranchDisplayName(selectedBranch, lang) : ""),
+    branch: filterBranch === "" ? (isRTL ? "كافة الفروع" : "All Branches") : (selectedBranch ? getBranchDisplayName(selectedBranch, lang) : ""),
     currentPeriod: periodLabel,
     previousPeriod: prevPeriodLabel,
     isDemo: !hasApiData,
@@ -468,33 +462,30 @@ export default function IncomeStatementPage() {
               <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">
                 {isRTL ? "العلامة التجارية" : "Brand"}
               </label>
-              <select
-                id="brandSelect"
-                value={String(filterBrand)}
-                onChange={(e) => setFilterBrand(e.target.value === "all" ? "all" : Number(e.target.value))}
-                className="w-full rounded-lg border border-[#10b981]/40 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
-              >
-                <option value="all">{isRTL ? "الكل" : "All"}</option>
-                {brandOptions.map((b) => (
-                  <option key={b.id} value={b.id}>{b.label}</option>
-                ))}
-              </select>
+              <UnifiedFilterSelect
+                mode="brand"
+                items={orgBrands}
+                selected={filterBrand}
+                onChange={setFilterBrand}
+                selectionMode="single"
+                placeholder={isRTL ? "الكل" : "All"}
+                triggerClassName="w-full rounded-lg border border-[#10b981]/40 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
+              />
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">
                 {isRTL ? "الفرع" : "Branch"}
               </label>
-              <select
-                id="branchSelect"
-                value={String(filterBranch)}
-                onChange={(e) => setFilterBranch(e.target.value === "all" ? "all" : Number(e.target.value))}
-                className="w-full rounded-lg border border-[#10b981]/40 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
-              >
-                <option value="all">{isRTL ? "كافة الفروع" : "All Branches"}</option>
-                {branchOptions.map((b) => (
-                  <option key={b.id} value={b.id}>{b.label}</option>
-                ))}
-              </select>
+              <UnifiedFilterSelect
+                mode="branch"
+                items={branchesForBrand}
+                selected={filterBranch}
+                onChange={setFilterBranch}
+                selectionMode="single"
+                placeholder={isRTL ? "كافة الفروع" : "All Branches"}
+                triggerClassName="w-full rounded-lg border border-[#10b981]/40 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
+                disabled={!!filterBrand && branchesForBrand.length === 0}
+              />
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">
@@ -517,13 +508,7 @@ export default function IncomeStatementPage() {
               <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">
                 {isRTL ? "الفترة" : "Period"}
               </label>
-              <input
-                type="month"
-                id="reportDate"
-                value={filterDate}
-                onChange={(e) => setFilterDate(e.target.value)}
-                className="w-full rounded-lg border border-[#10b981]/40 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
-              />
+              <ReportDateFilter showComparison />
             </div>
           <div className="col-span-2 md:col-span-1 flex gap-2">
             <button
@@ -576,6 +561,18 @@ export default function IncomeStatementPage() {
             </h6>
           </div>
           <div className="p-4 bg-white dark:bg-slate-800">
+            {/* نموذج الأعمدة المطلوبة */}
+            <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 dark:border-slate-600 dark:bg-slate-700/30">
+              <p className="mb-1 text-xs font-medium text-slate-600 dark:text-slate-300">
+                {isRTL ? "الأعمدة المطلوبة:" : "Required columns:"}
+              </p>
+              <div className="flex flex-wrap gap-1 text-xs">
+                <span className="rounded bg-white px-2 py-0.5 font-mono dark:bg-slate-800">{isRTL ? "كود الحساب" : "Code"}</span>
+                <span className="rounded bg-white px-2 py-0.5 font-mono dark:bg-slate-800">{isRTL ? "اسم الحساب" : "Name"}</span>
+                <span className="rounded bg-emerald-100 px-2 py-0.5 font-mono text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200">{isRTL ? "رصيد/المبلغ" : "Balance/Amount"}</span>
+                <span className="rounded bg-slate-100 px-2 py-0.5 text-slate-500 line-through dark:bg-slate-600 dark:text-slate-400">{isRTL ? "لا: رقم هوية، آيبان" : "No: ID, IBAN"}</span>
+              </div>
+            </div>
             <div className={`mb-4 rounded-lg border-0 px-4 py-3 ${canUpload ? "text-amber-800 dark:text-amber-200" : "text-red-700 dark:text-red-300"} ${canUpload ? "" : "border-2 border-red-400"}`} style={{ background: canUpload ? "#fff9db" : "#fef2f2" }}>
               <span className="flex items-center gap-2">
                 <svg className="h-5 w-5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
@@ -685,7 +682,7 @@ export default function IncomeStatementPage() {
         <>
         {isUpdating && (
           <div className="mb-4 rounded-xl border border-[#10b981]/30 bg-[#ecfdf5]/70 px-4 py-3 text-center text-sm font-medium text-[#059669]">
-            {isRTL ? `جاري استخراج بيانات ${filterBrand} لفترة ${filterDate} - مستوى ${filterLevel}` : `Processing ${filterBrand} for ${filterDate} - level ${filterLevel}`}
+            {isRTL ? `جاري استخراج بيانات ${filterBrand ? (selectedBrand ? getBrandDisplayName(selectedBrand, lang) : filterBrand) : "الكل"} لفترة ${filterDate} - مستوى ${filterLevel}` : `Processing ${filterBrand ? (selectedBrand ? getBrandDisplayName(selectedBrand, lang) : filterBrand) : "All"} for ${filterDate} - level ${filterLevel}`}
           </div>
         )}
         <motion.div

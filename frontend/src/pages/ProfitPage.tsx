@@ -4,7 +4,6 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { format, subDays } from "date-fns";
 import {
   fetchProfitSummary,
   fetchIngredients,
@@ -14,14 +13,14 @@ import {
   type ManageIngredient,
 } from "../lib/api";
 import { sar } from "../components/KPICard";
+import { useDateRange } from "../contexts/DateRangeContext";
+import ReportDateFilter from "../components/ReportDateFilter";
 
 export default function ProfitPage() {
   const { t } = useTranslation();
+  const { dateFrom, dateTo } = useDateRange();
   const [branches, setBranches] = useState<Array<{ id: number; name: string; name_ar?: string }>>([]);
   const [branchId, setBranchId] = useState<number | "">("");
-  const today = format(new Date(), "yyyy-MM-dd");
-  const [dateFrom, setDateFrom] = useState(today);
-  const [dateTo, setDateTo] = useState(today);
   const [summary, setSummary] = useState<ProfitSummary | null>(null);
   const [ingredients, setIngredients] = useState<ManageIngredient[]>([]);
   const [loading, setLoading] = useState(false);
@@ -106,6 +105,7 @@ export default function ProfitPage() {
           {t("financialDashboard")}
         </h1>
         <div className="flex flex-wrap items-center gap-4">
+          <ReportDateFilter showComparison />
           <select
             value={branchId}
             onChange={(e) => setBranchId(e.target.value === "" ? "" : Number(e.target.value))}
@@ -118,29 +118,6 @@ export default function ProfitPage() {
               </option>
             ))}
           </select>
-          <button
-            type="button"
-            onClick={() => {
-              const d = format(new Date(), "yyyy-MM-dd");
-              setDateFrom(d);
-              setDateTo(d);
-            }}
-            className="rounded-lg border border-slate-300 bg-slate-100 px-3 py-2 text-sm hover:bg-slate-200 dark:border-slate-600 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-white"
-          >
-            {t("today")}
-          </button>
-          <input
-            type="date"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-          />
-          <input
-            type="date"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-          />
           <button
             onClick={loadSummary}
             disabled={loading}

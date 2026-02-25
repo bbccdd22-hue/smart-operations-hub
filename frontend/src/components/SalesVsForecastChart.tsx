@@ -15,10 +15,12 @@ import { format, parseISO } from "date-fns";
 import { ar } from "date-fns/locale";
 import { useTranslation } from "react-i18next";
 
-type Point = { date: string; sales: number; forecast: number; label?: string };
+type Point = { date: string; sales: number; forecast: number; previousSales?: number; label?: string };
 
 type Props = {
   data: Array<{ date: string; sales: number; forecast: number }>;
+  /** الفترة السابقة للمقارنة – خط منقط باهت */
+  previousSeries?: Array<{ date: string; sales: number; forecast?: number }>;
   height?: number;
   showFooter?: boolean;
   variant?: "glass" | "white";
@@ -32,19 +34,23 @@ function sar(n: number) {
   }).format(n);
 }
 
-export default function SalesVsForecastChart({ data, height = 320, showFooter, variant = "white" }: Props) {
-  const { i18n } = useTranslation();
+export default function SalesVsForecastChart({ data, previousSeries, height = 320, showFooter, variant = "white" }: Props) {
+  const { i18n, t } = useTranslation();
   const isRTL = i18n.language === "ar";
 
   const chartData: Point[] = useMemo(
     () =>
-      data.map((d) => ({
-        ...d,
-        label: format(parseISO(d.date), "dd MMM", {
-          locale: isRTL ? ar : undefined,
-        }),
-      })),
-    [data, isRTL]
+      data.map((d, i) => {
+        const prev = previousSeries?.[i];
+        return {
+          ...d,
+          previousSales: prev != null ? prev.sales : undefined,
+          label: format(parseISO(d.date), "dd MMM", {
+            locale: isRTL ? ar : undefined,
+          }),
+        };
+      }),
+    [data, previousSeries, isRTL]
   );
 
   return (
@@ -104,7 +110,13 @@ export default function SalesVsForecastChart({ data, height = 320, showFooter, v
             />
             <Legend
               wrapperStyle={{ fontSize: "11px" }}
-              formatter={(value) => (value === "sales" ? "Actual Sales" : "AI Forecast")}
+              formatter={(value) =>
+                value === "sales"
+                  ? t("actualSales") || "Actual Sales"
+                  : value === "previousSales"
+                    ? t("previousPeriod") || "Previous Period"
+                    : "AI Forecast"
+              }
             />
             <Area
               type="monotone"
@@ -114,6 +126,19 @@ export default function SalesVsForecastChart({ data, height = 320, showFooter, v
               strokeWidth={2.5}
               fill="url(#salesGradient)"
             />
+            {previousSeries && previousSeries.length > 0 && (
+              <Line
+                type="monotone"
+                dataKey="previousSales"
+                name="previousSales"
+                stroke="rgb(148 163 184)"
+                strokeWidth={2}
+                strokeDasharray="6 4"
+                strokeOpacity={0.7}
+                dot={{ fill: "rgb(148 163 184)", r: 2 }}
+                activeDot={{ r: 4 }}
+              />
+            )}
             <Line
               type="monotone"
               dataKey="forecast"

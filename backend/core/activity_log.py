@@ -1,20 +1,23 @@
-"""سجل الرقابة – تسجيل حركات المستخدمين (فقط سيف يرى الصفحة)."""
+"""
+سجل الرقابة – تسجيل حركات المستخدمين.
+"""
 from org.models import ActivityLog
 
 
-def log_activity(
-    user,
-    action_type: str,
-    description: str = "",
-    page_path: str = "",
-    file_name: str = "",
-    target_model: str = "",
-    target_id: str = "",
-    request=None,
-):
-    """تسجيل حركة في سجل الرقابة."""
-    if not user or not user.is_authenticated:
-        return
+def log_activity(user, action_type=None, description="", request=None, **kwargs):
+    """
+    سجّل حركة للمستخدم في ActivityLog.
+    الاستخدام:
+        log_activity(user, "login", "تسجيل دخول", request=request)
+        log_activity(user, action_type="page_view", description="...", request=request, ...)
+    """
+    at = kwargs.pop("action_type", action_type) or "page_view"
+    desc = (kwargs.get("description") or description or "")[:500]
+    page_path = (kwargs.get("page_path") or "")[:256]
+    file_name = (kwargs.get("file_name") or "")[:255]
+    target_model = (kwargs.get("target_model") or "")[:64]
+    target_id = str(kwargs.get("target_id") or "")[:64]
+
     ip = None
     if request and hasattr(request, "META"):
         xff = request.META.get("HTTP_X_FORWARDED_FOR")
@@ -22,16 +25,14 @@ def log_activity(
             ip = xff.split(",")[0].strip()
         else:
             ip = request.META.get("REMOTE_ADDR")
-    try:
-        ActivityLog.objects.create(
-            user=user,
-            action_type=action_type,
-            description=description[:500],
-            page_path=page_path[:256],
-            file_name=file_name[:255],
-            target_model=target_model[:64],
-            target_id=str(target_id)[:64],
-            ip_address=ip,
-        )
-    except Exception:
-        pass
+
+    ActivityLog.objects.create(
+        user=user,
+        action_type=at,
+        description=desc,
+        page_path=page_path,
+        file_name=file_name,
+        target_model=target_model,
+        target_id=target_id,
+        ip_address=ip,
+    )

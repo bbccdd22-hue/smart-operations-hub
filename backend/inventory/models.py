@@ -1,3 +1,4 @@
+import uuid
 from decimal import Decimal
 
 from django.db import models
@@ -9,6 +10,7 @@ from config.constants import (
     SYSTEM_CODE_RECIPE,
     SYSTEM_CODE_RECIPE_LINE,
     SYSTEM_CODE_STOCK_MOVEMENT,
+    SYSTEM_CODE_STOCK_TRANSFER,
     SYSTEM_CODE_UNIT,
     SYSTEM_CODE_WASTE_LOG,
 )
@@ -56,12 +58,30 @@ class Ingredient(TimestampedModel):
     )
     package_name_en = models.CharField(max_length=64, blank=True, default="")
     package_name_ar = models.CharField(max_length=64, blank=True, default="")
+    package_is_active = models.BooleanField(
+        default=True,
+        help_text="إذا False: العبوة موقفة ولا تُستخدم في التقارير (عند وجود حركات مخزنية)",
+    )
+    default_display_unit = models.CharField(
+        max_length=16,
+        choices=[("base", "Base Unit"), ("package", "Package")],
+        default="base",
+        help_text="الوحدة الافتراضية التي تظهر في جميع التقارير بلا استثناء",
+    )
     # Override for Unit column: exact display string when set (e.g. "علبة (2.8 لتر)")
     workable_unit_label_ar = models.CharField(max_length=128, blank=True, default="")
     workable_unit_label_en = models.CharField(max_length=128, blank=True, default="")
     serial_code = models.CharField(
         max_length=64, blank=True, default="", db_index=True,
         help_text="Unique serial/code from Excel import",
+    )
+    linked_product = models.ForeignKey(
+        "FoodicsProduct",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="linked_ingredients",
+        help_text="وصفة فرعية: عندما يكون المكوّن نصف مصنع، اربطه بمنتج له وصفة لتفكيك الخصم هرمياً",
     )
     system_group = models.CharField(
         max_length=32,
@@ -168,6 +188,8 @@ class StockMovementType(models.TextChoices):
     PURCHASE = "purchase", "Purchase"
     ADJUSTMENT = "adjustment", "Adjustment"
     DEPLETION = "depletion", "Depletion"
+    TRANSFER_OUT = "transfer_out", "Transfer Out"
+    TRANSFER_IN = "transfer_in", "Transfer In"
 
 
 class StockMovement(TimestampedModel):
@@ -185,11 +207,83 @@ class StockMovement(TimestampedModel):
         return f"{self.branch} {self.ingredient} {self.qty_delta}"
 
 
+class StockTransferStatus(models.TextChoices):
+    PENDING = "pending", "Pending / قيد الانتظار"
+    CONFIRMED = "confirmed", "Confirmed / مؤكد الاستلام"
+    REJECTED = "rejected", "Rejected / مرفوض الاستلام"
+
+
+class StockTransfer(TimestampedModel):
+    """طلب تحويل مخزون بين فرعين."""
+    uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, db_index=True)
+    system_code = models.CharField(
+        max_length=16, default=SYSTEM_CODE_STOCK_TRANSFER, db_index=True,
+        help_text="ERP hierarchy code",
+    )
+    from_branch = models.ForeignKey(
+        Branch, on_delete=models.PROTECT, related_name="transfers_out"
+    )
+    to_branch = models.ForeignKey(
+        Branch, on_delete=models.PROTECT, related_name="transfers_in"
+    )
+    status = models.CharField(
+        max_length=16, choices=StockTransferStatus.choices,
+        default=StockTransferStatus.PENDING, db_index=True
+    )
+    requested_by = models.ForeignKey(
+        "auth.User", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="requested_transfers",
+    )
+    requested_at = models.DateTimeField(auto_now_add=True)
+    confirmed_by = models.ForeignKey(
+        "auth.User", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="confirmed_transfers",
+    )
+    confirmed_at = models.DateTimeField(null=True, blank=True)
+    rejected_by = models.ForeignKey(
+        "auth.User", on_delete=models.PROTECT, null=True, blank=True,
+        related_name="rejected_transfers",
+    )
+    rejected_at = models.DateTimeField(null=True, blank=True)
+    notes = models.TextField(blank=True, default="")
+
+    class Meta:
+        ordering = ["-requested_at"]
+
+
+class StockTransferLine(TimestampedModel):
+    """سطر تحويل – مكوّن واحد والكمية."""
+    transfer = models.ForeignKey(
+        StockTransfer, on_delete=models.CASCADE, related_name="lines"
+    )
+    ingredient = models.ForeignKey(
+        Ingredient, on_delete=models.PROTECT, related_name="transfer_lines"
+    )
+    qty = models.DecimalField(max_digits=14, decimal_places=4)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["transfer", "ingredient"],
+                name="uniq_transfer_ingredient",
+            ),
+        ]
+
+
 class WasteLog(TimestampedModel):
-    """Waste tracking: theoretical (from Prep List) vs actual usage per ingredient per date."""
+    """Waste tracking: theoretical (from Prep List) vs actual usage per ingredient per date per branch."""
 
     system_code = models.CharField(
         max_length=16, default=SYSTEM_CODE_WASTE_LOG, db_index=True,
+    )
+    branch = models.ForeignKey(
+        Branch,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="waste_logs",
+        db_index=True,
+        help_text="الفرع – مطلوب لتتبع الهدر حسب الفرع. null للتسجيلات القديمة.",
     )
     ingredient = models.ForeignKey(Ingredient, on_delete=models.PROTECT, related_name="waste_logs")
     date = models.DateField(db_index=True)
@@ -210,7 +304,13 @@ class WasteLog(TimestampedModel):
         constraints = [
             models.UniqueConstraint(
                 fields=["ingredient", "date"],
-                name="uniq_waste_log_ingredient_date",
+                condition=models.Q(branch__isnull=True),
+                name="uniq_waste_log_legacy",
+            ),
+            models.UniqueConstraint(
+                fields=["ingredient", "date", "branch"],
+                condition=models.Q(branch__isnull=False),
+                name="uniq_waste_log_ingredient_date_branch",
             ),
         ]
         ordering = ["-date", "ingredient__name_en"]

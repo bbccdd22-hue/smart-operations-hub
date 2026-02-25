@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
-from shifts.models import Shift, ShiftClosing, ShiftStatus, ShiftType
+from shifts.models import Shift, ShiftClosing, ShiftClosingAttachment, ShiftStatus, ShiftType
 
 
 class ShiftSerializer(serializers.ModelSerializer):
@@ -127,3 +127,30 @@ class ShiftClosingCreatePayloadSerializer(serializers.Serializer):
     system_network = serializers.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
     system_delivery = serializers.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
     system_total_sales = serializers.DecimalField(max_digits=12, decimal_places=2, default=Decimal("0"))
+
+
+ALLOWED_IMAGE_TYPES = ("image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif")
+
+
+class ShiftClosingAttachmentSerializer(serializers.ModelSerializer):
+    file_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ShiftClosingAttachment
+        fields = ["id", "file", "file_url", "caption", "created_at"]
+        read_only_fields = ["created_at"]
+
+    def validate_file(self, value):
+        if value and hasattr(value, "content_type") and value.content_type not in ALLOWED_IMAGE_TYPES:
+            raise serializers.ValidationError(
+                f"Only image files allowed (JPEG, PNG, WebP, GIF). Got: {value.content_type}"
+            )
+        return value
+
+    def get_file_url(self, obj) -> str | None:
+        if obj.file:
+            request = self.context.get("request")
+            if request:
+                return request.build_absolute_uri(obj.file.url)
+            return obj.file.url
+        return None

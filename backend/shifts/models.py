@@ -151,6 +151,22 @@ class ShiftClosing(TimestampedModel):
         return (v_cash, v_network)
 
 
+class ShiftClosingAttachment(TimestampedModel):
+    """مرفقات إقفال الوردية – صور إيصالات، فواتير"""
+    closing = models.ForeignKey(
+        ShiftClosing,
+        on_delete=models.CASCADE,
+        related_name="attachments",
+    )
+    file = models.FileField(upload_to="shifts/attachments/%Y/%m/")
+    caption = models.CharField(max_length=255, blank=True, default="")
+
+    class Meta:
+        ordering = ["-created_at"]
+        verbose_name = "Shift Closing Attachment"
+        verbose_name_plural = "Shift Closing Attachments"
+
+
 class ShiftSecurityLog(TimestampedModel):
     """
     Audit log: who closed which shift and when.

@@ -88,6 +88,36 @@ function apiHeaders(opts: RequestInit = {}): Record<string, string> {
   return { "X-Network-ID": NETWORK_ID, ...(opts.headers as Record<string, string>) };
 }
 
+const DEFAULT_TIMEOUT_MS = 30000;
+const DEFAULT_RETRIES = 2;
+
+/** Retry logic: إعادة المحاولة تلقائياً عند فشل الشبكة (Failed to fetch). */
+async function fetchWithRetry(
+  url: string,
+  opts: RequestInit,
+  retries = DEFAULT_RETRIES,
+  timeoutMs = DEFAULT_TIMEOUT_MS
+): Promise<Response> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+      const res = await fetch(url, { ...opts, signal: controller.signal });
+      clearTimeout(timeoutId);
+      return res;
+    } catch (e) {
+      lastErr = e;
+      const isRetryable =
+        e instanceof TypeError ||
+        (e instanceof Error && (e.message === "Failed to fetch" || e.name === "AbortError"));
+      if (!isRetryable || attempt === retries) throw e;
+      await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+    }
+  }
+  throw lastErr;
+}
+
 function fetchWithCsrf(url: string, opts: RequestInit = {}) {
   const headers = apiHeaders(opts);
   const method = (opts.method || "GET").toUpperCase();
@@ -95,7 +125,7 @@ function fetchWithCsrf(url: string, opts: RequestInit = {}) {
     const match = document.cookie.match(/csrftoken=([^;]+)/);
     if (match) headers["X-CSRFToken"] = match[1];
   }
-  return fetch(url, { ...opts, credentials: "include", headers });
+  return fetchWithRetry(url, { ...opts, credentials: "include", headers });
 }
 
 export async function fetchDashboardSummary(params?: {
@@ -321,7 +351,10 @@ export function brandDisplayName(brand: Brand, lang: string): string {
 
 export async function fetchBrands(): Promise<Brand[]> {
   try {
-    const res = await fetch(`${API_BASE}/org/brands/`, { credentials: "include" });
+    const res = await fetch(`${API_BASE}/org/brands/`, {
+      credentials: "include",
+      headers: apiHeaders(),
+    });
     if (!res.ok) throw new Error();
     return (await res.json()) as Brand[];
   } catch {
@@ -485,17 +518,114 @@ export async function deleteChartAccount(id: number): Promise<void> {
   if (!res.ok) throw new Error((j.detail as string) || "Failed to delete");
 }
 
+export type CostAuditRowInput = { code: string; account_name?: string; amount: number; description?: string };
+
 /** محرك رفع البيانات المالي – تحديث أرصدة الحسابات من الإكسل */
-export async function importChartBalances(balances: Record<string, number>): Promise<{ updated: number; not_found: string[]; errors: string[] }> {
+export async function importChartBalances(
+  balances: Record<string, number>,
+  options?: { rows?: CostAuditRowInput[]; source_file?: string }
+): Promise<{ updated: number; not_found?: string[]; errors?: string[]; upload_id?: number }> {
+  const body =
+    options?.rows && options.rows.length > 0
+      ? { rows: options.rows, source_file: options.source_file || "رفع إكسل" }
+      : { balances, source_file: options?.source_file || "رفع يدوي" };
   const res = await fetch(`${API_BASE}/accounting/chart/import-balances/`, {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() || "", ...apiHeaders() },
-    body: JSON.stringify({ balances }),
+    body: JSON.stringify(body),
   });
   const j = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error((j.detail as string) || "Failed to import balances");
   return j;
+}
+
+export type CostAuditEntry = {
+  id: number;
+  recorded_at: string | null;
+  account_code: string;
+  account_name: string;
+  description: string;
+  amount: string;
+  source_file: string;
+  is_excluded: boolean;
+  upload_id: number | null;
+};
+
+export async function fetchCostAuditEntries(params?: {
+  upload_id?: number;
+  show_excluded?: boolean;
+}): Promise<{ entries: CostAuditEntry[] }> {
+  const sp = new URLSearchParams();
+  if (params?.upload_id) sp.set("upload_id", String(params.upload_id));
+  if (params?.show_excluded !== undefined) sp.set("show_excluded", String(params.show_excluded));
+  const url = `${API_BASE}/accounting/cost-audit/${sp.toString() ? `?${sp}` : ""}`;
+  const res = await fetch(url, { credentials: "include", headers: apiHeaders() });
+  if (!res.ok) throw new Error("Failed to fetch cost audit entries");
+  return res.json();
+}
+
+export async function excludeCostAuditEntry(id: number, isExcluded: boolean = true): Promise<{ id: number; is_excluded: boolean }> {
+  const res = await fetch(`${API_BASE}/accounting/cost-audit/${id}/exclude/`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() || "", ...apiHeaders() },
+    body: JSON.stringify({ is_excluded: isExcluded }),
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((j.detail as string) || "Failed to exclude entry");
+  return j;
+}
+
+/** إجراء تسوية محاسبية يدوية – SAIF فقط */
+export type ManualAdjustmentPayload = {
+  account_id: number;
+  amount: number;
+  entry_type: "debit" | "credit";
+  reason: string;
+};
+
+export async function createManualAdjustment(payload: ManualAdjustmentPayload): Promise<{
+  id: number;
+  account_code: string;
+  account_name: string;
+  amount: string;
+  entry_type: string;
+  balance_before: string;
+  balance_after: string;
+  created_at: string | null;
+}> {
+  const res = await fetch(`${API_BASE}/accounting/manual-adjustments/`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() || "", ...apiHeaders() },
+    body: JSON.stringify(payload),
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((j.detail as string) || "Failed to create adjustment");
+  return j;
+}
+
+export type ManualAdjustmentLogEntry = {
+  id: number;
+  created_at: string | null;
+  account_code: string;
+  account_name: string;
+  amount: string;
+  entry_type: string;
+  reason: string;
+  balance_before: string;
+  balance_after: string;
+  performed_by: string;
+};
+
+export async function fetchManualAdjustmentLog(): Promise<{ adjustments: ManualAdjustmentLogEntry[] }> {
+  const res = await fetch(`${API_BASE}/accounting/manual-adjustments/log/`, {
+    credentials: "include",
+    headers: apiHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to fetch adjustment log");
+  return res.json();
 }
 
 /** Clear all cities and districts (SAIF only). Returns count of deleted records. */
@@ -723,12 +853,16 @@ export async function fetchAdminNotifications(limit?: number): Promise<AdminNoti
 }
 
 export async function markNotificationsRead(ids: number[]): Promise<void> {
-  await fetch(`${API_BASE}/org/notifications/`, {
+  const res = await fetch(`${API_BASE}/org/notifications/`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() || "" },
     credentials: "include",
     body: JSON.stringify({ ids }),
   });
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({}));
+    throw new Error((j as { detail?: string }).detail || "فشل في تعليم التنبيهات كمقروءة");
+  }
 }
 
 /** Parse preview: upload file, get rows + column mapping. No DB save. */
@@ -774,21 +908,28 @@ function extractServerError(j: unknown, fallback: string): string {
   return msgs || fallback;
 }
 
-/** Upload file with column mapping, brand_id (optional), branch_id. */
+/** Upload file with column mapping, brand_id (optional), branch_id.
+ * May return 202 Accepted for large product_sales – then poll fetchUploadStatus until processed. */
+export type UploadResult = {
+  id: number;
+  uuid?: string;
+  status: string;
+  progress_pct?: number;
+  progress_message?: string;
+  error_message?: string;
+  report_date_from?: string;
+  report_date_to?: string;
+  variances?: unknown[];
+  new_products_count?: number;
+};
+
 export async function uploadExcel(params: {
   file: File;
   report_type: string;
   column_mapping?: Record<string, string | null>;
   brand_id?: number | null;
   branch_id?: number | null;
-}): Promise<{
-  id: number;
-  status: string;
-  report_date_from?: string;
-  report_date_to?: string;
-  variances?: unknown[];
-  new_products_count?: number;
-}> {
+}): Promise<UploadResult> {
   const form = new FormData();
   form.append("file", params.file);
   form.append("report_type", params.report_type);
@@ -807,8 +948,17 @@ export async function uploadExcel(params: {
     credentials: "include",
   });
   const j = await res.json().catch(() => ({}));
+  if (res.status === 202) return j as UploadResult; // معالجة في الخلفية – العميل يستعلم عن التقدم
   if (!res.ok) throw new Error(extractServerError(j, "Upload failed"));
-  return j;
+  return j as UploadResult;
+}
+
+/** استعلام عن حالة الرفع والتقدم (للملفات المعالجة في الخلفية). استخدم uuid من الاستجابة. */
+export async function fetchUploadStatus(uploadIdOrUuid: number | string): Promise<UploadResult> {
+  const res = await fetch(`${API_BASE}/imports/upload/${uploadIdOrUuid}/`, { credentials: "include" });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((j.detail as string) || "Failed to fetch upload status");
+  return j as UploadResult;
 }
 
 /** Analytics for a processed upload. */
@@ -820,8 +970,8 @@ export type UploadAnalytics = {
   date_to: string | null;
 };
 
-export async function fetchUploadAnalytics(uploadId: number): Promise<UploadAnalytics> {
-  const res = await fetch(`${API_BASE}/imports/upload/${uploadId}/analytics/`, {
+export async function fetchUploadAnalytics(uploadIdOrUuid: number | string): Promise<UploadAnalytics> {
+  const res = await fetch(`${API_BASE}/imports/upload/${uploadIdOrUuid}/analytics/`, {
     credentials: "include",
   });
   const j = await res.json().catch(() => ({}));
@@ -930,6 +1080,141 @@ export type SavedView = {
   is_default: boolean;
 };
 
+/** لوحة تحكم المالك – Command Center */
+export type CommandCenterData = {
+  filters: { date: string; branch_ids: number[]; brand?: string };
+  kpis: {
+    daily_sales_today: number;
+    daily_sales_yesterday: number;
+    sales_change_pct: number;
+    in_transit_value_sar: number;
+    errors_unresolved_count: number;
+    negative_stock_count: number;
+  };
+  pending_transfers: Array<{
+    id: number;
+    from_branch_name: string;
+    to_branch_name: string;
+    value_sar: number;
+    requested_at: string | null;
+  }>;
+  latest_errors: Array<{
+    id: number;
+    error_type: string;
+    message: string;
+    created_at: string | null;
+    username: string;
+  }>;
+  sales_vs_waste_by_branch: Array<{
+    branch_id: number;
+    branch_name: string;
+    sales: number;
+    waste_sar: number;
+  }>;
+  low_stock_items: Array<{
+    ingredient_name: string;
+    ingredient_name_ar: string;
+    branch_name: string;
+    on_hand: number;
+    reorder_level: number;
+  }>;
+};
+
+export async function fetchCommandCenter(params?: {
+  date?: string;
+  branch_id?: number;
+  branch_ids?: string;
+  brand?: string;
+  brands?: string;
+}): Promise<CommandCenterData> {
+  const qs = new URLSearchParams();
+  if (params?.date) qs.set("date", params.date);
+  if (params?.branch_id) qs.set("branch_id", String(params.branch_id));
+  if (params?.branch_ids) qs.set("branch_ids", params.branch_ids);
+  if (params?.brand) qs.set("brand", params.brand);
+  if (params?.brands) qs.set("brands", params.brands || "");
+  const res = await fetch(`${API_BASE}/dashboard/command-center/?${qs.toString()}`, {
+    credentials: "include",
+    headers: apiHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to fetch command center");
+  return res.json();
+}
+
+/** لوحة تحكم المالك النهائية – Executive Dashboard */
+export type ExecutiveDashboardData = {
+  filters: { date_from: string; date_to: string; branch_ids: number[] };
+  net_profit_series: Array<{
+    date: string;
+    sales: number;
+    cogs: number;
+    gross_profit: number;
+    payroll: number;
+    depreciation: number;
+    net_profit: number;
+  }>;
+  safety_alerts: {
+    stock_shortage: Array<{
+      type: string;
+      ingredient_name: string;
+      ingredient_name_ar: string;
+      branch_name: string;
+      on_hand: number;
+      reorder_level: number;
+    }>;
+    late_attendance: Array<{
+      employee_name: string;
+      branch_name: string;
+      clock_in: string | null;
+    }>;
+    pending_purchase_orders: Array<{
+      id: number;
+      request_number: string;
+      branch_name: string;
+      status: string;
+      requested_at: string | null;
+    }>;
+  };
+  top_profitable_products: Array<{
+    product_sku: string;
+    product_name: string;
+    revenue: number;
+    cogs: number;
+    profit: number;
+    margin_pct: number;
+  }>;
+  branch_efficiency: Array<{
+    branch_id: number;
+    branch_name: string;
+    sales: number;
+    gross_profit: number;
+    margin_pct: number;
+  }>;
+};
+
+export async function fetchExecutiveDashboard(params?: {
+  date_from?: string;
+  date_to?: string;
+  branch_id?: number;
+  branch_ids?: string;
+  brand?: string;
+  brands?: string;
+}): Promise<ExecutiveDashboardData> {
+  const qs = new URLSearchParams();
+  if (params?.date_from) qs.set("date_from", params.date_from);
+  if (params?.date_to) qs.set("date_to", params.date_to);
+  if (params?.branch_id) qs.set("branch_id", String(params.branch_id));
+  if (params?.branch_ids) qs.set("branch_ids", params.branch_ids || "");
+  if (params?.brand) qs.set("brand", params.brand || "");
+  if (params?.brands) qs.set("brands", params.brands || "");
+  const res = await fetch(`${API_BASE}/dashboard/executive-dashboard/?${qs.toString()}`, {
+    credentials: "include",
+    headers: apiHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to fetch executive dashboard");
+  return res.json();
+}
+
 export async function fetchSavedViews(): Promise<SavedView[]> {
   const res = await fetch(`${API_BASE}/org/saved-views/`, { credentials: "include" });
   if (!res.ok) return [];
@@ -982,14 +1267,77 @@ export type ActivityLogEntry = {
   created_at: string;
 };
 
-export async function fetchActivityLog(limit = 500): Promise<ActivityLogEntry[]> {
-  const res = await fetch(`${API_BASE}/org/activity-log/?limit=${Math.min(limit, 1000)}`, {
+export async function fetchActivityLog(
+  limit = 500,
+  params?: { date_from?: string; date_to?: string }
+): Promise<ActivityLogEntry[]> {
+  const qs = new URLSearchParams();
+  qs.set("limit", String(Math.min(limit, 1000)));
+  if (params?.date_from) qs.set("date_from", params.date_from);
+  if (params?.date_to) qs.set("date_to", params.date_to);
+  const res = await fetch(`${API_BASE}/org/activity-log/?${qs.toString()}`, {
     credentials: "include",
     headers: apiHeaders(),
   });
   const j = (await res.json().catch(() => ({}))) as { logs?: ActivityLogEntry[] };
   if (!res.ok) return [];
   return j.logs ?? [];
+}
+
+export type SystemErrorLogEntry = {
+  id: number;
+  uuid?: string;
+  created_at: string;
+  error_type: string;
+  message: string;
+  traceback: string;
+  context: Record<string, unknown>;
+  user_id: number | null;
+  username: string;
+  resolved: boolean;
+};
+
+export async function fetchSystemErrorLogs(
+  limit = 200,
+  params?: { resolved?: boolean }
+): Promise<SystemErrorLogEntry[]> {
+  const qs = new URLSearchParams();
+  qs.set("limit", String(Math.min(limit, 500)));
+  if (params?.resolved !== undefined) qs.set("resolved", String(params.resolved));
+  const res = await fetch(`${API_BASE}/org/error-logs/?${qs.toString()}`, {
+    credentials: "include",
+    headers: apiHeaders(),
+  });
+  const j = (await res.json().catch(() => ({}))) as { logs?: SystemErrorLogEntry[] };
+  if (!res.ok) return [];
+  return j.logs ?? [];
+}
+
+export type SystemHeartbeatTask = {
+  task_name: string;
+  last_run_at: string | null;
+  last_status: string;
+  last_message: string;
+  is_stale: boolean;
+};
+
+export async function fetchSystemHeartbeat(): Promise<{
+  tasks: SystemHeartbeatTask[];
+  checked_at: string;
+}> {
+  const res = await fetch(`${API_BASE}/system/heartbeat/`, { credentials: "include" });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((j.detail as string) || "Failed to fetch heartbeat");
+  return j as { tasks: SystemHeartbeatTask[]; checked_at: string };
+}
+
+export async function resolveSystemErrorLog(uuid: string): Promise<void> {
+  const res = await fetchWithCsrf(`${API_BASE}/org/error-logs/${uuid}/resolve/`, {
+    method: "POST",
+    credentials: "include",
+    headers: apiHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to resolve");
 }
 
 export async function logActivity(payload: {
@@ -1152,9 +1500,10 @@ export type ForecastResponse = {
   warnings: Array<{ type?: string; message?: string; date?: string }>;
 };
 
-export async function fetchForecast(branchId?: number): Promise<ForecastResponse> {
+export async function fetchForecast(params?: { branchId?: number; brandId?: number }): Promise<ForecastResponse> {
   const qs = new URLSearchParams();
-  if (branchId != null) qs.set("branch_id", String(branchId));
+  if (params?.branchId != null) qs.set("branch_id", String(params.branchId));
+  if (params?.brandId != null) qs.set("brand_id", String(params.brandId));
   try {
     const res = await fetch(`${API_BASE}/dashboard/forecast/?${qs.toString()}`, { credentials: "include" });
     if (!res.ok) throw new Error();
@@ -1212,6 +1561,9 @@ export type ManageIngredient = {
   package_conversion_factor: string | null;
   package_name_en: string;
   package_name_ar: string;
+  package_is_active?: boolean;
+  default_display_unit?: "base" | "package";
+  has_transactions?: boolean;
   unit_cost?: string | null;
 };
 
@@ -1221,11 +1573,27 @@ export async function fetchInventoryUnits(): Promise<InventoryUnit[]> {
   return (await res.json()) as InventoryUnit[];
 }
 
-export async function fetchIngredients(systemGroup?: string): Promise<ManageIngredient[]> {
-  const qs = systemGroup ? `?system_group=${encodeURIComponent(systemGroup)}` : "";
-  const res = await fetch(`${API_BASE}/inventory/ingredients/${qs}`, { credentials: "include" });
+export async function fetchIngredients(systemGroup?: string, noCache?: boolean): Promise<ManageIngredient[]> {
+  const params = new URLSearchParams();
+  if (systemGroup) params.set("system_group", systemGroup);
+  if (noCache) params.set("_t", String(Date.now()));
+  const qs = params.toString() ? `?${params.toString()}` : "";
+  const res = await fetch(`${API_BASE}/inventory/ingredients/${qs}`, {
+    credentials: "include",
+    cache: noCache ? "no-store" : "default",
+  });
   if (!res.ok) return [];
   return (await res.json()) as ManageIngredient[];
+}
+
+export async function fetchIngredientDetail(id: number, noCache?: boolean): Promise<ManageIngredient | null> {
+  const url = noCache ? `${API_BASE}/inventory/ingredients/${id}/?_=${Date.now()}` : `${API_BASE}/inventory/ingredients/${id}/`;
+  const res = await fetch(url, {
+    credentials: "include",
+    cache: noCache ? "no-store" : "default",
+  });
+  if (!res.ok) return null;
+  return (await res.json()) as ManageIngredient;
 }
 
 export async function createIngredient(data: {
@@ -1263,9 +1631,11 @@ export async function updateIngredient(
     package_conversion_factor: number | null;
     package_name_en: string;
     package_name_ar: string;
+    package_is_active: boolean;
+    default_display_unit: "base" | "package";
     unit_cost: number | string | null;
   }>
-): Promise<void> {
+): Promise<Partial<ManageIngredient>> {
   const res = await fetchWithCsrf(`${API_BASE}/inventory/ingredients/${id}/`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
@@ -1273,9 +1643,10 @@ export async function updateIngredient(
     body: JSON.stringify(data),
   });
   if (!res.ok) {
-    const j = await res.json().catch(() => ({}));
-    throw new Error((j as { detail?: string }).detail || "Failed to update");
+    const j = (await res.json().catch(() => ({}))) as { detail?: string; message?: string };
+    throw new Error(j.message || j.detail || "Failed to update");
   }
+  return (await res.json().catch(() => ({}))) as Partial<ManageIngredient>;
 }
 
 export type HeartbeatData = {
@@ -1323,6 +1694,17 @@ export type ProfitSummary = {
     qty: string;
     unit_cost: string;
     cost: string;
+    excluded?: boolean;
+  }>;
+  /** عناصر مُعلّقة لمراجعة SAIF (تكلفة غير منطقية أو تتجاوز نسبة المبيعات) */
+  flagged_for_review?: Array<{
+    ingredient_id: number;
+    ingredient_name: string;
+    serial_code: string;
+    qty: string;
+    unit_cost: string;
+    cost: string;
+    reason: "invalid_unit_cost" | "exceeds_sales_threshold";
   }>;
   error?: string;
 };
@@ -1333,6 +1715,8 @@ export async function fetchProfitSummary(params: {
   date_from?: string;
   date_to?: string;
   brands?: string[];
+  /** تجاوز أي cache – إعادة جلب من المصدر */
+  bypassCache?: boolean;
 }): Promise<ProfitSummary> {
   const qs = new URLSearchParams();
   if (params.branch_id != null) qs.set("branch_id", String(params.branch_id));
@@ -1340,8 +1724,10 @@ export async function fetchProfitSummary(params: {
   if (params.date_from) qs.set("date_from", params.date_from);
   if (params.date_to) qs.set("date_to", params.date_to);
   if (params.brands?.length) qs.set("brands", params.brands.join(","));
+  if (params.bypassCache) qs.set("_t", String(Date.now()));
   const res = await fetch(`${API_BASE}/financials/summary/?${qs.toString()}`, {
     credentials: "include",
+    cache: params.bypassCache ? "no-store" : "default",
   });
   if (!res.ok) throw new Error("Failed to fetch financial summary");
   return (await res.json()) as ProfitSummary;
@@ -1378,8 +1764,120 @@ export async function fetchWasteReport(params: {
   return (await res.json()) as WasteReport;
 }
 
+export type StockTransferItem = {
+  id: number;
+  uuid?: string;
+  from_branch_id: number;
+  from_branch_name: string;
+  to_branch_id: number;
+  to_branch_name: string;
+  status: string;
+  requested_at: string | null;
+  requested_by?: string;
+  confirmed_at: string | null;
+  lines: Array<{ ingredient_id: number; ingredient_name: string; qty: string }>;
+  notes: string;
+};
+
+export async function fetchCentralKitchenTransfers(): Promise<{ transfers: StockTransferItem[] }> {
+  const res = await fetch(`${API_BASE}/inventory/central-kitchen/transfers/`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to fetch central kitchen transfers");
+  return (await res.json()) as { transfers: StockTransferItem[] };
+}
+
+export async function fetchPurchaseSuggestions(params: {
+  branch_id: number;
+  horizon_days?: number;
+  lookback_days?: number;
+}): Promise<{
+  suggestions: Array<{
+    ingredient_id: number;
+    ingredient_name: string;
+    ingredient_name_ar: string;
+    serial_code: string;
+    unit_code: string;
+    required_qty: string;
+    on_hand: string;
+    suggested_purchase_qty: string;
+    horizon_days: number;
+  }>;
+}> {
+  const qs = new URLSearchParams();
+  qs.set("branch_id", String(params.branch_id));
+  if (params.horizon_days != null) qs.set("horizon_days", String(params.horizon_days));
+  if (params.lookback_days != null) qs.set("lookback_days", String(params.lookback_days));
+  const res = await fetch(`${API_BASE}/procurement/purchase-suggestions/?${qs}`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to fetch purchase suggestions");
+  return (await res.json()) as {
+    suggestions: Array<{
+      ingredient_id: number;
+      ingredient_name: string;
+      ingredient_name_ar: string;
+      serial_code: string;
+      unit_code: string;
+      required_qty: string;
+      on_hand: string;
+      suggested_purchase_qty: string;
+      horizon_days: number;
+    }>;
+  };
+}
+
+export async function fetchStockTransfers(params?: {
+  from_branch?: number;
+  to_branch?: number;
+  status?: string;
+}): Promise<{ transfers: StockTransferItem[] }> {
+  const qs = new URLSearchParams();
+  if (params?.from_branch != null) qs.set("from_branch", String(params.from_branch));
+  if (params?.to_branch != null) qs.set("to_branch", String(params.to_branch));
+  if (params?.status) qs.set("status", params.status);
+  const suffix = qs.toString() ? `?${qs}` : "";
+  const res = await fetch(`${API_BASE}/inventory/transfers/${suffix}`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to fetch transfers");
+  return (await res.json()) as { transfers: StockTransferItem[] };
+}
+
+export async function createStockTransfer(data: {
+  from_branch_id: number;
+  to_branch_id: number;
+  lines: Array<{ ingredient_id: number; qty: number }>;
+  notes?: string;
+}): Promise<{ id: number; status: string }> {
+  const res = await fetchWithCsrf(`${API_BASE}/inventory/transfers/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(data),
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((j as { detail?: string }).detail || "Failed to create transfer");
+  return j as { id: number; status: string };
+}
+
+export async function confirmStockTransfer(uuid: string): Promise<{ status: string; id: number; uuid?: string }> {
+  const res = await fetchWithCsrf(`${API_BASE}/inventory/transfers/${uuid}/confirm/`, {
+    method: "POST",
+    credentials: "include",
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((j as { detail?: string }).detail || "Failed to confirm");
+  return j as { status: string; id: number };
+}
+
+export async function rejectStockTransfer(uuid: string): Promise<{ status: string; id: number; uuid?: string }> {
+  const res = await fetchWithCsrf(`${API_BASE}/inventory/transfers/${uuid}/reject/`, {
+    method: "POST",
+    credentials: "include",
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((j as { detail?: string }).detail || "Failed to reject");
+  return j as { status: string; id: number };
+}
+
 export async function saveWasteReport(data: {
   date?: string;
+  branch_id?: number;
   entries: Array<{
     ingredient_id: number;
     theoretical_usage: string | number;
@@ -1435,6 +1933,9 @@ export type ProductionPlanIngredient = {
   exact_required?: string;
   /** Base unit label for exact (e.g. "g", "gram") */
   exact_unit_label?: string;
+  /** الوحدة الافتراضية: النص المعروض في التقارير */
+  primary_display_ar?: string;
+  primary_display_en?: string;
 };
 
 export type ProductWithoutRecipe = {
@@ -1632,6 +2133,279 @@ export async function submitShiftClosing(payload: Record<string, unknown>): Prom
   return res.json();
 }
 
+/** مرفقات إقفال الوردية – صور إيصالات، فواتير */
+export type ShiftClosingAttachmentItem = {
+  id: number;
+  file: string;
+  file_url: string;
+  caption: string;
+  created_at: string;
+};
+
+export async function fetchShiftClosingAttachments(closingId: number): Promise<ShiftClosingAttachmentItem[]> {
+  const res = await fetch(`${API_BASE}/shifts/closing/${closingId}/attachments/`, { credentials: "include" });
+  if (!res.ok) return [];
+  return (await res.json()) as ShiftClosingAttachmentItem[];
+}
+
+/** تفاصيل إقفال الوردية – للمراجع المالي */
+export type ShiftClosingDetail = {
+  id: number;
+  shift: number;
+  status: string;
+  submitted_at: string | null;
+  submitted_by: number | null;
+  bills_500: number;
+  bills_200: number;
+  bills_100: number;
+  bills_50: number;
+  bills_20: number;
+  bills_10: number;
+  bills_5: number;
+  bills_1: number;
+  mada: number;
+  visa: number;
+  master_card: number;
+  hungerstation: number;
+  jahez: number;
+  lugmety: number;
+  the_chefz: number;
+  toyou: number;
+  expenses_vouchers: number;
+  staff_drinks: number;
+  system_cash: number;
+  system_network: number;
+  system_delivery: number;
+  system_total_sales: number;
+  variance_cash: number;
+  variance_network: number;
+  manual_cash_total: number;
+  manual_network_total: number;
+  manual_delivery_total: number;
+  shift_notes?: string;
+  opening_petty_cash?: number;
+};
+
+export async function fetchShiftClosingDetail(closingId: number): Promise<ShiftClosingDetail | null> {
+  const res = await fetch(`${API_BASE}/shifts/closing/${closingId}/`, { credentials: "include" });
+  if (!res.ok) return null;
+  return (await res.json()) as ShiftClosingDetail;
+}
+
+export async function uploadShiftClosingAttachment(
+  closingId: number,
+  file: File,
+  caption?: string
+): Promise<ShiftClosingAttachmentItem> {
+  const form = new FormData();
+  form.append("file", file);
+  if (caption) form.append("caption", caption);
+  const csrf = getCsrfToken();
+  const headers: Record<string, string> = {};
+  if (csrf) headers["X-CSRFToken"] = csrf;
+  const res = await fetch(`${API_BASE}/shifts/closing/${closingId}/attachments/`, {
+    method: "POST",
+    headers,
+    body: form,
+    credentials: "include",
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((j as { detail?: string }).detail || "Upload failed");
+  return j as ShiftClosingAttachmentItem;
+}
+
+/** المراجع المالي – قائمة إقفالات الورديات للمراجعة */
+export type AuditorClosingItem = {
+  id: number;
+  date: string;
+  branch_name: string;
+  brand_name: string;
+  brand_slug: string;
+  shift_type: string;
+  submitted_by: string;
+  submitted_at: string | null;
+  actual_cash: number;
+  system_cash: number;
+  variance_cash: number;
+  attachments_count: number;
+};
+
+/** ملخص تنفيذي الـ Hub – من إقفالات معتمدة ومعمّدة فقط */
+export type HubExecutiveSummaryRow = {
+  branch_id?: number;
+  brand_name: string;
+  brand_slug?: string;
+  branch_name: string;
+  branch_reference?: string;
+  gross_sales: number;
+  tax: number;
+  discounts: number;
+  net_sales: number;
+};
+
+export async function fetchHubExecutiveSummary(params?: {
+  date_from?: string;
+  date_to?: string;
+}): Promise<{ rows: HubExecutiveSummaryRow[] }> {
+  const qs = new URLSearchParams();
+  if (params?.date_from) qs.set("date_from", params.date_from);
+  if (params?.date_to) qs.set("date_to", params.date_to);
+  const res = await fetch(`${API_BASE}/shifts/hub-executive-summary/?${qs.toString()}`, {
+    credentials: "include",
+    headers: apiHeaders(),
+  });
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({}));
+    throw new Error((j as { detail?: string }).detail || "Failed to fetch");
+  }
+  return res.json();
+}
+
+export async function fetchAuditorShiftClosings(params: {
+  brand?: string;
+  date_from?: string;
+  date_to?: string;
+}): Promise<{ closings: AuditorClosingItem[] }> {
+  const qs = new URLSearchParams();
+  if (params.brand) qs.set("brand", params.brand);
+  if (params.date_from) qs.set("date_from", params.date_from);
+  if (params.date_to) qs.set("date_to", params.date_to);
+  const res = await fetch(`${API_BASE}/shifts/closing/auditor-list/?${qs.toString()}`, {
+    credentials: "include",
+    headers: apiHeaders(),
+  });
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({}));
+    throw new Error((j as { detail?: string }).detail || "Failed to fetch");
+  }
+  return res.json();
+}
+
+/** التقارير المالية من إقفال الورديات – Single Source of Truth */
+export type ShiftFinancialReportsParams = {
+  date_from?: string;
+  date_to?: string;
+  period?: "daily" | "weekly" | "monthly";
+  branch_ids?: number[];
+  brand?: string;
+  employee_id?: number;
+};
+
+export type ShiftFinancialReportsResponse = {
+  date_from: string;
+  date_to: string;
+  period: string;
+  reports: {
+    daily_sales: Array<{
+      branch_id: number;
+      branch_name: string;
+      branch_name_ar?: string;
+      brand_name: string;
+      date: string;
+      sales: number;
+      tax: number;
+      total_sales: number;
+    }>;
+    cash_report: Array<{
+      branch_id: number;
+      branch_name: string;
+      date: string;
+      actual_cash: number;
+      system_cash: number;
+      variance: number;
+    }>;
+    network_report: Array<{
+      branch_id: number;
+      branch_name: string;
+      date: string;
+      mada: number;
+      visa: number;
+      master_card: number;
+      network_total: number;
+      system_network: number;
+      variance: number;
+    }>;
+    cashier_shortage: Array<{
+      closing_id: number;
+      date: string;
+      branch_name: string;
+      shift_type: string;
+      employee_name: string;
+      employee_username: string;
+      expected_amount: number;
+      actual_amount: number;
+      variance: number;
+      submitted_at: string | null;
+    }>;
+    journal_entry: Array<{
+      date: string;
+      description: string;
+      debit_account: string;
+      credit_account: string;
+      debit_amount: number;
+      credit_amount: number;
+    }>;
+  };
+};
+
+export async function fetchShiftFinancialReports(
+  params: ShiftFinancialReportsParams
+): Promise<ShiftFinancialReportsResponse> {
+  const qs = new URLSearchParams();
+  if (params.date_from) qs.set("date_from", params.date_from);
+  if (params.date_to) qs.set("date_to", params.date_to);
+  if (params.period) qs.set("period", params.period);
+  if (params.branch_ids?.length) qs.set("branch_ids", params.branch_ids.join(","));
+  if (params.brand) qs.set("brand", params.brand);
+  if (params.employee_id != null) qs.set("employee_id", String(params.employee_id));
+  const res = await fetch(`${API_BASE}/shifts/financial-reports/?${qs.toString()}`, {
+    credentials: "include",
+    headers: apiHeaders(),
+  });
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({}));
+    throw new Error((j as { detail?: string }).detail || "Failed to fetch reports");
+  }
+  return res.json();
+}
+
+export async function exportShiftFinancialReport(params: {
+  report_type: string;
+  format: "xlsx" | "pdf";
+  date_from?: string;
+  date_to?: string;
+  period?: string;
+  branch_ids?: number[];
+  brand?: string;
+}): Promise<Blob> {
+  const qs = new URLSearchParams();
+  qs.set("report_type", params.report_type);
+  qs.set("format", params.format);
+  if (params.date_from) qs.set("date_from", params.date_from);
+  if (params.date_to) qs.set("date_to", params.date_to);
+  if (params.period) qs.set("period", params.period);
+  if (params.branch_ids?.length) qs.set("branch_ids", params.branch_ids.join(","));
+  if (params.brand) qs.set("brand", params.brand);
+  const res = await fetch(`${API_BASE}/shifts/financial-reports/export/?${qs.toString()}`, {
+    credentials: "include",
+    headers: apiHeaders(),
+  });
+  if (!res.ok) throw new Error("Export failed");
+  return res.blob();
+}
+
+export async function deleteShiftClosingAttachment(attachmentId: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/shifts/attachments/${attachmentId}/`, {
+    method: "DELETE",
+    credentials: "include",
+    headers: { "X-CSRFToken": getCsrfToken() || "" },
+  });
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({}));
+    throw new Error((j as { detail?: string }).detail || "Delete failed");
+  }
+}
+
 async function doProductionPlanRequest(
   branchId: number,
   items: Array<{ product_id?: number; product_sku?: string; product_name?: string; qty: number }>
@@ -1671,6 +2445,183 @@ export async function calculateProductionPlan(
     total_ingredients: json.total_ingredients ?? json.ingredients ?? [],
     products_without_recipe: json.products_without_recipe ?? [],
   };
+}
+
+// --- POS (شاشة الكاشير) ---
+export type POSProduct = {
+  id: number;
+  sku: string;
+  name: string;
+  price: number;
+  unit: string;
+  category: string;
+};
+
+export type POSCategory = { id: string; name: string; name_ar: string };
+
+export type POSModifier = {
+  id: number;
+  name: string;
+  name_ar?: string;
+  price_add: number;
+  modifier_type?: string;
+  ingredient_id?: number | null;
+  qty_per_use?: number;
+};
+
+export type POSCartItem = {
+  product_sku: string;
+  product_name: string;
+  qty: number;
+  unit_price: number;
+  modifiers?: { id: number; name: string; price_add: number }[];
+  modifier_total?: number;
+  discount_amount?: number;
+};
+
+export async function fetchPOSProducts(branchId: number, category?: string): Promise<POSProduct[]> {
+  const qs = new URLSearchParams();
+  qs.set("branch_id", String(branchId));
+  if (category && category !== "all") qs.set("category", category);
+  const res = await fetch(`${API_BASE}/pos/products/?${qs.toString()}`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to fetch products");
+  const j = (await res.json()) as { products: POSProduct[] };
+  return j.products ?? [];
+}
+
+export async function fetchPOSCategories(): Promise<POSCategory[]> {
+  const res = await fetch(`${API_BASE}/pos/categories/`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to fetch categories");
+  const j = (await res.json()) as { categories: POSCategory[] };
+  return j.categories ?? [];
+}
+
+export async function fetchPOSModifiers(): Promise<POSModifier[]> {
+  const res = await fetch(`${API_BASE}/pos/modifiers/`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to fetch modifiers");
+  const j = (await res.json()) as { modifiers: POSModifier[] };
+  return j.modifiers ?? [];
+}
+
+export async function createPOSSale(data: {
+  branch_id: number;
+  items: Array<{
+    product_sku: string;
+    product_name: string;
+    qty: number;
+    unit_price: number;
+    modifier_total?: number;
+    discount_amount?: number;
+    modifiers?: { modifier_id: number }[];
+  }>;
+  payment_method: string;
+  discount_total?: number;
+  notes?: string;
+}): Promise<{ sale_number: string; total: number; depletion_movements: number }> {
+  const res = await fetch(`${API_BASE}/pos/sale/`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({}));
+    throw new Error((j as { detail?: string }).detail || "فشل إنشاء البيع");
+  }
+  return res.json() as Promise<{ sale_number: string; total: number; depletion_movements: number }>;
+}
+
+export async function syncPOSOffline(sales: unknown[]): Promise<{ synced: number; errors: string[] }> {
+  const res = await fetch(`${API_BASE}/pos/sync-offline/`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sales }),
+  });
+  if (!res.ok) throw new Error("فشل المزامنة");
+  return res.json() as Promise<{ synced: number; errors: string[] }>;
+}
+
+// --- HR / الخدمة الذاتية للموظفين ---
+export async function fetchHRSelf(params?: { month?: number; year?: number }): Promise<{
+  profile?: { id: number; employee_id: string; full_name: string; branch: string | null; hire_date: string | null };
+  salary_preview?: {
+    gross: number;
+    deductions_absence: number;
+    deductions_advances: number;
+    deductions_penalties: number;
+    total_deductions: number;
+    net: number;
+    worked_days: number;
+    expected_days: number;
+  };
+}> {
+  const qs = new URLSearchParams();
+  if (params?.month) qs.set("month", String(params.month));
+  if (params?.year) qs.set("year", String(params.year));
+  const res = await fetch(`${API_BASE}/hr/self/?${qs.toString()}`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to fetch HR self");
+  return res.json();
+}
+
+export type HRLeaveItem = { id: number; start_date: string; end_date: string; reason: string; status: string };
+export type HRAdvanceItem = { id: number; amount: number; status: string; requested_at: string };
+
+export async function fetchHRLeaves(): Promise<{ items: HRLeaveItem[] }> {
+  const res = await fetch(`${API_BASE}/hr/leaves/`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to fetch leaves");
+  return res.json();
+}
+
+export async function createHRLeave(data: { start_date: string; end_date: string; reason?: string }): Promise<{ id: number; status: string }> {
+  const res = await fetch(`${API_BASE}/hr/leaves/`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({}));
+    throw new Error((j as { detail?: string }).detail || "فشل إنشاء الطلب");
+  }
+  return res.json();
+}
+
+export async function fetchHRAdvances(): Promise<{ items: HRAdvanceItem[] }> {
+  const res = await fetch(`${API_BASE}/hr/advances/`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to fetch advances");
+  return res.json();
+}
+
+export async function createHRAdvance(data: { amount: number }): Promise<{ id: number; status: string }> {
+  const res = await fetch(`${API_BASE}/hr/advances/`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({}));
+    throw new Error((j as { detail?: string }).detail || "فشل إنشاء الطلب");
+  }
+  return res.json();
+}
+
+export async function hrClockOut(): Promise<{ recorded: boolean }> {
+  const res = await fetch(`${API_BASE}/hr/clock-out/`, { method: "POST", credentials: "include" });
+  if (!res.ok) throw new Error("Failed");
+  return res.json();
+}
+
+export async function fetchPOSKitchenOrders(branchId: number): Promise<
+  { sale_number: string; items: unknown[]; total: number; created_at: string }[]
+> {
+  const res = await fetch(`${API_BASE}/pos/kitchen-orders/?branch_id=${branchId}`, {
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Failed to fetch kitchen orders");
+  const j = (await res.json()) as { orders: { sale_number: string; items: unknown[]; total: number; created_at: string }[] };
+  return j.orders ?? [];
 }
 
 

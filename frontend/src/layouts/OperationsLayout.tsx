@@ -38,9 +38,14 @@ export default function OperationsLayout() {
 
   const navItems = [
     { to: "/", label: t("opsHome"), end: true },
+    { to: "/pos", label: t("posCashier"), end: false },
+    { to: "/employee-self", label: t("employeeSelfService"), end: false },
     { to: "/dashboard/heartbeat", label: t("cafeHeartbeat"), end: false },
     { to: "/shift-closing", label: t("opsShiftOps"), end: false },
     { to: "/prep-list", label: t("opsPrepList"), end: false },
+    { to: "/stock-transfers", label: t("stockTransfers"), end: false },
+    { to: "/central-kitchen", label: t("centralKitchen"), end: false },
+    { to: "/smart-purchase", label: t("smartPurchase"), end: false },
     { to: "/profit-dashboard", label: t("financialDashboard"), end: false },
     { to: "/waste-tracker", label: t("wasteEntry"), end: false },
   ];

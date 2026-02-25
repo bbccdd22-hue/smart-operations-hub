@@ -3,6 +3,7 @@ from datetime import datetime
 
 from rest_framework import permissions, response, views
 
+from core.permissions import can_view_cost_price
 from org.models import Branch, Brand
 
 from inventory.profit_services import get_profit_summary
@@ -55,10 +56,22 @@ class FinancialSummaryView(views.APIView):
         except ValueError:
             date_to = today
 
+        # إعادة حساب من الصفر في كل طلب – لا cache، النطاق التاريخي صارم فقط
         result = get_profit_summary(
             branch_ids=branch_ids,
             date_from=date_from,
             date_to=date_to,
             brand_ids=brand_ids if not branch_ids else None,
         )
-        return response.Response(result)
+        if not can_view_cost_price(request.user):
+            result = {
+                "total_sales": result.get("total_sales", "0"),
+                "total_cogs": None,
+                "gross_profit": None,
+                "ingredients_with_cost": [],
+                "flagged_for_review": [],
+                **({"error": result["error"]} if "error" in result else {}),
+            }
+        resp = response.Response(result)
+        resp["Cache-Control"] = "no-store, no-cache, must-revalidate"
+        return resp

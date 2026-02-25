@@ -22,6 +22,15 @@ export type UserPermissions = {
   upload_files?: boolean;
   view_activity_log?: boolean;
   edit_chart_of_accounts?: boolean;
+  perm_shift_closing?: boolean;
+  perm_financial_reports?: boolean;
+  perm_management_reports?: boolean;
+  perm_full_system_access?: boolean;
+  perm_order_forecasting?: boolean;
+  perm_financial_auditor?: boolean;
+  view_cost_price?: boolean;
+  cancel_invoice?: boolean;
+  view_customer_phone?: boolean;
 };
 
 export type AuthUser = {
@@ -63,6 +72,27 @@ function getCsrfToken(): string | null {
   return match ? match[1] : null;
 }
 
+async function fetchWithRetry(url: string, opts: RequestInit, retries = 2): Promise<Response> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const id = setTimeout(() => controller.abort(), 30000);
+      const res = await fetch(url, { ...opts, signal: controller.signal });
+      clearTimeout(id);
+      return res;
+    } catch (e) {
+      lastErr = e;
+      const retryable =
+        e instanceof TypeError ||
+        (e instanceof Error && (e.message === "Failed to fetch" || e.name === "AbortError"));
+      if (!retryable || attempt === retries) throw e;
+      await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
+    }
+  }
+  throw lastErr;
+}
+
 async function fetchWithCsrf(url: string, opts: RequestInit = {}) {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -70,7 +100,7 @@ async function fetchWithCsrf(url: string, opts: RequestInit = {}) {
   };
   const token = getCsrfToken();
   if (token) headers["X-CSRFToken"] = token;
-  return fetch(url, { ...opts, credentials: "include", headers });
+  return fetchWithRetry(url, { ...opts, credentials: "include", headers });
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {

@@ -1,54 +1,120 @@
 /**
- * AppShellLayout – RealEstate Pro aesthetic
- * Slim translucent sidebar (desktop) + floating mobile bottom bar
- * Soft neumorphism + glassmorphism, 24–32px gutters/radius
+ * AppShellLayout – Nested sidebar + glassmorphism
+ * Collapsible groups, Lucide icons, smooth animations, compact footer
  */
-import { useState, useRef } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { useState, useRef, useEffect, useMemo } from "react";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTranslation } from "react-i18next";
+import { Search, Sun, Moon, Languages, LogOut } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 import { useNotifications } from "../contexts/NotificationContext";
 import { useTheme } from "../contexts/ThemeContext";
 import AnimatedBackground from "../components/AnimatedBackground";
 import NotificationsDropdown from "../components/NotificationsDropdown";
+import RoutePermissionGuard from "../components/RoutePermissionGuard";
 import OwnerSignatureFooter from "../components/OwnerSignatureFooter";
 import type { SystemHealthItem } from "../lib/api";
+import type { NavGroupConfig } from "../config/navConfig";
 
 const MOBILE_BAR_HEIGHT = 72;
-const SIDEBAR_WIDTH = 260; /* Icon + label, accommodates Arabic text clearly */
+const SIDEBAR_WIDTH = 280;
 
 type NavItem = { to: string; label: string; icon: React.ReactNode; primary?: boolean };
 type NavConfig = { items: NavItem[]; show?: boolean };
 
 export default function AppShellLayout({
   navConfig,
+  nestedNavConfig,
   health,
   healthOpen,
   setHealthOpen,
 }: {
   navConfig: NavConfig[];
+  nestedNavConfig?: NavGroupConfig[];
   health: SystemHealthItem[] | null;
   healthOpen: boolean;
   setHealthOpen: React.Dispatch<React.SetStateAction<boolean>>;
 }) {
   const { t, i18n } = useTranslation();
+  const location = useLocation();
   const { user, logout } = useAuth();
+  const isSAIF = user?.username === "SAIF";
   const notifications = useNotifications();
   const { dark, setDark } = useTheme();
   const isRTL = i18n.language === "ar";
   const [notifOpen, setNotifOpen] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const notifAnchorRef = useRef<HTMLButtonElement>(null);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [sidebarSearch, setSidebarSearch] = useState("");
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set());
+  const notifAnchorDesktopRef = useRef<HTMLButtonElement>(null);
+  const notifAnchorMobileRef = useRef<HTMLButtonElement>(null);
+  const userMenuRef = useRef<HTMLButtonElement>(null);
+  const [isLargeScreen, setIsLargeScreen] = useState(() => typeof window !== "undefined" && window.innerWidth >= 1024);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1024px)");
+    const handler = () => setIsLargeScreen(mq.matches);
+    mq.addEventListener("change", handler);
+    return () => mq.removeEventListener("change", handler);
+  }, []);
+  const notifAnchorRef = isLargeScreen ? notifAnchorDesktopRef : notifAnchorMobileRef;
 
   const allNavItems = navConfig.flatMap((c) => (c.show !== false ? c.items : []));
   const primaryItem = allNavItems.find((n) => n.primary) ?? allNavItems[0];
   const secondaryItems = allNavItems.filter((n) => n !== primaryItem);
 
+  const useNested = nestedNavConfig && nestedNavConfig.length > 0;
+  const allNestedItems = useMemo(() => {
+    if (!nestedNavConfig) return [];
+    const items: { to: string; label: string; icon: React.ReactNode; groupKey: string }[] = [];
+    for (const g of nestedNavConfig) {
+      for (const sg of g.subGroups) {
+        for (const it of sg.items) {
+          items.push({ ...it, groupKey: g.groupLabelKey });
+        }
+      }
+    }
+    return items;
+  }, [nestedNavConfig]);
+
+  useEffect(() => {
+    if (!useNested || !nestedNavConfig) return;
+    const path = location.pathname;
+    const toAdd = new Set<string>();
+    for (let i = 0; i < nestedNavConfig.length; i++) {
+      const g = nestedNavConfig[i];
+      const hasActive = g.subGroups.some((sg) =>
+        sg.items.some((it) => path === it.to || (it.to !== "/" && path.startsWith(it.to)))
+      );
+      if (hasActive) toAdd.add(`g-${i}`);
+    }
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      toAdd.forEach((k) => next.add(k));
+      return next.size > 0 ? next : new Set(nestedNavConfig.map((_, i) => `g-${i}`));
+    });
+  }, [location.pathname, nestedNavConfig, useNested]);
+
+  const toggleGroup = (key: string) => {
+    setExpandedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const filteredNestedItems = useMemo(() => {
+    if (!sidebarSearch.trim()) return null;
+    const q = sidebarSearch.trim().toLowerCase();
+    return allNestedItems.filter((it) => it.label.toLowerCase().includes(q));
+  }, [sidebarSearch, allNestedItems]);
+
   return (
     <div
       dir={isRTL ? "rtl" : "ltr"}
-      className="terminal-theme app-shell-root relative min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-transparent font-sans text-slate-100 antialiased"
+      className={`app-shell-root relative min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-transparent font-sans antialiased ${dark ? "terminal-theme text-slate-100" : "text-slate-800"}`}
     >
       <AnimatedBackground />
       {/* Desktop: Fixed Sidebar – right side (RTL) or left side (LTR); prevents layout shift */}
@@ -56,56 +122,187 @@ export default function AppShellLayout({
         className="app-shell-sidebar fixed top-0 bottom-0 z-[9996] hidden h-screen flex-col lg:flex"
         style={{
           width: SIDEBAR_WIDTH,
-          ...(isRTL ? { right: 0, left: "auto" } : { left: 0, right: "auto" }),
+          background: "var(--shell-sidebar-bg)",
+          backdropFilter: "blur(12px)",
+          WebkitBackdropFilter: "blur(12px)",
+          ...(isRTL ? { right: 0, left: "auto", borderLeft: "1px solid var(--shell-sidebar-border)" } : { left: 0, right: "auto", borderRight: "1px solid var(--shell-sidebar-border)" }),
         }}
       >
-        <div className="flex h-12 shrink-0 items-center gap-3 border-b border-white/5 px-4">
+        <div className="flex h-12 shrink-0 items-center gap-3 border-b px-4" style={{ borderColor: "var(--shell-sidebar-border)" }}>
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-[#00ffcc]/20 text-[#00ffcc]">
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
           </div>
-          <span className="truncate text-sm font-semibold text-slate-100">{t("appName")}</span>
+          <span className="truncate text-sm font-semibold" style={{ color: "var(--shell-text)" }}>{t("appName")}</span>
         </div>
-        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-3">
-          {allNavItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === "/" || item.to === "/dashboard"}
-              title={item.label}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition-all duration-200 ${
-                  isActive
-                    ? "bg-[#00ffcc]/15 text-[#00ffcc] shadow-[0_0_0_2px_rgba(0,255,204,0.3)]"
-                    : "text-slate-400 hover:bg-white/8 hover:text-slate-200"
-                }`
-              }
-            >
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center [&>svg]:h-5 [&>svg]:w-5">
-                {item.icon}
-              </span>
-              <span className="min-w-0 overflow-hidden text-ellipsis">{item.label}</span>
-            </NavLink>
-          ))}
+
+        <div className="shrink-0 border-b px-3 py-2" style={{ borderColor: "var(--shell-sidebar-border)" }}>
+          <div className={`flex items-center gap-2 rounded-xl border px-3 py-2 ${dark ? "border-white/10 bg-white/5" : "border-slate-200/60 bg-slate-50/80"}`}>
+            <Search className="h-4 w-4 shrink-0 text-[#00ffcc]/70" />
+            <input
+              type="search"
+              value={sidebarSearch}
+              onChange={(e) => setSidebarSearch(e.target.value)}
+              placeholder={t("search")}
+              className="w-full bg-transparent text-sm outline-none placeholder:opacity-60"
+              style={{ color: "var(--shell-text)" }}
+              aria-label={t("search")}
+            />
+          </div>
+        </div>
+
+        <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto p-3">
+          {useNested && nestedNavConfig ? (
+            filteredNestedItems !== null ? (
+              <div className="space-y-1">
+                {filteredNestedItems.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={item.to === "/" || item.to === "/dashboard"}
+                    onClick={() => setDrawerOpen(false)}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
+                        isActive
+                          ? "bg-[#10b981]/20 text-[#10b981] shadow-[0_0_0_2px_rgba(16,185,129,0.25)]"
+                          : dark ? "text-slate-400 hover:bg-white/8 hover:text-slate-200" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                      }`
+                    }
+                  >
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center [&>svg]:h-4 [&>svg]:w-4">{item.icon}</span>
+                    <span className="min-w-0 truncate">{item.label}</span>
+                  </NavLink>
+                ))}
+              </div>
+            ) : (
+              nestedNavConfig.map((group, gi) => {
+                const groupKey = `g-${gi}`;
+                const isExpanded = expandedGroups.has(groupKey);
+                const GroupIcon = group.groupIcon;
+                return (
+                  <div key={groupKey} className="mb-1">
+                    <button
+                      type="button"
+                      onClick={() => toggleGroup(groupKey)}
+                      className={`flex w-full items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all duration-200 ${
+                        dark ? "text-slate-300 hover:bg-white/8 hover:text-slate-100" : "text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                      }`}
+                    >
+                      <GroupIcon className="h-5 w-5 shrink-0 text-[#00ffcc]/90" />
+                      <span className="min-w-0 flex-1 truncate text-start">{t(group.groupLabelKey)}</span>
+                      <motion.span
+                        animate={{ rotate: isExpanded ? 180 : 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="shrink-0 opacity-60"
+                      >
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </motion.span>
+                    </button>
+                    <AnimatePresence initial={false}>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: "auto", opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.25, ease: "easeInOut" }}
+                          className="overflow-hidden"
+                        >
+                          {group.subGroups.map((sg) => (
+                            <div key={sg.subLabelKey} className="mt-1 space-y-0.5">
+                              {group.subGroups.length > 1 && (
+                                <div
+                                  className={`px-4 py-1 text-xs font-medium ${dark ? "text-slate-500" : "text-slate-500"}`}
+                                  style={{ paddingInlineStart: isRTL ? "1rem" : "1.5rem" }}
+                                >
+                                  {t(sg.subLabelKey)}
+                                </div>
+                              )}
+                              {sg.items.map((item) => (
+                                <NavLink
+                                  key={item.to}
+                                  to={item.to}
+                                  end={item.to === "/" || item.to === "/dashboard"}
+                                  className={({ isActive }) =>
+                                    `flex items-center gap-3 rounded-xl py-2.5 text-sm font-medium transition-all duration-200 ${
+                                      isActive
+                                        ? "bg-[#10b981]/20 text-[#10b981] shadow-[0_0_0_2px_rgba(16,185,129,0.25)]"
+                                        : dark ? "text-slate-400 hover:bg-white/8 hover:text-slate-200" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                                    }`
+                                  }
+                                  style={{ paddingInlineStart: isRTL ? "2rem" : "2.5rem", paddingInlineEnd: "1rem" }}
+                                >
+                                  <span className="flex h-6 w-6 shrink-0 items-center justify-center [&>svg]:h-4 [&>svg]:w-4 opacity-80">
+                                    {item.icon}
+                                  </span>
+                                  <span className="min-w-0 truncate">{item.label}</span>
+                                </NavLink>
+                              ))}
+                            </div>
+                          ))}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              })
+            )
+          ) : (
+            allNavItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === "/" || item.to === "/dashboard"}
+                title={item.label}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-medium transition-all duration-200 ${
+                    isActive
+                      ? "bg-[#00ffcc]/15 text-[#00ffcc] shadow-[0_0_0_2px_rgba(0,255,204,0.3)]"
+                      : dark ? "text-slate-400 hover:bg-white/8 hover:text-slate-200" : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  }`
+                }
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center [&>svg]:h-5 [&>svg]:w-5">{item.icon}</span>
+                <span className="min-w-0 overflow-hidden text-ellipsis">{item.label}</span>
+              </NavLink>
+            ))
+          )}
         </nav>
-        <div className="flex flex-col gap-1 border-t border-white/5 p-3">
+
+        <div
+          className="flex shrink-0 items-center justify-center gap-2 border-t p-2"
+          style={{ borderColor: "var(--shell-sidebar-border)", background: "var(--glass-bg)" }}
+        >
           <button
             type="button"
             onClick={() => setDark((d) => !d)}
-            className="flex items-center gap-3 rounded-2xl px-4 py-2.5 text-slate-400 hover:bg-white/5"
-            title={dark ? "Light mode" : "Dark mode"}
+            className="flex h-9 w-9 items-center justify-center rounded-xl transition hover:bg-[#00ffcc]/15 hover:text-[#00ffcc]"
+            style={{ color: "var(--shell-text-muted)" }}
+            title={dark ? (isRTL ? "الوضع النهاري" : "Light mode") : (isRTL ? "الوضع الليلي" : "Dark mode")}
+            aria-label={dark ? "Light mode" : "Dark mode"}
           >
-            <span className="text-lg">{dark ? "☀️" : "🌙"}</span>
-            <span className="text-sm">{dark ? "Light" : "Dark"}</span>
+            {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
           </button>
           <button
             type="button"
             onClick={() => i18n.changeLanguage(isRTL ? "en" : "ar")}
-            className="flex items-center gap-3 rounded-2xl px-4 py-2.5 text-sm text-slate-500 hover:bg-slate-100/80 dark:hover:bg-white/5"
+            className="flex h-9 w-9 items-center justify-center rounded-xl transition hover:bg-[#00ffcc]/15 hover:text-[#00ffcc]"
+            style={{ color: "var(--shell-text-muted)" }}
+            title={isRTL ? "English" : "العربية"}
+            aria-label="Change language"
           >
-            <span className="text-sm font-medium">{isRTL ? "EN" : "AR"}</span>
-            <span className="text-xs text-slate-400">{isRTL ? "English" : "العربية"}</span>
+            <Languages className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => logout()}
+            className="flex h-9 w-9 items-center justify-center rounded-xl text-rose-500 transition hover:bg-rose-500/15 hover:text-rose-400"
+            title={t("logout")}
+            aria-label={t("logout")}
+          >
+            <LogOut className="h-4 w-4" />
           </button>
         </div>
       </aside>
@@ -115,22 +312,22 @@ export default function AppShellLayout({
         className="fixed top-0 z-[9997] hidden h-12 lg:block"
         style={{
           ...(isRTL ? { left: 0, right: SIDEBAR_WIDTH, width: `calc(100vw - ${SIDEBAR_WIDTH}px)` } : { left: SIDEBAR_WIDTH, right: 0, width: `calc(100vw - ${SIDEBAR_WIDTH}px)` }),
-          background: "rgba(15, 23, 42, 0.6)",
+          background: "var(--shell-header-bg)",
           backdropFilter: "blur(10px)",
           WebkitBackdropFilter: "blur(10px)",
-          borderBottom: "1px solid rgba(0, 255, 204, 0.2)",
+          borderBottom: "1px solid var(--shell-header-border)",
         }}
       >
         <div className="flex h-full w-full items-center justify-between gap-4 px-6">
           {/* Search bar – Emerald accent */}
-          <div className="flex flex-1 max-w-md items-center gap-2 rounded-2xl border border-white/10 bg-white/5 px-3 py-2 backdrop-blur-xl transition focus-within:border-[#00ffcc]/50 focus-within:ring-2 focus-within:ring-[#00ffcc]/20 focus-within:shadow-[0_0_20px_rgba(0,255,204,0.12)]">
+          <div className={`flex flex-1 max-w-md items-center gap-2 rounded-2xl border px-3 py-2 backdrop-blur-xl transition focus-within:border-[#00ffcc]/50 focus-within:ring-2 focus-within:ring-[#00ffcc]/20 focus-within:shadow-[0_0_20px_rgba(0,255,204,0.12)] ${dark ? "border-white/10 bg-white/5" : "border-slate-200/60 bg-white/80"}`}>
             <svg className="h-4 w-4 shrink-0 text-[#00ffcc]/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input
               type="search"
               placeholder={t("search")}
-              className="w-full bg-transparent text-sm text-slate-100 placeholder-slate-500 outline-none"
+              className={`w-full bg-transparent text-sm outline-none ${dark ? "text-slate-100 placeholder-slate-500" : "text-slate-800 placeholder-slate-500"}`}
               aria-label={t("search")}
             />
           </div>
@@ -138,11 +335,14 @@ export default function AppShellLayout({
           <div className="flex items-center gap-2">
             <div className="relative">
               <button
-                ref={notifAnchorRef}
+                ref={notifAnchorDesktopRef}
                 type="button"
-                onClick={() => setNotifOpen((o) => !o)}
-                className="relative rounded-xl p-2.5 text-slate-400 transition hover:bg-[#00ffcc]/10 hover:text-[#00ffcc]"
+                onClick={(e) => { e.stopPropagation(); setNotifOpen((o) => !o); }}
+                className="relative flex min-h-[44px] min-w-[44px] cursor-pointer touch-manipulation items-center justify-center rounded-xl p-2.5 text-slate-400 transition hover:bg-[#00ffcc]/10 hover:text-[#00ffcc]"
+                style={{ touchAction: "manipulation" }}
                 title={t("notifications")}
+                aria-label={t("notifications")}
+                aria-expanded={notifOpen}
               >
                 <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538.214 1.055.595 1.43L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
@@ -153,15 +353,25 @@ export default function AppShellLayout({
                   </span>
                 )}
               </button>
-              <NotificationsDropdown
-                open={notifOpen}
-                onClose={() => setNotifOpen(false)}
-                anchorRef={notifAnchorRef}
-                notifications={notifications?.notifications ?? []}
-                unreadCount={notifications?.unreadCount ?? 0}
-                markAsRead={notifications?.markAsRead ?? (async () => {})}
-              />
             </div>
+            <button
+              type="button"
+              onClick={() => setDark((d) => !d)}
+              className="flex h-10 w-10 items-center justify-center rounded-xl transition hover:bg-[#00ffcc]/10 hover:text-[#00ffcc]"
+              style={{ color: "var(--shell-text-muted)" }}
+              title={dark ? (isRTL ? "الوضع النهاري" : "Light mode") : (isRTL ? "الوضع الليلي" : "Dark mode")}
+              aria-label={dark ? "Light mode" : "Dark mode"}
+            >
+              {dark ? (
+                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
+                </svg>
+              ) : (
+                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
+                </svg>
+              )}
+            </button>
             <button
               type="button"
               onClick={() => setHealthOpen((o) => !o)}
@@ -175,12 +385,12 @@ export default function AppShellLayout({
               />
               <span className="text-sm font-medium">{t("health")}</span>
             </button>
-            <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-3 py-2">
+            <div className={`flex items-center gap-3 rounded-2xl border px-3 py-2 ${dark ? "border-white/10 bg-white/5" : "border-slate-200/60 bg-white/80"}`}>
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#00ffcc] text-sm font-bold text-slate-900 shadow-[0_2px_12px_rgba(0,255,204,0.35)]">
                 {(user?.username ?? "U").charAt(0).toUpperCase()}
               </div>
               <div className="hidden text-left sm:block">
-                <div className="text-sm font-semibold text-slate-100">{user?.username ?? "—"}</div>
+                <div className="text-sm font-semibold" style={{ color: "var(--shell-text)" }}>{user?.username ?? "—"}</div>
                 <div className="text-xs text-[#00ffcc]/80">{user?.role ?? "—"}</div>
               </div>
             </div>
@@ -200,10 +410,10 @@ export default function AppShellLayout({
       <header
         className="fixed left-0 right-0 top-0 z-[9998] flex h-12 w-full items-center justify-between gap-3 px-4 lg:hidden"
         style={{
-          background: "rgba(15, 23, 42, 0.6)",
+          background: "var(--shell-header-bg)",
           backdropFilter: "blur(10px)",
           WebkitBackdropFilter: "blur(10px)",
-          borderBottom: "1px solid rgba(0, 255, 204, 0.2)",
+          borderBottom: "1px solid var(--shell-header-border)",
         }}
       >
         <div className="flex items-center gap-2">
@@ -223,16 +433,19 @@ export default function AppShellLayout({
             </svg>
           </div>
           <div className="min-w-0">
-            <div className="truncate text-sm font-semibold text-slate-100">{t("appName")}</div>
-            <div className="truncate text-[11px] text-slate-400">{user?.username ?? "—"}</div>
+            <div className="truncate text-sm font-semibold" style={{ color: "var(--shell-text)" }}>{t("appName")}</div>
+            <div className="truncate text-[11px]" style={{ color: "var(--shell-text-muted)" }}>{user?.username ?? "—"}</div>
           </div>
         </div>
         <div className="flex items-center gap-1">
           <button
-            ref={notifAnchorRef}
+            ref={notifAnchorMobileRef}
             type="button"
-            onClick={() => setNotifOpen((o) => !o)}
-            className="relative flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition hover:bg-[#00ffcc]/10 hover:text-[#00ffcc]"
+            onClick={(e) => { e.stopPropagation(); setNotifOpen((o) => !o); }}
+            className="relative flex min-h-[44px] min-w-[44px] cursor-pointer touch-manipulation items-center justify-center rounded-xl text-slate-400 transition hover:bg-[#00ffcc]/10 hover:text-[#00ffcc]"
+            style={{ touchAction: "manipulation" }}
+            aria-label={t("notifications")}
+            aria-expanded={notifOpen}
           >
             <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538.214 1.055.595 1.43L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
@@ -243,20 +456,83 @@ export default function AppShellLayout({
               </span>
             )}
           </button>
-          <NotificationsDropdown
-            open={notifOpen}
-            onClose={() => setNotifOpen(false)}
-            anchorRef={notifAnchorRef}
-            notifications={notifications?.notifications ?? []}
-            unreadCount={notifications?.unreadCount ?? 0}
-            markAsRead={notifications?.markAsRead ?? (async () => {})}
-          />
-          {/* Compact profile bubble */}
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#00ffcc] text-xs font-bold text-slate-900 shadow-[0_2px_6px_rgba(0,255,204,0.35)]">
-            {(user?.username ?? "U").charAt(0).toUpperCase()}
+          <button
+            type="button"
+            onClick={() => setDark((d) => !d)}
+            className="flex h-9 w-9 items-center justify-center rounded-xl transition hover:bg-[#00ffcc]/10 hover:text-[#00ffcc]"
+            style={{ color: "var(--shell-text-muted)" }}
+            title={dark ? (isRTL ? "الوضع النهاري" : "Light mode") : (isRTL ? "الوضع الليلي" : "Dark mode")}
+            aria-label={dark ? "Light mode" : "Dark mode"}
+          >
+            {dark ? (
+              <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clipRule="evenodd" />
+              </svg>
+            ) : (
+              <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z" />
+              </svg>
+            )}
+          </button>
+          {/* User menu – يضم اسم المستخدم وتسجيل الخروج */}
+          <div className="relative">
+            <button
+              ref={userMenuRef}
+              type="button"
+              onClick={() => setUserMenuOpen((o) => !o)}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#00ffcc] text-xs font-bold text-slate-900 shadow-[0_2px_6px_rgba(0,255,204,0.35)] transition hover:ring-2 hover:ring-[#00ffcc]/50"
+              aria-expanded={userMenuOpen}
+              aria-haspopup="menu"
+            >
+              {(user?.username ?? "U").charAt(0).toUpperCase()}
+            </button>
+            <AnimatePresence>
+              {userMenuOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-[9998]"
+                    onClick={() => setUserMenuOpen(false)}
+                    aria-hidden
+                  />
+                  <motion.div
+                    initial={{ opacity: 0, y: -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -8 }}
+                    className={`absolute top-full mt-2 z-[9999] min-w-[180px] rounded-xl border p-2 shadow-xl ${
+                      isRTL ? "left-0" : "right-0"
+                    } ${dark ? "border-white/10 bg-slate-900/95" : "border-slate-200 bg-white"}`}
+                  >
+                    <div className="border-b px-3 py-2 dark:border-white/10">
+                      <div className="text-sm font-semibold" style={{ color: "var(--shell-text)" }}>{user?.username ?? "—"}</div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400">{user?.role ?? "—"}</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => { logout(); setUserMenuOpen(false); }}
+                      className="mt-2 flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-rose-600 transition hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-900/20"
+                    >
+                      <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                      </svg>
+                      {t("logout")}
+                    </button>
+                  </motion.div>
+                </>
+              )}
+            </AnimatePresence>
           </div>
         </div>
       </header>
+
+      {/* تنبيهات – مودال واحد يشترك فيه الشريطين */}
+      <NotificationsDropdown
+        open={notifOpen}
+        onClose={() => setNotifOpen(false)}
+        anchorRef={notifAnchorRef}
+        notifications={notifications?.notifications ?? []}
+        unreadCount={notifications?.unreadCount ?? 0}
+        markAsRead={notifications?.markAsRead ?? (async () => {})}
+      />
 
       {/* Main content – full width mobile; viewport minus fixed sidebar on desktop */}
       <main
@@ -277,7 +553,9 @@ export default function AppShellLayout({
             transition={{ duration: 0.3, ease: "easeOut" }}
             className="flex min-h-full min-w-0 flex-1 flex-col"
           >
-            <Outlet />
+            <RoutePermissionGuard permissions={user?.permissions} isSAIF={!!isSAIF}>
+              <Outlet />
+            </RoutePermissionGuard>
           </motion.div>
           <OwnerSignatureFooter />
         </div>
@@ -402,20 +680,30 @@ export default function AppShellLayout({
                   </NavLink>
                 ))}
               </nav>
-              <div className="flex gap-2 border-t border-slate-200/50 p-3 dark:border-white/5">
+              <div className="flex flex-col gap-1 border-t border-slate-200/50 p-3 dark:border-white/5">
                 <button
                   type="button"
                   onClick={() => { setDark((d) => !d); setDrawerOpen(false); }}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-xl py-2.5 text-sm text-slate-600 dark:text-slate-400"
+                  className="flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm text-slate-600 dark:text-slate-400"
                 >
-                  {dark ? "☀️" : "🌙"} {dark ? "Light" : "Dark"}
+                  {dark ? "☀️" : "🌙"} {dark ? (isRTL ? "نهاري" : "Light") : (isRTL ? "ليلي" : "Dark")}
                 </button>
                 <button
                   type="button"
                   onClick={() => { i18n.changeLanguage(isRTL ? "en" : "ar"); setDrawerOpen(false); }}
-                  className="flex flex-1 items-center justify-center rounded-xl py-2.5 text-sm font-medium text-slate-600 dark:text-slate-400"
+                  className="flex items-center justify-center rounded-xl py-2.5 text-sm font-medium text-slate-600 dark:text-slate-400"
                 >
-                  {isRTL ? "EN" : "AR"}
+                  {isRTL ? "EN" : "AR"} – {isRTL ? "English" : "العربية"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { logout(); setDrawerOpen(false); }}
+                  className="flex items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-medium text-rose-600 hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-900/20"
+                >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                  </svg>
+                  {t("logout")}
                 </button>
               </div>
             </motion.aside>

@@ -16,6 +16,15 @@ import {
   type InventoryUnit,
 } from "../lib/api";
 
+/** تحويل الأرقام العربية (٠١٢٣...) إلى إنجليزية (0123...) لقبول كلاهما */
+function normalizeNumericInput(val: string): string {
+  const arabicToWestern: Record<string, string> = {
+    "٠": "0", "١": "1", "٢": "2", "٣": "3", "٤": "4",
+    "٥": "5", "٦": "6", "٧": "7", "٨": "8", "٩": "9",
+  };
+  return val.split("").map((c) => arabicToWestern[c] ?? c).join("");
+}
+
 const SYSTEM_GROUPS = [
   { value: "", label: "All", labelAr: "الكل" },
   { value: "raw_materials", label: "Raw Materials", labelAr: "المواد الخام" },
@@ -47,14 +56,12 @@ export default function ManageIngredientsPage() {
   });
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPrimaryUnitWarning, setShowPrimaryUnitWarning] = useState(false);
 
   const loadUnits = useCallback(async () => {
     const list = await fetchInventoryUnits();
     setUnits(list);
-    if (list.length > 0 && form.base_unit_id === 0) {
-      setForm((f) => ({ ...f, base_unit_id: list[0].id }));
-    }
-  }, [form.base_unit_id]);
+  }, []);
 
   const loadIngredients = useCallback(async () => {
     setLoading(true);
@@ -94,16 +101,16 @@ export default function ManageIngredientsPage() {
     setError(null);
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const performSave = async (unitId: number) => {
     setSaving(true);
     setError(null);
+    setShowPrimaryUnitWarning(false);
     try {
       if (editingId) {
         await updateIngredient(editingId, {
           name_en: form.name_en,
           name_ar: form.name_ar,
-          base_unit_id: form.base_unit_id,
+          base_unit_id: unitId,
           serial_code: form.serial_code,
           system_group: form.system_group,
           package_conversion_factor: form.package_conversion_factor
@@ -116,7 +123,7 @@ export default function ManageIngredientsPage() {
         await createIngredient({
           name_en: form.name_en,
           name_ar: form.name_ar,
-          base_unit_id: form.base_unit_id,
+          base_unit_id: unitId,
           serial_code: form.serial_code || undefined,
           system_group: form.system_group,
           package_conversion_factor: form.package_conversion_factor
@@ -133,6 +140,37 @@ export default function ManageIngredientsPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    const hasNoPrimaryUnit = !form.base_unit_id || form.base_unit_id === 0;
+    const smallestUnit = units.length > 0 ? units[0] : null;
+    if (hasNoPrimaryUnit && units.length > 0) {
+      setShowPrimaryUnitWarning(true);
+      setError(
+        isRTL
+          ? "يجب تحديد وحدة رئيسية لهذا الصنف لتجنب الخلل في التقارير"
+          : "You must specify a primary unit for this item to avoid report errors"
+      );
+      return;
+    }
+    if (hasNoPrimaryUnit && !smallestUnit) {
+      setError(isRTL ? "لا توجد وحدات. أضف وحدات أولاً." : "No units available. Add units first.");
+      return;
+    }
+    const unitToUse = (form.base_unit_id || smallestUnit?.id) ?? 0;
+    await performSave(unitToUse);
+  };
+
+  const handleSaveWithFallbackUnit = async () => {
+    const smallestUnit = units.length > 0 ? units[0] : null;
+    if (!smallestUnit) {
+      setError(isRTL ? "لا توجد وحدات." : "No units available.");
+      return;
+    }
+    await performSave(smallestUnit.id);
   };
 
   const startEdit = (ing: ManageIngredient) => {
@@ -271,13 +309,14 @@ export default function ManageIngredientsPage() {
               </div>
               <div>
                 <label className="mb-1 block text-xs text-white/70">
-                  {t("baseUnit")}
+                  {isRTL ? "الوحدة الرئيسية (Primary Unit)" : `${t("baseUnit")} (Primary Unit)`}
                 </label>
                 <select
                   value={form.base_unit_id}
                   onChange={(e) => setForm((f) => ({ ...f, base_unit_id: Number(e.target.value) }))}
                   className="glass-input w-full rounded-lg px-3 py-2 text-white"
                 >
+                  <option value={0}>{isRTL ? "— اختر الوحدة الرئيسية —" : "— Select primary unit —"}</option>
                   {units.map((u) => (
                     <option key={u.id} value={u.id}>
                       {u.code} ({u.name_en})
@@ -335,13 +374,18 @@ export default function ManageIngredientsPage() {
                   />
                   <span className="text-white/80">{t("contains")}</span>
                   <input
-                    type="number"
-                    min={0}
-                    step="any"
+                    type="text"
+                    inputMode="decimal"
+                    dir="ltr"
                     value={form.package_conversion_factor}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, package_conversion_factor: e.target.value }))
-                    }
+                    onChange={(e) => {
+                      const v = normalizeNumericInput(e.target.value).replace(/[^\d.]/g, "");
+                      const parts = v.split(".");
+                      const sanitized = parts.length > 2
+                        ? `${parts[0]}.${parts.slice(1).join("")}`
+                        : v;
+                      setForm((f) => ({ ...f, package_conversion_factor: sanitized }));
+                    }}
                     className="glass-input w-20 rounded-lg px-2 py-1.5 text-sm text-white"
                     placeholder="12"
                   />
@@ -352,7 +396,19 @@ export default function ManageIngredientsPage() {
               </div>
             </div>
             {error && (
-              <p className="mt-3 text-sm text-red-400">{error}</p>
+              <div className="mt-3 space-y-2">
+                <p className="text-sm text-red-400">{error}</p>
+                {showPrimaryUnitWarning && units.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleSaveWithFallbackUnit}
+                    disabled={saving}
+                    className="rounded-lg border border-amber-500/60 bg-amber-500/10 px-3 py-1.5 text-xs font-medium text-amber-400 hover:bg-amber-500/20"
+                  >
+                    {isRTL ? "تجاهل واستخدم أصغر وحدة تلقائياً (علامة تحذير)" : "Ignore & use smallest unit (with warning)"}
+                  </button>
+                )}
+              </div>
             )}
             <div className="mt-4 flex gap-2">
               <button
@@ -437,13 +493,21 @@ export default function ManageIngredientsPage() {
                         {ing.system_group.replace("_", " ")}
                       </td>
                       <td className="py-3">
-                        <button
-                          type="button"
-                          onClick={() => startEdit(ing)}
-                          className="rounded px-2 py-1 text-emerald-400 hover:bg-white/10"
-                        >
-                          {t("edit")}
-                        </button>
+                        <div className="flex gap-2">
+                          <Link
+                            to={`/inventory/item-file?id=${ing.id}`}
+                            className="rounded px-2 py-1 text-sky-400 hover:bg-white/10"
+                          >
+                            {isRTL ? "ملف" : "File"}
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => startEdit(ing)}
+                            className="rounded px-2 py-1 text-emerald-400 hover:bg-white/10"
+                          >
+                            {t("edit")}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );

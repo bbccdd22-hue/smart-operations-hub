@@ -1,7 +1,7 @@
 /**
  * Financial Report Controller – Unique IDs prevent data collision.
  */
-export type FinancialReportId = "FIN-001" | "FIN-002" | "FIN-003" | "FIN-004" | "FIN-005" | "FIN-006" | "FIN-007" | "FIN-008" | "FIN-009" | "FIN-010";
+export type FinancialReportId = "FIN-001" | "FIN-002" | "FIN-003" | "FIN-004" | "FIN-005" | "FIN-006" | "FIN-007" | "FIN-008" | "FIN-009" | "FIN-010" | "FIN-011" | "FIN-012";
 
 export interface FinancialReportMeta {
   id: FinancialReportId;
@@ -12,6 +12,8 @@ export interface FinancialReportMeta {
   subtitleAr: string;
   route: string;
   icon: "revenue" | "opex" | "cogs" | "gauge" | "cashflow" | "sitemap";
+  /** يظهر فقط لـ SAIF – لا يرى المدير العام أو غيره */
+  saifOnly?: boolean;
 }
 
 export const FINANCIAL_REPORTS: FinancialReportMeta[] = [
@@ -114,6 +116,27 @@ export const FINANCIAL_REPORTS: FinancialReportMeta[] = [
     subtitleAr: "توزيع مبيعات البراندات، كفاءة التشغيل، هيكل التكاليف",
     route: "/finance/charts-dashboard",
     icon: "gauge",
+  },
+  {
+    id: "FIN-011",
+    code: "FIN-011",
+    titleEn: "Cost Audit Center",
+    titleAr: "سجل تدقيق التكاليف التشغيلية",
+    subtitleEn: "Full transparency – trace every cost to its source",
+    subtitleAr: "شفافية كاملة – تتبع كل ريال إلى مصدره",
+    route: "/finance/cost-audit",
+    icon: "opex",
+  },
+  {
+    id: "FIN-012",
+    code: "FIN-012",
+    titleEn: "Manual Adjustments",
+    titleAr: "إجراء تسوية محاسبية",
+    subtitleEn: "SAIF only – fix phantom numbers in trial balance",
+    subtitleAr: "سيف فقط – إصلاح الأرقام الوهمية في ميزان المراجعة",
+    route: "/finance/manual-adjustments",
+    icon: "gauge",
+    saifOnly: true,
   },
 ];
 

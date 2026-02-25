@@ -119,6 +119,7 @@ export function exportPrepListPDF(
             : row.ingredient_name;
         const rmCode = row.serial_code?.trim() || "";
         const nameDisplay = rmCode ? `${rmCode} - ${namePart}` : namePart;
+        const primaryDisplay = row.primary_display_en || row.primary_display_ar;
         const workableDisplay = row.workable_display_en || row.workable_display_ar;
         const qtyNum = row.display_qty != null ? parseFloat(row.display_qty) : NaN;
         const unitLabel =
@@ -127,14 +128,11 @@ export function exportPrepListPDF(
           unitLabel && Number.isFinite(qtyNum) && qtyNum >= 2
             ? (unitLabel || "").replace(/\bBottle\b/, "Bottles")
             : unitLabel ?? row.unit_code;
-        const qtyVal =
-          row.display_qty != null && unitLabel
-            ? String(row.display_qty)
-            : String(row.required_qty);
-        const unitVal = workableDisplay || standardUnit;
+        const qtyVal = primaryDisplay ?? (row.display_qty != null && unitLabel ? String(row.display_qty) : String(row.required_qty));
+        const unitVal = primaryDisplay ? "" : (workableDisplay || standardUnit);
         doc.text(nameDisplay, 14, y);
-        doc.text(qtyVal, 100, y);
-        doc.text(unitVal, 130, y);
+        doc.text(primaryDisplay ? primaryDisplay : qtyVal, 100, y);
+        doc.text(primaryDisplay ? "" : unitVal, 130, y);
         doc.text(String(row.on_hand), 150, y);
         y += 6;
       }
@@ -185,6 +183,7 @@ export function exportPrepListExcel(
                   : r.ingredient_name;
               const rmCode = r.serial_code?.trim() || "";
               const nameDisplay = rmCode ? `${rmCode} - ${namePart}` : namePart;
+              const primaryDisplay = r.primary_display_en || r.primary_display_ar;
               const workable = r.workable_display_en || r.workable_display_ar;
               const qtyNum = r.display_qty != null ? parseFloat(r.display_qty) : NaN;
               const unitLabel =
@@ -193,11 +192,10 @@ export function exportPrepListExcel(
                 unitLabel && Number.isFinite(qtyNum) && qtyNum >= 2
                   ? (unitLabel || "").replace(/\bBottle\b/, "Bottles")
                   : unitLabel ?? r.unit_code;
-              const qty =
-                r.display_qty != null && unitLabel
-                  ? String(r.display_qty)
-                  : String(r.required_qty);
-              const unit = workable || standardUnit;
+              const qty = primaryDisplay
+                ? primaryDisplay
+                : (r.display_qty != null && unitLabel ? String(r.display_qty) : String(r.required_qty));
+              const unit = primaryDisplay ? "" : (workable || standardUnit);
               return [nameDisplay, qty, unit, r.on_hand];
             }),
           ]

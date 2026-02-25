@@ -7,6 +7,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../contexts/AuthContext";
+import { useDateRange } from "../contexts/DateRangeContext";
+import ReportDateFilter from "../components/ReportDateFilter";
 import {
   fetchForecast,
   fetchProductsWithRecipes,
@@ -39,7 +41,7 @@ function addMonths(s: string, months: number): string {
 type ForecastMethod = "last_month" | "last_week";
 
 export default function OperationsDashboardPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user } = useAuth();
   // Align with Main Dashboard: use branch_ids when numeric, branch_id for branch_code (e.g. A01)
   const branchIdRaw = user?.branch_id;
@@ -50,9 +52,7 @@ export default function OperationsDashboardPage() {
   const branchIdParam = branchId != null && !Number.isNaN(branchId) ? branchId : (branchIdRaw ?? null);
   const branchIdsForChart = branchId != null && !Number.isNaN(branchId) ? [branchId] : undefined;
 
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
-  const [dateFrom, setDateFrom] = useState(today);
-  const [dateTo, setDateTo] = useState(today);
+  const { dateFrom, dateTo } = useDateRange();
   const [forecastMethod, setForecastMethod] = useState<ForecastMethod>("last_week");
   const [forecast, setForecast] = useState<ForecastDay[]>([]);
   const [cash, setCash] = useState<number>(0);
@@ -75,7 +75,7 @@ export default function OperationsDashboardPage() {
     const load = async () => {
       try {
         const [forecastRes, productsRes] = await Promise.all([
-          branchId ? fetchForecast(branchId) : Promise.resolve({ next_7_days: [] as ForecastDay[] }),
+          branchId ? fetchForecast({ branchId }) : Promise.resolve({ next_7_days: [] as ForecastDay[] }),
           fetchProductsWithRecipes(branchId ?? undefined),
         ]);
         if (mounted) {
@@ -268,12 +268,9 @@ export default function OperationsDashboardPage() {
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <label className="block text-sm">
             <span className="mb-1 block text-white/70">{t("opsDate")}</span>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="glass-input min-h-[44px] w-full rounded-xl px-4 py-3 text-white"
-            />
+            <div className="flex min-h-[44px] items-center rounded-xl bg-white/5 px-4 py-3 text-white">
+              {dateFrom}
+            </div>
           </label>
           <label className="block text-sm">
             <span className="mb-1 block text-white/70">{t("opsCash")}</span>
@@ -323,22 +320,8 @@ export default function OperationsDashboardPage() {
         <h2 className="mb-4 text-sm font-semibold text-white">{t("opsSalesForecast")}</h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <label className="block">
-            <span className="mb-1 block text-sm text-white/70">{t("forecastDateRangeStart")}</span>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="glass-input min-h-[44px] w-full rounded-xl px-4 py-3 text-white"
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-sm text-white/70">{t("forecastDateRangeEnd")}</span>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="glass-input min-h-[44px] w-full rounded-xl px-4 py-3 text-white"
-            />
+            <span className="mb-1 block text-sm text-white/70">{t("date")}</span>
+            <ReportDateFilter />
           </label>
           <label className="block">
             <span className="mb-1 block text-sm text-white/70">{t("forecastMethod")}</span>
@@ -405,22 +388,8 @@ export default function OperationsDashboardPage() {
         <h2 className="mb-4 text-sm font-semibold text-white">{t("opsPrepListTitle")}</h2>
         <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <label className="block">
-            <span className="mb-1 block text-sm text-white/70">{t("forecastDateRangeStart")}</span>
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-              className="glass-input min-h-[44px] w-full rounded-xl px-4 py-3 text-white"
-            />
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-sm text-white/70">{t("forecastDateRangeEnd")}</span>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-              className="glass-input min-h-[44px] w-full rounded-xl px-4 py-3 text-white"
-            />
+            <span className="mb-1 block text-sm text-white/70">{t("date")}</span>
+            <ReportDateFilter />
           </label>
           <label className="block">
             <span className="mb-1 block text-sm text-white/70">{t("forecastMethod")}</span>
@@ -528,16 +497,17 @@ export default function OperationsDashboardPage() {
               ingredients && ingredients.length > 0 ? (
                 <div className="space-y-2">
                   {ingredients.map((i) => {
+                    const primaryDisplay = i18n.language === "ar"
+                      ? (i.primary_display_ar ?? i.workable_display_ar)
+                      : (i.primary_display_en ?? i.workable_display_en);
                     const unitLabel = i.display_unit_label ?? i.display_unit_code;
                     const qtyNum = i.display_qty != null ? parseFloat(i.display_qty) : NaN;
                     const label =
                       unitLabel && Number.isFinite(qtyNum) && qtyNum >= 2
                         ? (unitLabel || "").replace(/\bBottle\b/, "Bottles")
                         : unitLabel;
-                    const amountDisplay =
-                      i.display_qty != null && label
-                        ? `${i.display_qty} ${label}`
-                        : `${i.required_qty} ${i.unit_code}`;
+                    const amountDisplay = primaryDisplay
+                      ?? (i.display_qty != null && label ? `${i.display_qty} ${label}` : `${i.required_qty} ${i.unit_code}`);
                     const namePart =
                       i.ingredient_name_ar?.trim()
                         ? `${i.ingredient_name} | ${i.ingredient_name_ar}`

@@ -12,6 +12,15 @@ const PERMISSION_KEYS = [
   "upload_files",
   "view_activity_log",
   "edit_chart_of_accounts",
+  "perm_shift_closing",
+  "perm_financial_reports",
+  "perm_management_reports",
+  "perm_full_system_access",
+  "perm_order_forecasting",
+  "perm_financial_auditor",
+  "view_cost_price",
+  "cancel_invoice",
+  "view_customer_phone",
 ] as const;
 
 const ROLE_TO_BACKEND: Record<string, string> = {

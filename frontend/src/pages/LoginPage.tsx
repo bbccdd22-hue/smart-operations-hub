@@ -37,15 +37,18 @@ export default function LoginPage() {
     clearStaleAuthState();
   }, []);
 
+  useEffect(() => {
+    document.title = isRTL ? "تسجيل الدخول" : "Login";
+    return () => { document.title = "Smart Operations Hub"; };
+  }, [isRTL]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password) return;
     try {
       const user = await login(username.trim(), password);
-      if (user && isOperationsUser(user)) {
+      if (user) {
         navigate("/", { replace: true });
-      } else {
-        navigate("/dashboard", { replace: true });
       }
     } catch {
       // Error shown in context
@@ -98,24 +101,7 @@ export default function LoginPage() {
               {isRTL ? "EN" : "عربي"}
             </button>
           </div>
-          <div className="mb-6 flex justify-center">
-            <div
-              className="flex h-14 w-14 items-center justify-center rounded-2xl sm:h-16 sm:w-16"
-              style={{
-                background: "linear-gradient(135deg, rgba(16, 185, 129, 0.2) 0%, rgba(16, 185, 129, 0.08) 100%)",
-              }}
-            >
-              <span className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">S</span>
-            </div>
-          </div>
-          <h1 className="text-center text-xl font-semibold tracking-tight text-slate-800 sm:text-2xl dark:text-white">
-            {t("appName")}
-          </h1>
-          <p className="mt-2 text-center text-sm text-slate-600 dark:text-slate-400">
-            {isRTL ? "تسجيل الدخول إلى لوحة التحكم" : "Sign in to your dashboard"}
-          </p>
-
-          <form onSubmit={handleSubmit} className="mt-8 space-y-5">
+          <form onSubmit={handleSubmit} className="mt-4 space-y-5">
             {error && (
               <motion.div
                 initial={{ opacity: 0, y: -8 }}

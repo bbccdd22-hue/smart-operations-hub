@@ -9,6 +9,8 @@ from analytics.views import (
     PredictDateView,
     SystemHealthView,
 )
+from analytics.command_center_views import OwnerCommandCenterView
+from analytics.executive_dashboard_views import ExecutiveDashboardView
 
 urlpatterns = [
     path("summary/", OwnerDashboardSummaryView.as_view(), name="owner-dashboard-summary"),
@@ -18,5 +20,7 @@ urlpatterns = [
     path("forecast/", ForecastView.as_view(), name="forecast"),
     path("predict-date/", PredictDateView.as_view(), name="predict-date"),
     path("system-health/", SystemHealthView.as_view(), name="system-health"),
+    path("command-center/", OwnerCommandCenterView.as_view(), name="owner-command-center"),
+    path("executive-dashboard/", ExecutiveDashboardView.as_view(), name="executive-dashboard"),
 ]
 

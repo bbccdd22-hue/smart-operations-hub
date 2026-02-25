@@ -27,7 +27,10 @@ class BranchTypeSerializer(serializers.ModelSerializer):
 class BrandSerializer(serializers.ModelSerializer):
     class Meta:
         model = Brand
-        fields = ["id", "name", "name_ar", "slug", "brand_code", "chart_rev_prefix", "chart_exp_prefix", "is_active"]
+        fields = [
+            "id", "name", "name_ar", "slug", "brand_code",
+            "chart_rev_prefix", "chart_exp_prefix", "default_currency", "is_active",
+        ]
 
 
 class BranchSerializer(serializers.ModelSerializer):

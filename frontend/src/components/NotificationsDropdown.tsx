@@ -1,4 +1,5 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import type { AdminNotificationItem } from "../lib/api";
@@ -77,28 +78,48 @@ export default function NotificationsDropdown({
     return () => document.removeEventListener("keydown", handleEscape);
   }, [open, onClose]);
 
-  if (!open) return null;
+  const [marking, setMarking] = useState(false);
+  const [position, setPosition] = useState({ top: 0, left: 0, right: 0 });
 
-  const handleMarkAll = async () => {
-    if (notifications.length > 0) {
+  useLayoutEffect(() => {
+    if (!open || !anchorRef?.current) return;
+    const anchor = anchorRef.current;
+    const rect = anchor.getBoundingClientRect();
+    setPosition({
+      top: rect.bottom + 8,
+      left: rect.left,
+      right: rect.right,
+    });
+  }, [open, anchorRef]);
+
+  const handleMarkAll = async (e: React.MouseEvent | React.TouchEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (notifications.length === 0 || marking) return;
+    setMarking(true);
+    try {
       await markAsRead(notifications.map((n) => n.id));
+    } finally {
+      setMarking(false);
     }
   };
 
-  return (
+  if (!open) return null;
+
+  const panelContent = (
     <div
       ref={panelRef}
-      className="absolute top-full mt-2 w-80 max-w-[calc(100vw-2rem)] overflow-hidden shadow-xl"
+      className="fixed w-80 max-w-[calc(100vw-2rem)] overflow-hidden shadow-xl"
       style={{
-        zIndex: 9999,
+        zIndex: 10050,
+        top: position.top,
+        left: isRTL ? "auto" : position.left,
+        right: isRTL ? window.innerWidth - position.right : "auto",
         borderRadius: 12,
-        // RTL: dropdown aligns to left of bell (right edge anchored); LTR: left edge anchored
-        right: isRTL ? 0 : "auto",
-        left: isRTL ? "auto" : 0,
         backdropFilter: "blur(15px)",
         WebkitBackdropFilter: "blur(15px)",
-        backgroundColor: "rgba(18, 18, 24, 0.88)",
-        border: "1px solid rgba(255,255,255,0.1)",
+        backgroundColor: "rgba(18, 18, 24, 0.95)",
+        border: "1px solid rgba(255,255,255,0.15)",
       }}
     >
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
@@ -109,9 +130,12 @@ export default function NotificationsDropdown({
           <button
             type="button"
             onClick={handleMarkAll}
-            className="text-xs text-emerald-400 hover:text-emerald-300"
+            className="min-h-[44px] min-w-[44px] touch-manipulation px-3 py-2 text-xs font-medium text-emerald-400 transition hover:text-emerald-300 active:text-emerald-200 disabled:opacity-50"
+            style={{ touchAction: "manipulation" }}
+            disabled={marking}
+            aria-label={t("markAllAsRead")}
           >
-            {t("markAllAsRead")}
+            {marking ? (isRTL ? "جاري..." : "Marking...") : t("markAllAsRead")}
           </button>
         )}
       </div>
@@ -148,7 +172,7 @@ export default function NotificationsDropdown({
         )}
       </div>
       <Link
-        to="/admin-hub/notification-settings"
+        to="/admin-hub/notifications"
         onClick={onClose}
         className="block border-t border-white/10 px-4 py-3 text-center text-sm font-medium text-emerald-400 transition hover:bg-white/5 hover:text-emerald-300"
       >
@@ -156,4 +180,6 @@ export default function NotificationsDropdown({
       </Link>
     </div>
   );
+
+  return createPortal(panelContent, document.body);
 }

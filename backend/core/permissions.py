@@ -24,6 +24,46 @@ def is_super_admin(user) -> bool:
     return bool(user and user.is_authenticated and (user.username or "") == SAIF_USERNAME)
 
 
+def has_financial_auditor_access(user) -> bool:
+    """المراجع المالي – سيف أو من له صلاحية perm_financial_auditor (مالك، إلخ)."""
+    if not user or not user.is_authenticated:
+        return False
+    if is_super_admin(user):
+        return True
+    profile = get_user_profile(user)
+    return _role_has_permission(profile, "perm_financial_auditor")
+
+
+def can_view_cost_price(user) -> bool:
+    """صلاحية رؤية سعر التكلفة – الربح، التكاليف، إلخ."""
+    if not user or not user.is_authenticated:
+        return False
+    if is_super_admin(user):
+        return True
+    profile = get_user_profile(user)
+    return _role_has_permission(profile, "view_cost_price")
+
+
+def can_cancel_invoice(user) -> bool:
+    """صلاحية إلغاء الفاتورة."""
+    if not user or not user.is_authenticated:
+        return False
+    if is_super_admin(user):
+        return True
+    profile = get_user_profile(user)
+    return _role_has_permission(profile, "cancel_invoice")
+
+
+def can_view_customer_phone(user) -> bool:
+    """صلاحية رؤية رقم جوال العميل."""
+    if not user or not user.is_authenticated:
+        return False
+    if is_super_admin(user):
+        return True
+    profile = get_user_profile(user)
+    return _role_has_permission(profile, "view_customer_phone")
+
+
 def _role_has_permission(profile: Optional[UserProfile], permission_key: str) -> bool:
     """يفحص صلاحية الدور من RolePermissionConfig. يُستخدم فوراً بعد الحفظ."""
     if not profile:
@@ -31,7 +71,8 @@ def _role_has_permission(profile: Optional[UserProfile], permission_key: str) ->
     try:
         from org.models import RolePermissionConfig, ROLE_PERMISSION_DEFAULTS
         config = RolePermissionConfig.objects.filter(role=profile.role).first()
-        perms = config.permissions if config and config.permissions else ROLE_PERMISSION_DEFAULTS.get(profile.role, {})
+        defaults = ROLE_PERMISSION_DEFAULTS.get(profile.role, {})
+        perms = {**defaults, **(config.permissions or {})} if config else defaults
         return bool(perms.get(permission_key, False))
     except Exception:
         return False

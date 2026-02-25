@@ -1,3 +1,4 @@
+import threading
 from datetime import timedelta
 
 from django.db.models import Count, Sum
@@ -13,6 +14,25 @@ from imports.parser import ParseError, parse_excel_upload
 from imports.serializers import ExcelUploadSerializer
 from imports.smart_parser import parse_preview
 from org.models import Brand, Branch
+
+# حجم ملف بالبايتات – فوقه تُعالج product_sales في الخلفية (202 + polling)
+PRODUCT_SALES_ASYNC_SIZE_BYTES = 500_000
+
+
+def _log_upload_error(error_type: str, message: str, user, filename: str, upload_id: int | None, exc: BaseException | None):
+    """سجل الخطأ في SystemErrorLog للمالك."""
+    try:
+        from core.error_logging import log_system_error
+
+        log_system_error(
+            error_type=error_type,
+            message=message,
+            user=user,
+            context={"filename": filename, "upload_id": upload_id},
+            exc=exc,
+        )
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def _notify_parse_error(user, filename: str, message: str):
@@ -201,15 +221,18 @@ class BatchUploadView(views.APIView):
                 upload.error_message = msg[:2000]
                 upload.save(update_fields=["status", "error_message"])
                 _notify_parse_error(request.user, getattr(f, "name", "unknown"), msg)
+                _log_upload_error("upload_failed", msg, request.user, getattr(f, "name", "unknown"), upload.id, exc)
                 results.append({"file": getattr(f, "name", "unknown"), "status": "error", "error": msg[:200]})
             except Exception as exc:
                 upload.status = ExcelUploadStatus.FAILED
-                upload.error_message = str(exc)[:2000]
+                msg = str(exc)
+                upload.error_message = msg[:2000]
                 upload.save(update_fields=["status", "error_message"])
+                _log_upload_error("upload_failed", msg, request.user, getattr(f, "name", "unknown"), upload.id, exc)
                 results.append({
                     "file": getattr(f, "name", "unknown"),
                     "status": "error",
-                    "error": str(exc)[:200],
+                    "error": msg[:200],
                 })
 
         success_count = sum(1 for r in results if r.get("status") == "success")
@@ -329,12 +352,57 @@ class ExcelUploadView(views.APIView):
         upload.status = ExcelUploadStatus.PROCESSING
         upload.save(update_fields=["status"])
 
+        # معالجة في الخلفية لملفات product_sales الكبيرة (يُرجع 202 للاستعلام عن التقدم)
+        file_size = getattr(file_obj, "size", 0) or 0
+        use_async = (
+            upload.report_type == ExcelReportType.PRODUCT_SALES
+            and file_size >= PRODUCT_SALES_ASYNC_SIZE_BYTES
+        )
+        if use_async:
+
+            def _process_in_background():
+                upload.refresh_from_db()
+                if upload.status != ExcelUploadStatus.PROCESSING:
+                    return
+                try:
+                    parse_excel_upload(upload, report_type=upload.report_type, column_mapping=column_mapping)
+                    upload.status = ExcelUploadStatus.PROCESSED
+                    upload.processed_at = timezone.now()
+                    upload.error_message = ""
+                    upload.progress_pct = 100
+                    upload.progress_message = ""
+                    upload.save(update_fields=["status", "processed_at", "error_message", "progress_pct", "progress_message"])
+                    _notify_excel_upload(request.user, upload)
+                except ParseError as exc:
+                    upload.status = ExcelUploadStatus.FAILED
+                    upload.error_message = str(exc)[:2000]
+                    upload.progress_pct = 0
+                    upload.progress_message = ""
+                    upload.save(update_fields=["status", "error_message", "progress_pct", "progress_message"])
+                    _notify_parse_error(request.user, getattr(upload.file, "name", "unknown"), str(exc))
+                except Exception as exc:  # noqa: BLE001
+                    upload.status = ExcelUploadStatus.FAILED
+                    upload.error_message = str(exc)[:2000]
+                    upload.progress_pct = 0
+                    upload.progress_message = ""
+                    upload.save(update_fields=["status", "error_message", "progress_pct", "progress_message"])
+
+            t = threading.Thread(target=_process_in_background)
+            t.daemon = True
+            t.start()
+            return response.Response(
+                ExcelUploadSerializer(upload).data,
+                status=status.HTTP_202_ACCEPTED,
+            )
+
         try:
             meta = parse_excel_upload(upload, report_type=upload.report_type, column_mapping=column_mapping)
             upload.status = ExcelUploadStatus.PROCESSED
             upload.processed_at = timezone.now()
             upload.error_message = ""
-            upload.save(update_fields=["status", "processed_at", "error_message", "updated_at"])
+            upload.progress_pct = 100
+            upload.progress_message = ""
+            upload.save(update_fields=["status", "processed_at", "error_message", "progress_pct", "progress_message"])
 
             # Notify SAIF if excel upload notifications enabled
             _notify_excel_upload(request.user, upload)
@@ -366,6 +434,23 @@ class ExcelUploadView(views.APIView):
         return response.Response(data, status=status.HTTP_201_CREATED)
 
 
+class UploadStatusView(views.APIView):
+    """
+    استعلام عن حالة الرفع والتقدم (للمعالجة بالخلفية وشريط التقدم).
+    """
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, upload_uuid, *args, **kwargs):
+        try:
+            upload = ExcelUpload.objects.get(uuid=upload_uuid)
+        except ExcelUpload.DoesNotExist:
+            return response.Response({"detail": "Upload not found"}, status=status.HTTP_404_NOT_FOUND)
+        data = ExcelUploadSerializer(upload).data
+        if upload.status == ExcelUploadStatus.PROCESSED:
+            data["variances"] = _variance_engine(upload)
+        return response.Response(data, status=status.HTTP_200_OK)
+
+
 class UploadAnalyticsView(views.APIView):
     """
     Get chart-ready analytics for a processed upload.
@@ -373,11 +458,11 @@ class UploadAnalyticsView(views.APIView):
     """
     permission_classes = [permissions.AllowAny]
 
-    def get(self, request, upload_id, *args, **kwargs):
+    def get(self, request, upload_uuid, *args, **kwargs):
         from django.db.models import Sum
 
         try:
-            upload = ExcelUpload.objects.get(pk=upload_id, status=ExcelUploadStatus.PROCESSED)
+            upload = ExcelUpload.objects.get(uuid=upload_uuid, status=ExcelUploadStatus.PROCESSED)
         except ExcelUpload.DoesNotExist:
             return response.Response({"detail": "Upload not found"}, status=status.HTTP_404_NOT_FOUND)
 

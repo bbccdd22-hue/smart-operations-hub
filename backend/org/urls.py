@@ -22,6 +22,8 @@ urlpatterns = [
     path("saved-views/<int:pk>/", views.SavedViewDetailView.as_view(), name="saved_view_detail"),
     path("activity-log/", views.ActivityLogListView.as_view(), name="activity_log_list"),
     path("activity-log/create/", views.ActivityLogCreateView.as_view(), name="activity_log_create"),
+    path("error-logs/", views.SystemErrorLogListView.as_view(), name="system_error_logs"),
+    path("error-logs/<uuid:uuid>/resolve/", views.SystemErrorLogResolveView.as_view(), name="system_error_log_resolve"),
     path("role-permissions/<str:role>/", views.RolePermissionDetailView.as_view(), name="role_permission_detail"),
 ]
 

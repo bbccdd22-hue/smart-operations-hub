@@ -17,7 +17,7 @@ from core.permissions import (
 )
 
 from accounting.daily_report import generate_daily_report_excel
-from accounting.models import ChartAccount
+from accounting.models import ChartAccount, CostAuditEntry, CostUpload, ManualAdjustment
 from accounting.serializers import ChartAccountSerializer
 from accounting.services import (
     get_daily_reconciliation,
@@ -382,22 +382,88 @@ class ChartAccountListView(views.APIView):
         return response.Response(ser.data, status=status.HTTP_201_CREATED)
 
 
+def _recalc_chart_balance_from_upload(upload_id: int) -> int:
+    """إعادة حساب أرصدة الحسابات من إدخالات الرفع غير المستبعدة."""
+    from django.db.models import Sum
+    all_codes = set(
+        CostAuditEntry.objects.filter(upload_id=upload_id)
+        .values_list("account_code", flat=True)
+        .distinct()
+    )
+    agg = CostAuditEntry.objects.filter(
+        upload_id=upload_id,
+        is_excluded=False,
+    ).values("account_code").annotate(total=Sum("amount"))
+    by_code = {r["account_code"]: (r["total"] or Decimal("0")) for r in agg}
+    updated = 0
+    for code in all_codes:
+        total = by_code.get(code, Decimal("0"))
+        ChartAccount.objects.filter(code=code, is_active=True).update(
+            balance=total,
+            updated_at=datetime.now(),
+        )
+        updated += 1
+    return updated
+
+
 class ChartAccountImportBalancesView(views.APIView):
     """
     محرك رفع البيانات المالي – تحديث أرصدة الحسابات من ملف الإكسل.
-    POST body: { "balances": { "01": 1000.50, "010201": 500, ... } }
+    POST body: { "balances": {...} } أو { "rows": [...], "source_file": "..." }
+    عند وجود rows يُنشأ سجل تدقيق لكل صف.
     """
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         if not can_upload_or_modify_data(request.user) or is_read_only_role(get_user_profile(request.user)):
             return response.Response({"detail": "صلاحية الرفع مطلوبة"}, status=status.HTTP_403_FORBIDDEN)
+
+        rows = request.data.get("rows")
+        source_file = (request.data.get("source_file") or "").strip() or "رفع يدوي"
         balances = request.data.get("balances")
+
+        if rows and isinstance(rows, list):
+            # تدفق جديد: صفوف تفصيلية مع مصدر الملف
+            cost_upload = CostUpload.objects.create(
+                source_file=source_file,
+                uploaded_by=request.user if request.user.is_authenticated else None,
+            )
+            created = 0
+            for r in rows:
+                code = str(r.get("code") or "").strip()
+                if not code:
+                    continue
+                try:
+                    amount = Decimal(str(r.get("amount") or 0))
+                except (InvalidOperation, TypeError, ValueError):
+                    continue
+                CostAuditEntry.objects.create(
+                    upload=cost_upload,
+                    account_code=code,
+                    account_name=str(r.get("account_name") or "")[:255],
+                    description=str(r.get("description") or "")[:500],
+                    amount=amount,
+                    source_file=source_file,
+                    is_excluded=False,
+                )
+                created += 1
+            _recalc_chart_balance_from_upload(cost_upload.id)
+            return response.Response({
+                "updated": created,
+                "upload_id": cost_upload.id,
+                "source_file": source_file,
+            })
+
+        # تدفق قديم: توازنات فقط
         if not isinstance(balances, dict):
             return response.Response(
                 {"detail": "balances must be an object: { code: amount }"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        cost_upload = CostUpload.objects.create(
+            source_file=source_file,
+            uploaded_by=request.user if request.user.is_authenticated else None,
+        )
         updated = 0
         not_found = []
         errors = []
@@ -412,6 +478,15 @@ class ChartAccountImportBalancesView(views.APIView):
                 continue
             try:
                 acc = ChartAccount.objects.get(code=code, is_active=True)
+                CostAuditEntry.objects.create(
+                    upload=cost_upload,
+                    account_code=code,
+                    account_name=(acc.name_ar or acc.name_en or "")[:255],
+                    description="",
+                    amount=amount,
+                    source_file=source_file,
+                    is_excluded=False,
+                )
                 acc.balance = amount
                 acc.save(update_fields=["balance", "updated_at"])
                 updated += 1
@@ -424,8 +499,141 @@ class ChartAccountImportBalancesView(views.APIView):
         })
 
 
+class CostAuditListView(views.APIView):
+    """سجل تدقيق التكاليف – قائمة تفصيلية بكل عملية تسجيل تكلفة."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        qs = CostAuditEntry.objects.select_related("upload").order_by("-amount", "-created_at")
+        upload_id = request.query_params.get("upload_id")
+        if upload_id:
+            try:
+                qs = qs.filter(upload_id=int(upload_id))
+            except ValueError:
+                pass
+        show_excluded = request.query_params.get("show_excluded", "true").lower() == "true"
+        if not show_excluded:
+            qs = qs.filter(is_excluded=False)
+        rows = []
+        for e in qs[:2000]:  # حد معقول
+            rows.append({
+                "id": e.id,
+                "recorded_at": e.created_at.isoformat() if e.created_at else None,
+                "account_code": e.account_code,
+                "account_name": e.account_name,
+                "description": e.description,
+                "amount": str(e.amount),
+                "source_file": e.source_file or (e.upload.source_file if e.upload else ""),
+                "is_excluded": e.is_excluded,
+                "upload_id": e.upload_id,
+            })
+        return response.Response({"entries": rows})
+
+
+class CostAuditExcludeView(views.APIView):
+    """استبعاد إدخال من الحساب – SAIF فقط."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, pk):
+        if request.user.username != "SAIF":
+            return response.Response({"detail": "سيف فقط – صلاحية الاستبعاد"}, status=status.HTTP_403_FORBIDDEN)
+        try:
+            entry = CostAuditEntry.objects.get(pk=pk)
+        except CostAuditEntry.DoesNotExist:
+            return response.Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+        entry.is_excluded = request.data.get("is_excluded", True)
+        entry.save(update_fields=["is_excluded", "updated_at"])
+        if entry.upload_id:
+            _recalc_chart_balance_from_upload(entry.upload_id)
+        return response.Response({"id": entry.id, "is_excluded": entry.is_excluded})
+
+
+class ManualAdjustmentCreateView(views.APIView):
+    """إجراء تسوية محاسبية – SAIF فقط."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request):
+        if request.user.username != "SAIF":
+            return response.Response({"detail": "سيف فقط – صلاحية التسويات اليدوية"}, status=status.HTTP_403_FORBIDDEN)
+        account_id = request.data.get("account_id")
+        amount_val = request.data.get("amount")
+        entry_type = request.data.get("entry_type", "credit")
+        reason = (request.data.get("reason") or "").strip()
+        if not account_id or not reason:
+            return response.Response(
+                {"detail": "account_id و reason مطلوبان"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            amount = Decimal(str(amount_val))
+        except (InvalidOperation, TypeError, ValueError):
+            return response.Response({"detail": "amount غير صالح"}, status=status.HTTP_400_BAD_REQUEST)
+        if amount <= 0:
+            return response.Response({"detail": "المبلغ يجب أن يكون موجباً"}, status=status.HTTP_400_BAD_REQUEST)
+        if entry_type not in ("debit", "credit"):
+            return response.Response({"detail": "entry_type: debit أو credit"}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            acc = ChartAccount.objects.get(pk=account_id, is_active=True)
+        except ChartAccount.DoesNotExist:
+            return response.Response({"detail": "الحساب غير موجود"}, status=status.HTTP_404_NOT_FOUND)
+        balance_before = acc.balance or Decimal("0")
+        if entry_type == "debit":
+            balance_after = balance_before + amount
+        else:
+            balance_after = balance_before - amount
+        if balance_after < 0:
+            balance_after = Decimal("0")
+        acc.balance = balance_after
+        acc.save(update_fields=["balance", "updated_at"])
+        adj = ManualAdjustment.objects.create(
+            account=acc,
+            amount=amount,
+            entry_type=entry_type,
+            reason=reason,
+            balance_before=balance_before,
+            balance_after=balance_after,
+            performed_by=request.user,
+        )
+        return response.Response({
+            "id": adj.id,
+            "account_id": acc.id,
+            "account_code": acc.code,
+            "account_name": acc.name_ar,
+            "amount": str(amount),
+            "entry_type": entry_type,
+            "balance_before": str(balance_before),
+            "balance_after": str(balance_after),
+            "created_at": adj.created_at.isoformat() if adj.created_at else None,
+        }, status=status.HTTP_201_CREATED)
+
+
+class ManualAdjustmentLogView(views.APIView):
+    """سجل التسويات – SAIF فقط، لا يُحذف."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if request.user.username != "SAIF":
+            return response.Response({"detail": "سيف فقط"}, status=status.HTTP_403_FORBIDDEN)
+        qs = ManualAdjustment.objects.select_related("account", "performed_by").order_by("-created_at")[:500]
+        rows = []
+        for a in qs:
+            rows.append({
+                "id": a.id,
+                "created_at": a.created_at.isoformat() if a.created_at else None,
+                "account_code": a.account.code,
+                "account_name": a.account.name_ar,
+                "amount": str(a.amount),
+                "entry_type": a.entry_type,
+                "reason": a.reason,
+                "balance_before": str(a.balance_before),
+                "balance_after": str(a.balance_after),
+                "performed_by": (a.performed_by.username if a.performed_by else "") or "",
+            })
+        return response.Response({"adjustments": rows})
+
+
 class ChartAccountDetailView(views.APIView):
-    """تعديل / حذف حساب (مع فحص الرصيد)."""
+    """تعديل / حذف حساب (مع فحص الرصيد). قاعدة سيف: قفل رقم الحساب والأب – منع تغيير الهيكل."""
     permission_classes = [permissions.IsAuthenticated]
 
     def patch(self, request, pk):
@@ -435,6 +643,22 @@ class ChartAccountDetailView(views.APIView):
             acc = ChartAccount.objects.get(pk=pk)
         except ChartAccount.DoesNotExist:
             return response.Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+        # [Ref: Chart Lock] منع تغيير الرقم التسلسلي أو هيكل الحسابات الأب
+        if "code" in request.data and str(request.data.get("code", "")).strip() != str(acc.code):
+            return response.Response(
+                {"detail": "لا يمكن تغيير رقم الحساب – الشجرة مقفلة"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if "parent" in request.data:
+            new_parent = request.data.get("parent")
+            current_parent = acc.parent_id
+            if (new_parent is None and current_parent is not None) or (
+                new_parent is not None and int(new_parent) != (current_parent or 0)
+            ):
+                return response.Response(
+                    {"detail": "لا يمكن تغيير الحساب الأب – هيكل الشجرة مقفل"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
         ser = ChartAccountSerializer(acc, data=request.data, partial=True)
         if not ser.is_valid():
             return response.Response(ser.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -455,3 +679,46 @@ class ChartAccountDetailView(views.APIView):
             )
         acc.delete()
         return response.Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ConsolidatedBalanceSheetView(views.APIView):
+    """الميزانية الموحدة - تجميع أرصدة الحسابات من الفروع."""
+
+    def get(self, request):
+        from accounting.consolidation_services import get_consolidated_balance_sheet, get_consolidated_income
+
+        org_id = request.query_params.get("organization_id")
+        brand_ids = request.query_params.get("brand_ids")
+        branch_ids = request.query_params.get("branch_ids")
+        as_of = request.query_params.get("as_of")
+        from_date = request.query_params.get("from_date")
+        to_date = request.query_params.get("to_date")
+
+        oid = int(org_id) if org_id and org_id.isdigit() else None
+        bids = None
+        if brand_ids:
+            try:
+                bids = [int(x.strip()) for x in brand_ids.split(",") if x.strip().isdigit()]
+            except (ValueError, AttributeError):
+                pass
+        brids = None
+        if branch_ids:
+            try:
+                brids = [int(x.strip()) for x in branch_ids.split(",") if x.strip().isdigit()]
+            except (ValueError, AttributeError):
+                pass
+
+        balance_sheet = get_consolidated_balance_sheet(
+            organization_id=oid, brand_ids=bids, branch_ids=brids, as_of_date=as_of
+        )
+        income = get_consolidated_income(
+            organization_id=oid, brand_ids=bids, branch_ids=brids,
+            from_date=from_date, to_date=to_date,
+        )
+        return response.Response({
+            "balance_sheet": [
+                {"code": b.code, "name_ar": b.name_ar, "name_en": b.name_en, "balance": str(b.balance)}
+                for b in balance_sheet
+            ],
+            "income_statement": income,
+        })

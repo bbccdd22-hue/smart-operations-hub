@@ -31,6 +31,16 @@ export default function AdminHubPage() {
     { id: "operational", labelAr: "الإعدادات التشغيلية", labelEn: "Operational Settings" },
   ];
 
+  /** لوحة تحكم المالك – SAIF / Owner / GM / Full System Access */
+  const canAccessCommandCenter =
+    isSuperAdmin || isOwner || isGeneralManager || !!user?.permissions?.perm_full_system_access;
+  const commandCenterCard: CardItem | null = canAccessCommandCenter
+    ? { key: "commandCenter", to: "/admin-hub/command-center", icon: "🎯", labelKey: "ownersCommandCenter" }
+    : null;
+  const executiveDashboardCard: CardItem | null = canAccessCommandCenter
+    ? { key: "executiveDashboard", to: "/admin-hub/executive-dashboard", icon: "📊", labelKey: "executiveDashboard" }
+    : null;
+
   /** Section 1: إدارة الكيانات – Brands, Branches */
   const entityCards = [
     { key: "brands", to: "/admin-hub/brands", icon: "🏷️", labelKey: "brands" },
@@ -56,6 +66,20 @@ export default function AdminHubPage() {
       labelAr: "سجل الرقابة",
       show: canViewActivityLog,
     },
+    {
+      key: "errorLogs",
+      to: "/admin-hub/error-logs",
+      icon: "⚠️",
+      labelAr: "سجل الأخطاء",
+      show: isSuperAdmin,
+    },
+    {
+      key: "systemHeartbeat",
+      to: "/admin-hub/system-heartbeat",
+      icon: "💓",
+      labelAr: "نبض النظام",
+      show: isSuperAdmin,
+    },
   ].filter((c) => c.show);
 
   /** Section 3: الإعدادات التشغيلية */
@@ -78,9 +102,10 @@ export default function AdminHubPage() {
     },
   ];
 
-  type CardItem = { key: string; to: string; icon: string; labelKey?: string; labelAr?: string };
+  type CardItem = { key: string; to: string; icon: string; labelKey?: string; labelAr?: string; fullAccess?: boolean };
+  const ownerCards = [commandCenterCard, executiveDashboardCard].filter(Boolean) as CardItem[];
   const sectionCards: Record<TabId, CardItem[]> = {
-    entities: entityCards,
+    entities: ownerCards.length > 0 ? [...ownerCards, ...entityCards] : entityCards,
     accounts: accountCards as CardItem[],
     operational: operationalCards,
   };

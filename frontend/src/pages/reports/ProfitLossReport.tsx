@@ -9,6 +9,7 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { fetchChartAccounts, type ChartAccount } from "../../lib/api";
+import UnifiedFilterSelect from "../../components/UnifiedFilterSelect";
 import { useOrgs } from "../../contexts/OrgsContext";
 import { getBrandChartCodes } from "../../lib/brandChartMapping";
 import { getBrandDisplayName, getBranchDisplayName } from "../../lib/localization";
@@ -32,8 +33,8 @@ export default function ProfitLossReport() {
   const lang = i18n.language;
   const [accounts, setAccounts] = useState<ChartAccount[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterBrand, setFilterBrand] = useState<string | number>("all");
-  const [filterBranch, setFilterBranch] = useState<string | number>("all");
+  const [filterBrand, setFilterBrand] = useState<string | "">("");
+  const [filterBranch, setFilterBranch] = useState<number | "">("");
   const [filterLevel, setFilterLevel] = useState<number>(5);
   const levelClamped = Math.min(5, Math.max(1, filterLevel));
 
@@ -45,28 +46,23 @@ export default function ProfitLossReport() {
   }, []);
 
   const selectedBrand = useMemo(
-    () => (filterBrand !== "all" && typeof filterBrand === "number" ? orgBrands.find((b) => b.id === filterBrand) : null),
+    () => (filterBrand ? orgBrands.find((b) => (b.slug ?? b.brand_code ?? String(b.id)) === filterBrand) : null),
     [orgBrands, filterBrand]
   );
   const selectedBranch = useMemo(
-    () => (filterBranch !== "all" && typeof filterBranch === "number" ? orgBranches.find((b) => b.id === filterBranch) : null),
+    () => (filterBranch !== "" ? orgBranches.find((b) => b.id === filterBranch) : null),
     [orgBranches, filterBranch]
   );
-  const brandOptions = useMemo(
-    () => orgBrands.map((b) => ({ id: b.id, label: getBrandDisplayName(b, lang) })).sort((a, b) => a.label.localeCompare(b.label, "ar")),
-    [orgBrands, lang]
-  );
   const branchesForBrand = useMemo(
-    () => (filterBrand !== "all" && typeof filterBrand === "number" ? (branchesByBrandId[filterBrand] ?? []) : orgBranches),
-    [filterBrand, branchesByBrandId, orgBranches]
-  );
-  const branchOptions = useMemo(
-    () => branchesForBrand.map((b) => ({ id: b.id, label: getBranchDisplayName(b, lang) })).sort((a, b) => a.label.localeCompare(b.label, "ar")),
-    [branchesForBrand, lang]
+    () =>
+      filterBrand && selectedBrand
+        ? (branchesByBrandId[selectedBrand.id] ?? [])
+        : orgBranches,
+    [filterBrand, selectedBrand, branchesByBrandId, orgBranches]
   );
   const matchBrand = useCallback(
     (code: string) => {
-      if (filterBrand === "all") return true;
+      if (!filterBrand) return true;
       if (!selectedBrand) return false;
       const codes = getBrandChartCodes(selectedBrand);
       if (!codes) return false;
@@ -76,7 +72,7 @@ export default function ProfitLossReport() {
   );
   const matchBranch = useCallback(
     (name: string, nameEn: string) => {
-      if (filterBranch === "all") return true;
+      if (filterBranch === "") return true;
       const n = (name + " " + nameEn).toLowerCase();
       if (selectedBranch) {
         const searchTerms = [
@@ -90,11 +86,6 @@ export default function ProfitLossReport() {
           const short = t.startsWith("فرع ") ? t.slice(5) : t;
           if (short && n.includes(short)) return true;
         }
-      }
-      if (typeof filterBranch === "string") {
-        const br = filterBranch.toLowerCase();
-        const brShort = br.startsWith("فرع ") ? br.slice(5) : br;
-        return n.includes(br) || n.includes(brShort);
       }
       return false;
     },
@@ -112,10 +103,10 @@ export default function ProfitLossReport() {
   const expenseAccounts = applyParentChildAggregation(expenseRaw);
 
   useEffect(() => {
-    if (filterBrand !== "all" && typeof filterBrand === "number" && !orgBrands.some((b) => b.id === filterBrand)) setFilterBrand("all");
-    if (filterBrand === "all") setFilterBranch("all");
-    else if (filterBranch !== "all" && typeof filterBranch === "number" && !branchOptions.some((b) => b.id === filterBranch)) setFilterBranch("all");
-  }, [filterBrand, filterBranch, orgBrands, branchOptions]);
+    if (filterBrand && !orgBrands.some((b) => (b.slug ?? b.brand_code ?? String(b.id)) === filterBrand)) setFilterBrand("");
+    if (!filterBrand) setFilterBranch("");
+    else if (filterBranch !== "" && !branchesForBrand.some((b) => b.id === filterBranch)) setFilterBranch("");
+  }, [filterBrand, filterBranch, orgBrands, branchesForBrand]);
 
   const totalRevenue = revenueAccounts.reduce((s, a) => s + toNum(a.balance), 0);
   const totalExpenses = expenseAccounts.reduce((s, a) => s + toNum(a.balance), 0);
@@ -166,29 +157,28 @@ export default function ProfitLossReport() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 items-end">
           <div>
             <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">{isRTL ? "العلامة التجارية" : "Brand"}</label>
-            <select
-              value={String(filterBrand)}
-              onChange={(e) => setFilterBrand(e.target.value === "all" ? "all" : Number(e.target.value))}
-              className="w-full rounded-lg border border-[#10b981]/40 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
-            >
-              <option value="all">{isRTL ? "الكل" : "All"}</option>
-              {brandOptions.map((b) => (
-                <option key={b.id} value={b.id}>{b.label}</option>
-              ))}
-            </select>
+            <UnifiedFilterSelect
+              mode="brand"
+              items={orgBrands}
+              selected={filterBrand}
+              onChange={setFilterBrand}
+              selectionMode="single"
+              placeholder={isRTL ? "الكل" : "All"}
+              triggerClassName="w-full rounded-lg border border-[#10b981]/40 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
+            />
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">{isRTL ? "الفرع" : "Branch"}</label>
-            <select
-              value={String(filterBranch)}
-              onChange={(e) => setFilterBranch(e.target.value === "all" ? "all" : Number(e.target.value))}
-              className="w-full rounded-lg border border-[#10b981]/40 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
-            >
-              <option value="all">{isRTL ? "كافة الفروع" : "All Branches"}</option>
-              {branchOptions.map((b) => (
-                <option key={b.id} value={b.id}>{b.label}</option>
-              ))}
-            </select>
+            <UnifiedFilterSelect
+              mode="branch"
+              items={branchesForBrand}
+              selected={filterBranch}
+              onChange={setFilterBranch}
+              selectionMode="single"
+              placeholder={isRTL ? "كافة الفروع" : "All Branches"}
+              triggerClassName="w-full rounded-lg border border-[#10b981]/40 bg-white dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-slate-200"
+              disabled={!!filterBrand && branchesForBrand.length === 0}
+            />
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-600 dark:text-slate-400 mb-1">{isRTL ? "المستوى" : "Level"}</label>

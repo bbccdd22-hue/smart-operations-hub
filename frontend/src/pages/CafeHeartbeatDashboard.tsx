@@ -5,8 +5,9 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { format } from "date-fns";
 import { fetchHeartbeat, fetchBranches, type HeartbeatData } from "../lib/api";
+import { useDateRange } from "../contexts/DateRangeContext";
+import ReportDateFilter from "../components/ReportDateFilter";
 import { sar } from "../components/KPICard";
 
 function progressColor(pct: number): "green" | "yellow" | "red" {
@@ -27,6 +28,7 @@ export default function CafeHeartbeatDashboard() {
   const [branches, setBranches] = useState<Array<{ id: number; name: string; name_ar?: string }>>([]);
   const [branchId, setBranchId] = useState<number | "">("");
   const [loading, setLoading] = useState(true);
+  const { dateFrom } = useDateRange();
 
   const loadBranches = useCallback(async () => {
     const list = await fetchBranches();
@@ -37,7 +39,7 @@ export default function CafeHeartbeatDashboard() {
     try {
       const d = await fetchHeartbeat({
         branch_id: branchId !== "" ? branchId : undefined,
-        date: format(new Date(), "yyyy-MM-dd"),
+        date: dateFrom,
       });
       setData(d);
     } catch {
@@ -45,7 +47,7 @@ export default function CafeHeartbeatDashboard() {
     } finally {
       setLoading(false);
     }
-  }, [branchId]);
+  }, [branchId, dateFrom]);
 
   useEffect(() => {
     loadBranches();
@@ -79,7 +81,8 @@ export default function CafeHeartbeatDashboard() {
         <h1 className="text-2xl font-bold text-white">
           {t("cafeHeartbeat") ?? "Cafe Heartbeat Dashboard"}
         </h1>
-        <div className="flex items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <ReportDateFilter />
           <select
             value={branchId}
             onChange={(e) => setBranchId(e.target.value === "" ? "" : Number(e.target.value))}

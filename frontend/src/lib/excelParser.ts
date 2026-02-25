@@ -1,23 +1,80 @@
 /**
  * محرك تحليل ملفات الإكسل المالية
  * مع التحقق من مطابقة المسميات (العلامة، الفرع) مع الإعدادات فقط
+ * مطابقة صارمة: يجمع الأرقام فقط من أعمدة الاسم الصريح (المبلغ، Amount، المبيعات، المصاريف، رصيد)
+ * يتجاهل أعمدة أرقام الهوية/القيد/آيبان، ويطبق Trim على أسماء الأعمدة
  */
 import * as XLSX from "xlsx";
 import { normalizeToCanonicalName } from "./brandChartMapping";
 
 const CODE_PATTERN = /^[0-9]{1,10}$/;
 
+/** أعمدة المبلغ المسموح بها فقط – اسم صريح بعد trim */
+const ALLOWED_AMOUNT_HEADERS = new Set([
+  "المبلغ", "amount", "مبلغ", "المبيعات", "المصاريف", "رصيد", "balance",
+]);
+
+/** أعمدة تُستبعد دائماً (رقم هوية، قيد، آيبان) حتى لو تحتوي أرقاماً */
+const EXCLUDED_HEADER_PATTERNS = [
+  "رقم الهوية", "رقم القيد", "آيبان", "iban", "identity", "journal",
+  "كود القيد", "رقم الحساب المصرفي", "account number",
+];
+
+export const REQUIRED_AMOUNT_COLUMN_NAMES = "المبلغ، Amount، المبيعات، المصاريف، رصيد، balance";
+
 export type ParseExcelResult = {
   balances: Record<string, number>;
+  rows?: CostAuditRow[];
   nameErrors: string[];
   validatedBrandCol: number | null;
   validatedBranchCol: number | null;
 };
 
+/** صف تفصيلي من الإكسل – لسجل تدقيق التكاليف */
+export type CostAuditRow = {
+  code: string;
+  account_name: string;
+  amount: number;
+  description: string;
+};
+
+function trimHeader(h: string | number): string {
+  return String(h ?? "").trim().replace(/\s+/g, " ");
+}
+
+function isExcludedColumn(h: string): boolean {
+  const lower = h.toLowerCase();
+  return EXCLUDED_HEADER_PATTERNS.some((p) => lower.includes(p.toLowerCase()));
+}
+
+/** قيمة تبدو كرقم تعريف أو آيبان – لا تُجمع */
+function looksLikeIdOrIban(val: number): boolean {
+  if (val === 0 || !Number.isFinite(val)) return false;
+  const s = String(Math.abs(Math.floor(val)));
+  return s.length >= 8;
+}
+
+function findAmountColumn(header: (string | number)[]): { col: number; name: string } | null {
+  for (let c = 0; c < header.length; c++) {
+    const raw = header[c] ?? "";
+    const h = trimHeader(raw);
+    if (!h) continue;
+    if (isExcludedColumn(h)) continue;
+    const normalized = h.toLowerCase().replace(/\s+/g, " ").trim();
+    if (ALLOWED_AMOUNT_HEADERS.has(normalized) || ALLOWED_AMOUNT_HEADERS.has(h)) {
+      return { col: c, name: h };
+    }
+    if (["مبلغ", "amount", "رصيد", "balance", "المبيعات", "المصاريف", "المبلغ"].some((p) => normalized === p || normalized.includes(p))) {
+      return { col: c, name: h };
+    }
+  }
+  return null;
+}
+
 function findColumn(header: (string | number)[], patterns: string[]): number {
   for (let c = 0; c < header.length; c++) {
-    const h = String(header[c] ?? "").toLowerCase();
-    if (patterns.some((p) => h.includes(p))) return c;
+    const h = trimHeader(header[c] ?? "").toLowerCase();
+    if (patterns.some((p) => h.includes(p.toLowerCase()))) return c;
   }
   return -1;
 }
@@ -44,12 +101,23 @@ export function parseExcelToBalancesWithValidation(
         const nameErrors: string[] = [];
         const header = (rows[0] || []) as (string | number)[];
 
+        const amountMatch = findAmountColumn(header);
+        if (!amountMatch) {
+          return reject(
+            new Error(
+              `لم يتم التعرف على عمود المبلغ أو الرصيد، يرجى التأكد من اسم العمود في ملف الإكسل. الأعمدة المقبولة: ${REQUIRED_AMOUNT_COLUMN_NAMES}`
+            )
+          );
+        }
+        const amountCol = amountMatch.col;
+
         let codeCol = findColumn(header, ["رقم", "code", "حساب"]);
         if (codeCol < 0) codeCol = 0;
-        let amountCol = findColumn(header, ["رصيد", "balance", "مبلغ", "amount"]);
-        if (amountCol < 0) amountCol = 1;
+        const nameCol = findColumn(header, ["اسم", "name", "حساب"]);
         const brandCol = findColumn(header, ["العلامة", "علامة", "brand", "براند"]);
         const branchCol = findColumn(header, ["الفرع", "فرع", "branch"]);
+
+        const auditRows: CostAuditRow[] = [];
 
         for (let r = 1; r < rows.length; r++) {
           const row = rows[r] as (string | number)[];
@@ -78,11 +146,21 @@ export function parseExcelToBalancesWithValidation(
           if (code.includes(".")) code = code.split(".")[0];
           if (!CODE_PATTERN.test(code)) continue;
           const num = parseFloat(String(row[amountCol] ?? 0));
-          if (!isNaN(num)) balances[code] = num;
+          if (isNaN(num)) continue;
+          if (looksLikeIdOrIban(num)) continue;
+          balances[code] = num;
+          const accountName = nameCol >= 0 ? String(row[nameCol] ?? "").trim() : "";
+          auditRows.push({
+            code,
+            account_name: accountName,
+            amount: num,
+            description: accountName || code,
+          });
         }
 
         resolve({
           balances,
+          rows: auditRows,
           nameErrors,
           validatedBrandCol: brandCol >= 0 ? brandCol : null,
           validatedBranchCol: branchCol >= 0 ? branchCol : null,

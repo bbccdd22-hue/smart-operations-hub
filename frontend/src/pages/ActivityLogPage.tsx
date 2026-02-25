@@ -3,6 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { motion } from "framer-motion";
 import { useAuth } from "../contexts/AuthContext";
+import { useDateRange } from "../contexts/DateRangeContext";
+import ReportDateFilter from "../components/ReportDateFilter";
 import { fetchActivityLog, type ActivityLogEntry } from "../lib/api";
 
 const ACTION_LABELS: Record<string, string> = {
@@ -21,6 +23,7 @@ export default function ActivityLogPage() {
   const navigate = useNavigate();
   const [logs, setLogs] = useState<ActivityLogEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const { dateFrom, dateTo } = useDateRange();
 
   const isSuperAdmin = user?.username === "SAIF";
   const canViewActivityLog = isSuperAdmin || !!user?.permissions?.view_activity_log;
@@ -36,11 +39,11 @@ export default function ActivityLogPage() {
       setLoading(false);
       return;
     }
-    fetchActivityLog(500)
+    fetchActivityLog(500, { date_from: dateFrom, date_to: dateTo })
       .then(setLogs)
       .catch(() => setLogs([]))
       .finally(() => setLoading(false));
-  }, [user, canViewActivityLog]);
+  }, [user, canViewActivityLog, dateFrom, dateTo]);
 
   if (!user) return null;
   if (user && !canViewActivityLog) return null; // redirecting
@@ -54,14 +57,17 @@ export default function ActivityLogPage() {
 
   return (
     <div className="min-h-[calc(100vh-8rem)]">
-      <div className="mb-6">
-        <Link to="/admin-hub" className="text-sm text-white/70 hover:text-white">
-          ← {t("adminDashboard")}
-        </Link>
-        <h1 className="mt-2 text-2xl font-bold text-white">سجل الرقابة</h1>
-        <p className="mt-1 text-sm text-white/60">
-          تسجيل الدخول، الصفحات المعروضة، الملفات المرفوعة
-        </p>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <Link to="/admin-hub" className="text-sm text-white/70 hover:text-white">
+            ← {t("adminDashboard")}
+          </Link>
+          <h1 className="mt-2 text-2xl font-bold text-white">سجل الرقابة</h1>
+          <p className="mt-1 text-sm text-white/60">
+            تسجيل الدخول، الصفحات المعروضة، الملفات المرفوعة
+          </p>
+        </div>
+        <ReportDateFilter />
       </div>
 
       <motion.div

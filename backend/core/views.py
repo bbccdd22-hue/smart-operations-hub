@@ -51,11 +51,22 @@ def login_view(request):
     from core.permissions import is_super_admin
 
     log_activity(user, "login", "تسجيل دخول", request=request)
+    try:
+        from hr.attendance_services import record_clock_in
+        record_clock_in(user)
+    except Exception:
+        pass
     profile = get_user_profile(user)
     branch = profile.branch if profile else None
     brand = (branch.brand if branch else profile.brand) if profile else None
     display_name = f"{(getattr(user, 'first_name', '') or '').strip()} {(getattr(user, 'last_name', '') or '').strip()}".strip() or user.username
-    perms = {k: True for k in ["view_financial_reports", "upload_files", "view_activity_log", "edit_chart_of_accounts"]} if is_super_admin(user) else _get_role_permissions(profile)
+    _all_perms = [
+        "view_financial_reports", "upload_files", "view_activity_log", "edit_chart_of_accounts",
+        "perm_shift_closing", "perm_financial_reports", "perm_management_reports",
+        "perm_full_system_access", "perm_order_forecasting", "perm_financial_auditor",
+        "view_cost_price", "cancel_invoice", "view_customer_phone",
+    ]
+    perms = {k: True for k in _all_perms} if is_super_admin(user) else _get_role_permissions(profile)
     return JsonResponse({
         "user": {
             "id": user.id,
@@ -76,6 +87,13 @@ def login_view(request):
 @require_POST
 def logout_view(request):
     """Session logout."""
+    user = getattr(request, "user", None)
+    if user and user.is_authenticated:
+        try:
+            from hr.attendance_services import record_clock_out
+            record_clock_out(user)
+        except Exception:
+            pass
     logout(request)
     return JsonResponse({"detail": "Logged out"})
 
@@ -85,12 +103,13 @@ def _get_role_permissions(profile):
     from core.permissions import _role_has_permission
     if not profile:
         return {}
-    return {
-        "view_financial_reports": _role_has_permission(profile, "view_financial_reports"),
-        "upload_files": _role_has_permission(profile, "upload_files"),
-        "view_activity_log": _role_has_permission(profile, "view_activity_log"),
-        "edit_chart_of_accounts": _role_has_permission(profile, "edit_chart_of_accounts"),
-    }
+    keys = [
+        "view_financial_reports", "upload_files", "view_activity_log", "edit_chart_of_accounts",
+        "perm_shift_closing", "perm_financial_reports", "perm_management_reports",
+        "perm_full_system_access", "perm_order_forecasting", "perm_financial_auditor",
+        "view_cost_price", "cancel_invoice", "view_customer_phone",
+    ]
+    return {k: _role_has_permission(profile, k) for k in keys}
 
 
 class CurrentUserView(APIView):
@@ -104,7 +123,13 @@ class CurrentUserView(APIView):
         branch = profile.branch if profile else None
         brand = (branch.brand if branch else profile.brand) if profile else None
         display_name = f"{(getattr(user, 'first_name', '') or '').strip()} {(getattr(user, 'last_name', '') or '').strip()}".strip() or user.username
-        perms = {k: True for k in ["view_financial_reports", "upload_files", "view_activity_log", "edit_chart_of_accounts"]} if is_super_admin(user) else _get_role_permissions(profile)
+        _all_perms = [
+            "view_financial_reports", "upload_files", "view_activity_log", "edit_chart_of_accounts",
+            "perm_shift_closing", "perm_financial_reports", "perm_management_reports",
+            "perm_full_system_access", "perm_order_forecasting", "perm_financial_auditor",
+            "view_cost_price", "cancel_invoice", "view_customer_phone",
+        ]
+        perms = {k: True for k in _all_perms} if is_super_admin(user) else _get_role_permissions(profile)
         return Response({
             "user": {
                 "id": user.id,

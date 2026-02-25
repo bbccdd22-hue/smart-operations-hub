@@ -77,6 +77,7 @@ export default function WastePage() {
     try {
       await saveWasteReport({
         date,
+        branch_id: branchId !== "" ? branchId : undefined,
         entries: entries.map((e) => ({
           ingredient_id: e.ingredient_id,
           theoretical_usage: e.theoretical_usage,

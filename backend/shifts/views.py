@@ -6,10 +6,65 @@ from rest_framework import generics, permissions, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from shifts.models import ShiftClosing, ShiftSecurityLog, Shift, ShiftStatus, ShiftType
-from shifts.serializers import ShiftClosingSerializer, ShiftClosingCreatePayloadSerializer
-from core.permissions import get_user_scope
+from shifts.models import ShiftClosing, ShiftClosingAttachment, ShiftSecurityLog, Shift, ShiftStatus, ShiftType
+from shifts.serializers import (
+    ShiftClosingAttachmentSerializer,
+    ShiftClosingCreatePayloadSerializer,
+    ShiftClosingSerializer,
+)
+from core.permissions import get_user_scope, has_financial_auditor_access
 from org.models import Branch
+
+
+class ShiftClosingListForAuditorView(APIView):
+    """List submitted shift closings for Financial Auditor – filter by brand, date range."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if not has_financial_auditor_access(request.user):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Financial Auditor access only")
+        brand_slug = request.query_params.get("brand")
+        date_from = request.query_params.get("date_from")
+        date_to = request.query_params.get("date_to")
+        qs = ShiftClosing.objects.filter(
+            status="submitted",
+        ).select_related("shift", "shift__branch", "shift__branch__brand", "submitted_by")
+        if brand_slug:
+            qs = qs.filter(shift__branch__brand__slug=brand_slug)
+        if date_from:
+            from datetime import datetime
+            try:
+                df = datetime.fromisoformat(date_from).date()
+                qs = qs.filter(shift__opened_at__date__gte=df)
+            except ValueError:
+                pass
+        if date_to:
+            from datetime import datetime
+            try:
+                dt = datetime.fromisoformat(date_to).date()
+                qs = qs.filter(shift__opened_at__date__lte=dt)
+            except ValueError:
+                pass
+        from django.db.models import Count
+        qs = qs.annotate(attachments_count=Count("attachments")).order_by("-submitted_at", "shift__branch__name")
+        closings = []
+        for c in qs[:200]:  # limit for performance
+            closings.append({
+                "id": c.id,
+                "date": str(c.shift.opened_at.date()),
+                "branch_name": c.shift.branch.name,
+                "brand_name": c.shift.branch.brand.name,
+                "brand_slug": c.shift.branch.brand.slug,
+                "shift_type": c.shift.shift_type,
+                "submitted_by": (c.submitted_by.username if c.submitted_by else ""),
+                "submitted_at": c.submitted_at.isoformat() if c.submitted_at else None,
+                "actual_cash": float(c.manual_cash_total()),
+                "system_cash": float(c.system_cash or 0),
+                "variance_cash": float(c.variance_cash or 0),
+                "attachments_count": c.attachments_count,
+            })
+        return Response({"closings": closings})
 
 
 class ShiftClosingByBranchDateView(APIView):
@@ -166,6 +221,12 @@ class ShiftClosingCreateView(APIView):
                 branch=shift.branch,
                 notes=f"Approved & Submitted: cash var={v_cash}, network var={v_network}",
             )
+            # إنشاء القيد المحاسبي المزدوج تلقائياً
+            try:
+                from accounting.journal_services import create_journal_entry_from_shift_closing
+                create_journal_entry_from_shift_closing(closing, created_by=request.user)
+            except Exception:  # noqa: BLE001
+                pass  # لا نمنع الإقفال إذا فشل إنشاء القيد
 
         return Response({
             "closing": ShiftClosingSerializer(closing).data,
@@ -200,6 +261,12 @@ class ShiftClosingSubmitView(APIView):
             action="shift_submitted",
             branch=shift.branch,
         )
+        # إنشاء القيد المحاسبي المزدوج تلقائياً
+        try:
+            from accounting.journal_services import create_journal_entry_from_shift_closing
+            create_journal_entry_from_shift_closing(closing, created_by=request.user)
+        except Exception:  # noqa: BLE001
+            pass  # لا نمنع الإقفال إذا فشل إنشاء القيد
         return Response({
             "closing": ShiftClosingSerializer(closing).data,
             "is_submitted": True,
@@ -242,5 +309,130 @@ class ShiftClosingUpsertView(generics.CreateAPIView):
 class ShiftClosingDetailView(generics.RetrieveAPIView):
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = ShiftClosingSerializer
-    queryset = ShiftClosing.objects.all()
+    queryset = ShiftClosing.objects.select_related("shift", "shift__branch", "shift__branch__brand", "submitted_by")
+
+    def get_queryset(self):
+        qs = ShiftClosing.objects.all().select_related(
+            "shift", "shift__branch", "shift__branch__brand", "submitted_by"
+        )
+        if has_financial_auditor_access(self.request.user):
+            return qs
+        scope = get_user_scope(self.request.user)
+        if scope["branch_ids"] is None:
+            return qs
+        return qs.filter(shift__branch_id__in=(scope["branch_ids"] or []))
+
+
+class ShiftClosingAttachmentListCreateView(APIView):
+    """List and create attachments for a shift closing."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, closing_pk):
+        closing = ShiftClosing.objects.get(pk=closing_pk)
+        scope = get_user_scope(request.user)
+        can_view = (
+            has_financial_auditor_access(request.user)
+            or scope["branch_ids"] is None
+            or closing.shift.branch_id in (scope["branch_ids"] or [])
+        )
+        if not can_view:
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Access denied")
+        attachments = closing.attachments.all()
+        ser = ShiftClosingAttachmentSerializer(attachments, many=True, context={"request": request})
+        return Response(ser.data)
+
+    def post(self, request, closing_pk):
+        closing = ShiftClosing.objects.get(pk=closing_pk)
+        scope = get_user_scope(request.user)
+        if scope["branch_ids"] is not None and closing.shift.branch_id not in (scope["branch_ids"] or []):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Access denied")
+        if closing.status == "submitted":
+            return Response({"detail": "Cannot add attachments to submitted closing"}, status=400)
+        ser = ShiftClosingAttachmentSerializer(data=request.data, context={"request": request})
+        ser.is_valid(raise_exception=True)
+        ser.save(closing=closing)
+        return Response(ser.data, status=status.HTTP_201_CREATED)
+
+
+class ShiftClosingAuditorListView(APIView):
+    """List submitted shift closings for Financial Auditor – filter by brand, all brands visible."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from core.permissions import is_super_admin
+        from django.db.models import Count
+
+        if not is_super_admin(request.user):
+            # Check perm_financial_auditor from profile
+            profile = getattr(request.user, "profile", None)
+            if not profile or not getattr(profile, "has_financial_auditor", lambda: False)():
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied("Financial Auditor permission required")
+
+        brand_slug = request.query_params.get("brand", "").strip()
+        date_from = request.query_params.get("date_from")
+        date_to = request.query_params.get("date_to")
+
+        qs = ShiftClosing.objects.filter(
+            status="submitted",
+        ).select_related(
+            "shift",
+            "shift__branch",
+            "shift__branch__brand",
+            "submitted_by",
+        ).prefetch_related("attachments").annotate(attachment_count=Count("attachments"))
+
+        if brand_slug:
+            qs = qs.filter(shift__branch__brand__slug=brand_slug)
+        if date_from:
+            try:
+                from datetime import datetime
+                qs = qs.filter(shift__opened_at__date__gte=datetime.fromisoformat(date_from).date())
+            except ValueError:
+                pass
+        if date_to:
+            try:
+                from datetime import datetime
+                qs = qs.filter(shift__opened_at__date__lte=datetime.fromisoformat(date_to).date())
+            except ValueError:
+                pass
+
+        qs = qs.order_by("-shift__opened_at")
+
+        rows = []
+        for c in qs[:200]:  # Limit for UI
+            rows.append({
+                "id": c.id,
+                "date": str(c.shift.opened_at.date()),
+                "branch_name": c.shift.branch.name,
+                "brand_name": c.shift.branch.brand.name,
+                "brand_slug": c.shift.branch.brand.slug,
+                "shift_type": c.shift.shift_type,
+                "submitted_by": (c.submitted_by.username if c.submitted_by_id else None),
+                "manual_cash": float(c.manual_cash_total()),
+                "system_cash": float(c.system_cash or 0),
+                "variance_cash": float(c.variance_cash or 0),
+                "attachment_count": c.attachment_count,
+                "submitted_at": c.submitted_at.isoformat() if c.submitted_at else None,
+            })
+        return Response({"closings": rows})
+
+
+class ShiftClosingAttachmentDestroyView(APIView):
+    """Delete a shift closing attachment."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def delete(self, request, pk):
+        att = ShiftClosingAttachment.objects.select_related("closing__shift").get(pk=pk)
+        scope = get_user_scope(request.user)
+        if scope["branch_ids"] is not None and att.closing.shift.branch_id not in (scope["branch_ids"] or []):
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Access denied")
+        if att.closing.status == "submitted":
+            return Response({"detail": "Cannot delete attachments from submitted closing"}, status=400)
+        att.file.delete(save=False)
+        att.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 

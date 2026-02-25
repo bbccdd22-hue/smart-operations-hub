@@ -7,14 +7,14 @@ import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { importChartBalances, logActivity } from "../lib/api";
-import { parseExcelToBalances } from "../lib/excelParser";
+import { parseExcelToBalancesWithValidation, downloadSaifIncomeTemplate } from "../lib/excelParser";
 
 export default function BalanceUploadPage() {
   const { i18n } = useTranslation();
   const isRTL = i18n.language === "ar";
   const [dragging, setDragging] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<{ updated: number; not_found: string[]; errors: string[] } | null>(null);
+  const [result, setResult] = useState<{ updated: number; not_found?: string[]; errors?: string[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [balances, setBalances] = useState<Record<string, number> | null>(null);
 
@@ -28,14 +28,17 @@ export default function BalanceUploadPage() {
       setResult(null);
       setLoading(true);
       try {
-        const parsed = await parseExcelToBalances(file);
+        const { balances: parsed, rows } = await parseExcelToBalancesWithValidation(file, [], []);
         setBalances(parsed);
         if (Object.keys(parsed).length === 0) {
           setError(isRTL ? "لم يتم العثور على أرصدة في الملف" : "No balances found in file");
           setLoading(false);
           return;
         }
-        const res = await importChartBalances(parsed);
+        const res = await importChartBalances(parsed, {
+          rows: rows?.map((r) => ({ code: r.code, account_name: r.account_name, amount: r.amount, description: r.description })),
+          source_file: file.name,
+        });
         setResult(res);
         logActivity({
           action_type: "file_upload",
@@ -92,6 +95,35 @@ export default function BalanceUploadPage() {
           {error}
         </div>
       )}
+
+      {/* دليل رفع الملفات – نموذج الأعمدة المطلوبة */}
+      <div className="mb-6 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-slate-700 dark:bg-slate-800/50">
+        <h3 className="mb-2 text-sm font-semibold text-slate-700 dark:text-slate-200">
+          {isRTL ? "نموذج الأعمدة المطلوبة في ملف الإكسل" : "Required Excel columns template"}
+        </h3>
+        <p className="mb-2 text-xs text-slate-600 dark:text-slate-400">
+          {isRTL ? "تأكد من وجود أسماء الأعمدة التالية (بدون مسافات زائدة):" : "Ensure your file has these column names (no extra spaces):"}
+        </p>
+        <div className="mb-2 grid grid-cols-2 gap-2 text-xs sm:grid-cols-3">
+          <span className="rounded bg-white px-2 py-1 font-mono dark:bg-slate-800">{isRTL ? "كود الحساب" : "Account Code"}</span>
+          <span className="rounded bg-white px-2 py-1 font-mono dark:bg-slate-800">{isRTL ? "اسم الحساب" : "Account Name"}</span>
+          <span className="rounded bg-emerald-100 px-2 py-1 font-mono text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200">
+            {isRTL ? "رصيد أو المبلغ أو المبيعات أو المصاريف" : "Balance, Amount, Sales, or Expenses"}
+          </span>
+          <span className="rounded bg-white px-2 py-1 font-mono dark:bg-slate-800">{isRTL ? "العلامة (اختياري)" : "Brand (optional)"}</span>
+          <span className="rounded bg-white px-2 py-1 font-mono dark:bg-slate-800">{isRTL ? "الفرع (اختياري)" : "Branch (optional)"}</span>
+          <span className="rounded bg-slate-100 px-2 py-1 text-slate-500 line-through dark:bg-slate-700 dark:text-slate-400">
+            {isRTL ? "لا تستخدم: رقم الهوية، آيبان، رقم القيد" : "Do NOT use: ID, IBAN, Journal #"}
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={downloadSaifIncomeTemplate}
+          className="text-sm font-medium text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300"
+        >
+          {isRTL ? "تحميل نموذج فارغ (.xlsx)" : "Download empty template (.xlsx)"}
+        </button>
+      </div>
 
       <motion.div
         initial={{ opacity: 0, y: 8 }}
@@ -169,16 +201,16 @@ export default function BalanceUploadPage() {
                   ? `تم تحديث أرصدة ${result.updated} حساباً وتحديث صافي الأرباح فوراً.`
                   : `Updated balances for ${result.updated} accounts.`}
               </p>
-              {result.not_found.length > 0 && (
+              {(result.not_found?.length ?? 0) > 0 && (
                 <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">
                   {isRTL ? "حسابات غير موجودة في الدليل: " : "Codes not in chart: "}
-                  {result.not_found.slice(0, 10).join(", ")}
-                  {result.not_found.length > 10 && "…"}
+                  {result.not_found!.slice(0, 10).join(", ")}
+                  {result.not_found!.length > 10 && "…"}
                 </p>
               )}
-              {result.errors.length > 0 && (
+              {(result.errors?.length ?? 0) > 0 && (
                 <p className="mt-1 text-xs text-red-600 dark:text-red-400">
-                  {result.errors.slice(0, 5).join("; ")}
+                  {result.errors!.slice(0, 5).join("; ")}
                 </p>
               )}
             </div>

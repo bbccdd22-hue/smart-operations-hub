@@ -46,6 +46,9 @@ INSTALLED_APPS = [
     # Third-party
     'rest_framework',
     'corsheaders',
+    'drf_spectacular',
+    'django_otp',
+    'django_otp.plugins.otp_totp',
     # Local apps
     'core',
     'org',
@@ -56,10 +59,21 @@ INSTALLED_APPS = [
     'foodics',
     'accounting',
     'financials',
+    'procurement',
+    'hr',
+    'assets',
+    'pos',
+    'crm',
+    'central_kitchen',
+    'quality',
+    'bi',
+    'currencies',
+    'notifications',
 ]
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
+    'core.tenant_middleware.RequestContextMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
@@ -216,6 +230,26 @@ REST_FRAMEWORK = {
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+}
+
+# Open API - للتكامل مع بوابات الدفع، التوصيل، الضرائب، تطبيقات الموبايل
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'Smart Operations Hub API',
+    'DESCRIPTION': (
+        'Enterprise ERP API - التوثيق التلقائي لجميع الـ APIs. '
+        'جاهز للربط مع أنظمة خارجية، بوابات الدفع، التوصيل، الضرائب، وتطبيقات الموبايل.'
+    ),
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'TAGS': [
+        {'name': 'auth', 'description': 'تسجيل الدخول والمستخدم الحالي'},
+        {'name': 'org', 'description': 'المنظمة، الفروع، العلامات، المستخدمون، الأدوار والصلاحيات'},
+        {'name': 'shifts', 'description': 'الورديات وإقفال الشفتات'},
+        {'name': 'inventory', 'description': 'المخزون، المنتجات، التكاليف والربح'},
+        {'name': 'financials', 'description': 'الملخص المالي والتقارير'},
+        {'name': 'notifications', 'description': 'محرك التنبيهات وقواعد الإرسال'},
     ],
 }
 

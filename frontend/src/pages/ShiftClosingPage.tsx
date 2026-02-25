@@ -4,11 +4,15 @@ import { DENOMS, denomTotal, round2, variance, type DenomCounts } from "../lib/m
 import {
   Branch,
   Brand,
+  deleteShiftClosingAttachment,
   fetchBranches,
   fetchBrands,
+  fetchShiftClosingAttachments,
   getShiftClosingByBranchDate,
   lookupSystemCash,
   submitShiftClosing,
+  uploadShiftClosingAttachment,
+  type ShiftClosingAttachmentItem,
 } from "../lib/api";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -112,6 +116,9 @@ export default function ShiftClosingPage() {
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isLoadingClosing, setIsLoadingClosing] = useState(false);
+  const [closingId, setClosingId] = useState<number | null>(null);
+  const [attachments, setAttachments] = useState<ShiftClosingAttachmentItem[]>([]);
+  const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
     fetchBrands().then(setBrands);
@@ -162,6 +169,7 @@ export default function ShiftClosingPage() {
         setIsSubmitted(is_submitted);
         if (closing) {
           const c = closing as Record<string, unknown>;
+          setClosingId(typeof c.id === "number" ? c.id : null);
           setCounts({
             500: Number(c.bills_500 ?? 0),
             200: Number(c.bills_200 ?? 0),
@@ -188,10 +196,20 @@ export default function ShiftClosingPage() {
             systemNetwork: Number(c.system_network ?? 0),
           });
           setHeader((h) => ({ ...h, notes: String((c as { shift_notes?: string }).shift_notes ?? "") }));
+        } else {
+          setClosingId(null);
         }
       })
       .finally(() => setIsLoadingClosing(false));
   }, [header.branchId, header.date, header.shiftType]);
+
+  useEffect(() => {
+    if (!closingId || isSubmitted) {
+      setAttachments([]);
+      return;
+    }
+    fetchShiftClosingAttachments(closingId).then(setAttachments);
+  }, [closingId, isSubmitted]);
 
   const cashTotal = useMemo(() => denomTotal(counts), [counts]);
   const networkTotal = useMemo(() => round2(m.mada + m.visa + m.master), [m.mada, m.visa, m.master]);
@@ -248,6 +266,8 @@ export default function ShiftClosingPage() {
     setIsSubmitting(true);
     try {
       const res = await submitShiftClosing(payload);
+      const c = res.closing as Record<string, unknown>;
+      setClosingId(typeof c?.id === "number" ? c.id : null);
       setIsSubmitted(res.is_submitted);
     } catch {
       // Error handled by user
@@ -262,12 +282,62 @@ export default function ShiftClosingPage() {
     setIsSubmitting(true);
     try {
       const res = await submitShiftClosing(payload);
+      const c = res.closing as Record<string, unknown>;
+      setClosingId(typeof c?.id === "number" ? c.id : null);
       setIsSubmitted(res.is_submitted);
       setShowConfirmModal(false);
     } catch {
       // Error shown
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const uploadFiles = async (files: FileList | File[]) => {
+    const list = Array.from(files);
+    if (!list.length || !closingId || isSubmitted) return;
+    const allowed = ["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"];
+    const toUpload = list.filter((f) => allowed.includes(f.type));
+    if (!toUpload.length) return;
+    setIsUploading(true);
+    try {
+      for (const file of toUpload) {
+        const uploaded = await uploadShiftClosingAttachment(closingId, file);
+        setAttachments((prev) => [uploaded, ...prev]);
+      }
+    } catch {
+      // Error - could add toast
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files?.length) return;
+    await uploadFiles(files);
+    e.target.value = "";
+  };
+
+  const handleAttachmentDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!e.dataTransfer.files?.length || !closingId || isSubmitted) return;
+    await uploadFiles(e.dataTransfer.files);
+  };
+
+  const handleAttachmentDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleAttachmentDelete = async (id: number) => {
+    if (isSubmitted) return;
+    try {
+      await deleteShiftClosingAttachment(id);
+      setAttachments((prev) => prev.filter((a) => a.id !== id));
+    } catch {
+      // Error
     }
   };
 
@@ -379,6 +449,79 @@ export default function ShiftClosingPage() {
             disabled={isSubmitted}
           />
         </label>
+
+        <div className="mt-4 rounded-2xl border border-dashed border-slate-300/60 bg-slate-50/50 p-4 dark:border-slate-600/50 dark:bg-slate-800/30">
+          <div className="mb-2 flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+              رفع صور العمليات الورقية / Image Upload
+            </h3>
+            {!closingId && !isSubmitted && (
+              <span className="text-xs text-amber-600 dark:text-amber-500">
+                احفظ المسودة أولاً لإضافة المرفقات / Save draft first to add attachments
+              </span>
+            )}
+          </div>
+          {closingId && !isSubmitted && (
+            <label
+              className="relative mb-3 flex min-h-[140px] cursor-pointer touch-manipulation flex-col items-center justify-center rounded-xl border-2 border-dashed border-slate-300 bg-white p-6 transition hover:border-emerald-500 hover:bg-emerald-50/50 active:scale-[0.98] dark:border-slate-600 dark:bg-slate-800/50 dark:hover:border-emerald-500 dark:hover:bg-emerald-900/20"
+              style={{ touchAction: "manipulation" }}
+              onDrop={handleAttachmentDrop}
+              onDragOver={handleAttachmentDragOver}
+              onDragLeave={handleAttachmentDragOver}
+            >
+              <input
+                type="file"
+                accept="image/jpeg,image/jpg,image/png,image/webp,image/gif"
+                capture="environment"
+                multiple
+                className="hidden"
+                onChange={handleAttachmentUpload}
+                disabled={isUploading}
+              />
+              {isUploading && (
+                <span className="absolute inset-0 flex items-center justify-center rounded-xl bg-white/80 dark:bg-slate-900/80">
+                  <span className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+                </span>
+              )}
+              <svg className="mb-2 h-12 w-12 shrink-0 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 12v8m0 0l3-3m-3 3l-3-3" />
+              </svg>
+              <span className="text-center text-sm font-medium text-slate-600 dark:text-slate-400">
+                {isUploading ? "جاري الرفع…" : "انقر أو التقط بالجوال · اسحب للرفع"}
+              </span>
+              <span className="mt-1 text-xs text-slate-500">JPEG, PNG, WebP · رفع متعدد · كاميرا مباشرة</span>
+            </label>
+          )}
+          {attachments.length > 0 && (
+            <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+              {attachments.map((att) => (
+                <div key={att.id} className="group relative overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
+                  <img
+                    src={att.file_url}
+                    alt={att.caption || "Attachment"}
+                    className="h-24 w-full object-cover"
+                  />
+                  {!isSubmitted && (
+                    <button
+                      type="button"
+                      onClick={() => handleAttachmentDelete(att.id)}
+                      className="absolute right-1 top-1 min-h-[44px] min-w-[44px] rounded-full bg-rose-500/90 p-2 text-white opacity-90 transition hover:bg-rose-600 hover:opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
+                      aria-label="Delete"
+                    >
+                      <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                  {att.caption && (
+                    <div className="truncate px-2 py-1 text-xs text-slate-500">{att.caption}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-3">
           {!isSubmitted && header.branchId && (

@@ -1,10 +1,11 @@
 /**
- * Predictive Dashboard – Professional layout with metrics cards, line chart, and sidebar.
- * Top metrics: Monthly Forecast Total, Peak Day, Confidence Score.
- * Layout: 30-day Line Chart (main) | Next 7 Days sidebar.
+ * محرك توقعات الطلبات الذكي – Order Forecasting Engine
+ * يعتمد على مقارنة مبيعات فترة مستقبلية بفترة سابقة (أسبوع، شهر) حسب العلامة التجارية
+ * الربط بالمكونات: تحويل المبيعات المتوقعة إلى كميات مواد خام عبر قائمة الإنتاج
  */
 import { useEffect, useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { Link } from "react-router-dom";
 import {
   AreaChart,
   Area,
@@ -16,7 +17,8 @@ import {
 } from "recharts";
 import { format, parseISO } from "date-fns";
 import { ar } from "date-fns/locale";
-import { fetchForecast, fetchBranches, type ForecastDay, type Branch } from "../lib/api";
+import { fetchForecast, fetchBranches, fetchBrands, type ForecastDay, type Branch, type Brand } from "../lib/api";
+import UnifiedFilterSelect from "../components/UnifiedFilterSelect";
 
 function sar(n: number, locale?: string) {
   return new Intl.NumberFormat(locale, { style: "currency", currency: "SAR", maximumFractionDigits: 0 }).format(n);
@@ -55,16 +57,34 @@ export default function PredictiveDashboardPage() {
     next_30_days: ForecastDay[];
     warnings: Array<{ message?: string }>;
   } | null>(null);
+  const [brands, setBrands] = useState<Brand[]>([]);
+  const [selectedBrand, setSelectedBrand] = useState<string>("");
   const [branchId, setBranchId] = useState<number | "">("");
   const [branches, setBranches] = useState<Branch[]>([]);
 
   useEffect(() => {
-    fetchBranches().then(setBranches);
+    fetchBrands().then(setBrands);
   }, []);
 
   useEffect(() => {
-    fetchForecast(branchId === "" ? undefined : branchId).then(setForecast);
-  }, [branchId]);
+    if (!selectedBrand) {
+      setBranches([]);
+      setBranchId("");
+      return;
+    }
+    fetchBranches(selectedBrand).then((b) => {
+      setBranches(b);
+      setBranchId("");
+    });
+  }, [selectedBrand]);
+
+  useEffect(() => {
+    const brandObj = brands.find((b) => b.slug === selectedBrand);
+    fetchForecast({
+      branchId: branchId === "" ? undefined : branchId,
+      brandId: brandObj?.id,
+    }).then(setForecast);
+  }, [branchId, selectedBrand, brands]);
 
   const metrics = useMemo(() => {
     const days30 = forecast?.next_30_days ?? [];
@@ -96,19 +116,33 @@ export default function PredictiveDashboardPage() {
             {t("forecastSubtitle")}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-500 dark:text-slate-400">{t("branch")}</span>
-          <select
-            className="rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-sm text-slate-900 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-            value={branchId}
-            onChange={(e) => setBranchId(e.target.value ? Number(e.target.value) : "")}
+        <UnifiedFilterSelect
+          mode="brand"
+          items={brands}
+          selected={selectedBrand}
+          onChange={setSelectedBrand}
+          selectionMode="single"
+          label={isRTL ? "العلامة التجارية" : "Brand"}
+          placeholder={isRTL ? "اختيار العلامة التجارية" : "Select Brand"}
+        />
+        <UnifiedFilterSelect
+          mode="branch"
+          items={branches}
+          selected={branchId}
+          onChange={setBranchId}
+          selectionMode="single"
+          label={t("branch")}
+          placeholder={`${t("all")} ${t("branch")}`}
+          disabled={!selectedBrand}
+        />
+        {branchId && (
+          <Link
+            to="/prep-list"
+            className="rounded-xl bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
           >
-            <option value="">{t("all")} {t("branch")}</option>
-            {branches.map((b) => (
-              <option key={b.id} value={b.id}>{b.name_ar || b.name}</option>
-            ))}
-          </select>
-        </div>
+            {isRTL ? "تحويل إلى قائمة الإنتاج" : "To Production List"}
+          </Link>
+        )}
       </div>
 
       {forecast?.warnings?.length ? (

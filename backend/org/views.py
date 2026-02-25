@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, connection, transaction
+from drf_spectacular.utils import extend_schema
 from rest_framework import generics, permissions, status, views
 from rest_framework.response import Response
 
@@ -16,6 +17,7 @@ from org.models import (
     AdminNotification,
     Brand,
     Branch,
+    SystemErrorLog,
     BranchType,
     City,
     District,
@@ -954,7 +956,24 @@ class ActivityLogListView(views.APIView):
         else:
             return Response({"detail": "هذه الخاصية متاحة فقط للمسؤول النظام أو الأدوار المُصرّح لها"}, status=403)
         limit = min(int(request.query_params.get("limit", 500)), 1000)
-        logs = ActivityLog.objects.select_related("user").order_by("-created_at")[:limit]
+        qs = ActivityLog.objects.select_related("user").order_by("-created_at")
+        date_from = request.query_params.get("date_from")
+        date_to = request.query_params.get("date_to")
+        if date_from:
+            try:
+                from datetime import datetime
+                df = datetime.strptime(date_from, "%Y-%m-%d").date()
+                qs = qs.filter(created_at__date__gte=df)
+            except ValueError:
+                pass
+        if date_to:
+            try:
+                from datetime import datetime
+                dt = datetime.strptime(date_to, "%Y-%m-%d").date()
+                qs = qs.filter(created_at__date__lte=dt)
+            except ValueError:
+                pass
+        logs = qs[:limit]
         data = [
             {
                 "id": L.id,
@@ -1001,28 +1020,86 @@ class ActivityLogCreateView(views.APIView):
         return Response({"ok": True})
 
 
+class SystemErrorLogListView(views.APIView):
+    """سجل أخطاء النظام – سيف فقط لمراجعة الأعطال."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        if not is_super_admin(request.user):
+            return Response({"detail": "هذه الصفحة متاحة فقط للمسؤول النظام (سيف)"}, status=403)
+        limit = min(int(request.query_params.get("limit", 200)), 500)
+        resolved_filter = request.query_params.get("resolved")
+        qs = SystemErrorLog.objects.select_related("user").order_by("-created_at")
+        if resolved_filter is not None and str(resolved_filter).lower() in ("true", "1", "yes"):
+            qs = qs.filter(resolved=True)
+        elif resolved_filter is not None and str(resolved_filter).lower() in ("false", "0", "no"):
+            qs = qs.filter(resolved=False)
+        logs = qs[:limit]
+        data = [
+            {
+                "id": L.id,
+                "uuid": str(L.uuid),
+                "created_at": L.created_at.isoformat(),
+                "error_type": L.error_type,
+                "message": L.message,
+                "traceback": L.traceback or "",
+                "context": L.context or {},
+                "user_id": L.user_id,
+                "username": L.user.username if L.user else "—",
+                "resolved": L.resolved,
+            }
+            for L in logs
+        ]
+        return Response({"logs": data})
+
+
+class SystemErrorLogResolveView(views.APIView):
+    """تعليم خطأ كمُعالج – سيف فقط."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, uuid):
+        if not is_super_admin(request.user):
+            return Response({"detail": "SAIF only"}, status=403)
+        try:
+            log = SystemErrorLog.objects.get(uuid=uuid)
+        except SystemErrorLog.DoesNotExist:
+            return Response({"detail": "Not found"}, status=404)
+        log.resolved = True
+        log.save(update_fields=["resolved"])
+        return Response({"resolved": True})
+
+
 # صلاحيات الأدوار – سيف فقط
 ALL_PERMISSION_KEYS = [
     "view_financial_reports",
     "upload_files",
     "view_activity_log",
     "edit_chart_of_accounts",
+    "perm_shift_closing",
+    "perm_financial_reports",
+    "perm_management_reports",
+    "perm_full_system_access",
+    "perm_order_forecasting",
+    "perm_financial_auditor",
+    "view_cost_price",
+    "cancel_invoice",
+    "view_customer_phone",
 ]
 
 
 def _get_role_permissions(role: str) -> dict:
     """يرجع صلاحيات الدور من DB أو الافتراضية."""
+    defaults = dict(ROLE_PERMISSION_DEFAULTS.get(role, {}))
     try:
         config = RolePermissionConfig.objects.get(role=role)
-        perms = dict(config.permissions) if config.permissions else {}
+        stored = dict(config.permissions) if config.permissions else {}
+        perms = {**defaults, **stored}
     except RolePermissionConfig.DoesNotExist:
-        perms = dict(ROLE_PERMISSION_DEFAULTS.get(role, {}))
-    result = {}
-    for k in ALL_PERMISSION_KEYS:
-        result[k] = bool(perms.get(k, False))
-    return result
+        perms = defaults
+    return {k: bool(perms.get(k, False)) for k in ALL_PERMISSION_KEYS}
 
 
+@extend_schema(tags=["org"])
 class RolePermissionDetailView(views.APIView):
     """GET/PATCH صلاحيات دور – سيف فقط."""
     permission_classes = [permissions.IsAuthenticated]

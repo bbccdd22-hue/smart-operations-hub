@@ -9,6 +9,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import { format, subDays } from "date-fns";
 import { ar } from "date-fns/locale";
 import { fetchDashboardSummary, fetchDashboardChartData } from "../../lib/api";
+import { useDateRange } from "../../contexts/DateRangeContext";
+import ReportDateFilter from "../../components/ReportDateFilter";
 import ResponsiveFinancialTable from "../../components/ResponsiveFinancialTable";
 
 const REFERENCE_NET = 981459;
@@ -105,15 +107,20 @@ export default function DailyRevenueReport() {
     total_sales?: number;
   } | null>(null);
 
-  const today = format(new Date(), "yyyy-MM-dd");
-  const yesterday = format(subDays(new Date(), 1), "yyyy-MM-dd");
+  const { dateFrom, dateTo, compDateFrom, compDateTo, comparisonEnabled } = useDateRange();
+  const prevFrom =
+    comparisonEnabled && compDateFrom
+      ? compDateFrom
+      : format(subDays(new Date(dateFrom), 1), "yyyy-MM-dd");
+  const prevTo =
+    comparisonEnabled && compDateTo ? compDateTo : prevFrom;
 
   useEffect(() => {
     setLoading(true);
     Promise.all([
-      fetchDashboardSummary({ date_from: today, date_to: today }),
-      fetchDashboardChartData({ date_from: today, date_to: today }),
-      fetchDashboardSummary({ date_from: yesterday, date_to: yesterday }),
+      fetchDashboardSummary({ date_from: dateFrom, date_to: dateTo }),
+      fetchDashboardChartData({ date_from: dateFrom, date_to: dateTo }),
+      fetchDashboardSummary({ date_from: prevFrom, date_to: prevTo }),
     ])
       .then(([sum, chart, prevSum]) => {
         const sales = sum.totals?.system_total_sales ?? sum.financial_summary?.total_sales ?? REFERENCE_NET;
@@ -129,7 +136,7 @@ export default function DailyRevenueReport() {
         setFinancial(null);
       })
       .finally(() => setLoading(false));
-  }, [today, yesterday]);
+  }, [dateFrom, dateTo, prevFrom, prevTo]);
 
   const growthPct =
     prevNetSales != null && prevNetSales > 0 ? ((netSales - prevNetSales) / prevNetSales) * 100 : 5.2;
@@ -178,6 +185,9 @@ export default function DailyRevenueReport() {
           <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-800 dark:text-white">
             {isRTL ? "تقرير الإيرادات اليومية" : "Daily Revenue Report"}
           </h1>
+          <div className="mt-2">
+            <ReportDateFilter showComparison />
+          </div>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             {isRTL ? "صافي المبيعات، الضريبة، وتفصيل الخصومات" : "Net sales, tax, and discount breakdown"}
           </p>

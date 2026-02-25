@@ -7,8 +7,9 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import AdminRoute from "./components/AdminRoute";
 import AdminHubLayout from "./layouts/AdminHubLayout";
 import AppShellLayout from "./layouts/AppShellLayout";
-import { buildMainNavConfig } from "./config/navConfig";
+import { buildMainNavConfig, buildNestedNavConfig } from "./config/navConfig";
 import DashboardPage from "./pages/DashboardPage";
+import ManagementReportsPage from "./pages/ManagementReportsPage";
 import AdminHubPage from "./pages/AdminHubPage";
 import BranchesPage from "./pages/BranchesPage";
 import BrandsPage from "./pages/BrandsPage";
@@ -22,18 +23,27 @@ import PredictiveDashboardPage from "./pages/PredictiveDashboardPage";
 import ReconciliationPage from "./pages/ReconciliationPage";
 import SystemSettingsPage from "./pages/SystemSettingsPage";
 import ManageIngredientsPage from "./pages/ManageIngredientsPage";
+import ItemFilePage from "./pages/ItemFilePage";
+import StockTransfersPage from "./pages/StockTransfersPage";
+import CentralKitchenPage from "./pages/CentralKitchenPage";
+import SmartPurchasePage from "./pages/SmartPurchasePage";
 import UsersPage from "./pages/UsersPage";
 import UserProfilePage from "./pages/UserProfilePage";
 import RolesPage from "./pages/RolesPage";
 import NotificationSettingsPage from "./pages/NotificationSettingsPage";
+import NotificationsListPage from "./pages/NotificationsListPage";
 import SmartUploadPage from "./pages/SmartUploadPage";
 import ActivityLogPage from "./pages/ActivityLogPage";
+import SystemErrorLogsPage from "./pages/SystemErrorLogsPage";
+import SystemHeartbeatPage from "./pages/SystemHeartbeatPage";
 import LoginPage from "./pages/LoginPage";
+import HubPage from "./pages/HubPage";
 import OperationsLayout from "./layouts/OperationsLayout";
 import OperationsDashboardPage from "./pages/OperationsDashboardPage";
 import PrepListPage from "./pages/PrepListPage";
 import ProfitPage from "./pages/ProfitPage";
 import FinanceHubPage from "./pages/FinanceHubPage";
+import FinancialReportsPage from "./pages/FinancialReportsPage";
 import DailyRevenueReport from "./pages/reports/DailyRevenueReport";
 import OperationalExpensesReport from "./pages/reports/OperationalExpensesReport";
 import CostOfGoodsSoldReport from "./pages/reports/CostOfGoodsSoldReport";
@@ -41,14 +51,25 @@ import NetProfitMarginReport from "./pages/reports/NetProfitMarginReport";
 import CashFlowStatementReport from "./pages/reports/CashFlowStatementReport";
 import ProfitLossReport from "./pages/reports/ProfitLossReport";
 import IncomeStatementPage from "./pages/reports/IncomeStatementPage";
+import CostAuditCenterPage from "./pages/reports/CostAuditCenterPage";
+import FinancialAuditorPage from "./pages/FinancialAuditorPage";
+import ManualAdjustmentsPage from "./pages/reports/ManualAdjustmentsPage";
+import OwnerCommandCenterPage from "./pages/OwnerCommandCenterPage";
+import ExecutiveDashboardPage from "./pages/ExecutiveDashboardPage";
 import FinancialChartsDashboard from "./pages/reports/FinancialChartsDashboard";
 import ChartOfAccountsPage from "./pages/ChartOfAccountsPage";
 import BalanceUploadPage from "./pages/BalanceUploadPage";
 import WastePage from "./pages/WastePage";
+import POSPage from "./pages/POSPage";
+import KitchenDisplayPage from "./pages/KitchenDisplayPage";
+import EmployeeSelfServicePage from "./pages/EmployeeSelfServicePage";
 import CafeHeartbeatDashboard from "./pages/CafeHeartbeatDashboard";
 import { fetchSystemHealth, type SystemHealthItem } from "./lib/api";
+import { DateRangeProvider } from "./contexts/DateRangeContext";
+import { ProfitVisibilityProvider } from "./contexts/ProfitVisibilityContext";
 import ToastContainer from "./components/ToastContainer";
 import ActivityLogger from "./components/ActivityLogger";
+import ErrorBoundary from "./components/ErrorBoundary";
 import NotificationsDropdown from "./components/NotificationsDropdown";
 import OwnerSignatureFooter from "./components/OwnerSignatureFooter";
 
@@ -67,7 +88,9 @@ export default function App() {
   const isSuperAdmin = isSAIF;
   const showAdminHub = isSAIF || isOwner || isGeneralManager;
   const eid = (user?.employee_id || "").toUpperCase();
-  const isOperationsMode = /^A\d+$/.test(eid) || /^B\d+$/.test(eid); // single-letter A or B only [Ref: 2026-02-13]
+  /** SAIF/Owner: دائماً لوحة التحكم الكاملة مع القائمة الجانبية. موظفو الميدان (A/B): وضع التشغيل */
+  const isOperationsMode =
+    !isSAIF && !isOwner && (/^A\d+$/.test(eid) || /^B\d+$/.test(eid));
 
   useEffect(() => {
     fetchSystemHealth().then((r) => setHealth(r.last_uploads));
@@ -76,12 +99,28 @@ export default function App() {
     if (healthOpen && health === null) fetchSystemHealth().then((r) => setHealth(r.last_uploads));
   }, [healthOpen, health]);
 
+  const canUseDateComparison = isSAIF || user?.role === "general_manager";
+  /** صلاحية رؤية سعر التكلفة – تُحدد من صلاحيات الدور. إن غابت من الاستجابة نرجع للسلوك القديم */
+  const canUseProfitVisibility =
+    user?.permissions?.view_cost_price === true ||
+    (user?.permissions?.view_cost_price === undefined && (isSAIF || isGeneralManager));
+  /** المدير العام: افتراضي تشغيلية للخصوصية. SAIF: افتراضي كامل */
+  const defaultShowFullFinancial = isSAIF;
+
   return (
     <>
     <ToastContainer />
     <ActivityLogger />
+    <ErrorBoundary onRetry={() => window.location.reload()}>
+    <DateRangeProvider canUseComparison={!!canUseDateComparison}>
+    <ProfitVisibilityProvider
+      canUseProfitVisibility={!!canUseProfitVisibility}
+      defaultShowFullFinancial={defaultShowFullFinancial}
+      userId={user?.id ?? user?.username}
+    >
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/hub" element={<ProtectedRoute><Navigate to="/" replace /></ProtectedRoute>} />
       <Route
         path="/admin-hub"
         element={
@@ -93,10 +132,15 @@ export default function App() {
         }
       >
         <Route index element={<AdminHubPage />} />
+        <Route path="command-center" element={<OwnerCommandCenterPage />} />
+        <Route path="executive-dashboard" element={<ExecutiveDashboardPage />} />
         <Route path="activity-log" element={<ActivityLogPage />} />
+        <Route path="error-logs" element={<SystemErrorLogsPage />} />
+        <Route path="system-heartbeat" element={<SystemHeartbeatPage />} />
         <Route path="users" element={<UsersPage />} />
         <Route path="users/:id" element={<UserProfilePage />} />
         <Route path="notification-settings" element={<NotificationSettingsPage />} />
+        <Route path="notifications" element={<NotificationsListPage />} />
         <Route path="smart-upload" element={<SmartUploadPage />} />
         <Route path="roles" element={<RolesPage />} />
         <Route path="branches" element={<BranchesPage />} />
@@ -116,10 +160,15 @@ export default function App() {
           }
         >
           <Route index element={<OperationsDashboardPage />} />
+          <Route path="pos" element={<POSPage />} />
+          <Route path="employee-self" element={<EmployeeSelfServicePage />} />
+          <Route path="kitchen" element={<KitchenDisplayPage />} />
           <Route path="shift-closing" element={<ShiftClosingPage />} />
           <Route path="prep-list" element={<PrepListPage />} />
+          <Route path="dashboard/reports" element={<ManagementReportsPage />} />
           <Route path="dashboard/heartbeat" element={<CafeHeartbeatDashboard />} />
           <Route path="finance" element={<FinanceHubPage />} />
+          <Route path="finance/reports" element={<FinancialReportsPage />} />
           <Route path="finance/daily-revenue" element={<DailyRevenueReport />} />
           <Route path="finance/opex" element={<OperationalExpensesReport />} />
           <Route path="finance/cogs" element={<CostOfGoodsSoldReport />} />
@@ -127,12 +176,21 @@ export default function App() {
           <Route path="finance/cash-flow" element={<CashFlowStatementReport />} />
           <Route path="finance/profit-loss" element={<ProfitLossReport />} />
           <Route path="finance/income-statement" element={<IncomeStatementPage />} />
+          <Route path="finance/cost-audit" element={<CostAuditCenterPage />} />
+          <Route path="finance/auditor" element={<FinancialAuditorPage />} />
+          <Route path="finance/manual-adjustments" element={<ManualAdjustmentsPage />} />
           <Route path="finance/charts-dashboard" element={<FinancialChartsDashboard />} />
           <Route path="finance/chart-of-accounts" element={<ChartOfAccountsPage />} />
           <Route path="finance/balance-upload" element={<BalanceUploadPage />} />
           <Route path="profit-dashboard" element={<ProfitPage />} />
           <Route path="waste-tracker" element={<WastePage />} />
           <Route path="upload-center" element={<UploadCenterPage />} />
+          <Route path="ingredients" element={<IngredientsPage />} />
+          <Route path="inventory/manage-ingredients" element={<ManageIngredientsPage />} />
+          <Route path="inventory/item-file" element={<ItemFilePage />} />
+          <Route path="stock-transfers" element={<StockTransfersPage />} />
+          <Route path="central-kitchen" element={<CentralKitchenPage />} />
+          <Route path="smart-purchase" element={<SmartPurchasePage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       ) : (
@@ -148,6 +206,15 @@ export default function App() {
                   isSuperAdmin,
                   isExternalAccountant,
                   isGeneralManager,
+                  permissions: user?.permissions ?? {},
+                })}
+                nestedNavConfig={buildNestedNavConfig(t, {
+                  isBranchSupervisor,
+                  showAdminHub,
+                  isOwner,
+                  isSuperAdmin,
+                  isExternalAccountant,
+                  permissions: user?.permissions ?? {},
                 })}
                 health={health}
                 healthOpen={healthOpen}
@@ -158,15 +225,25 @@ export default function App() {
       >
         <Route index element={<DashboardPage />} />
         <Route path="dashboard" element={<DashboardPage />} />
+        <Route path="executive-dashboard" element={<ExecutiveDashboardPage />} />
+        <Route path="dashboard/reports" element={<ManagementReportsPage />} />
         <Route path="dashboard/heartbeat" element={<CafeHeartbeatDashboard />} />
         <Route path="forecast" element={<PredictiveDashboardPage />} />
         <Route path="prep-list" element={<PrepListPage />} />
+        <Route path="pos" element={<POSPage />} />
+        <Route path="employee-self" element={<EmployeeSelfServicePage />} />
+        <Route path="kitchen" element={<KitchenDisplayPage />} />
         <Route path="shift-closing" element={<ShiftClosingPage />} />
         <Route path="reconciliation" element={<ReconciliationPage />} />
         <Route path="upload-center" element={<UploadCenterPage />} />
         <Route path="ingredients" element={<IngredientsPage />} />
-        <Route path="inventory/manage-ingredients" element={<ManageIngredientsPage />} />
-        <Route path="finance" element={<FinanceHubPage />} />
+          <Route path="inventory/manage-ingredients" element={<ManageIngredientsPage />} />
+          <Route path="inventory/item-file" element={<ItemFilePage />} />
+          <Route path="stock-transfers" element={<StockTransfersPage />} />
+          <Route path="central-kitchen" element={<CentralKitchenPage />} />
+          <Route path="smart-purchase" element={<SmartPurchasePage />} />
+          <Route path="finance" element={<FinanceHubPage />} />
+        <Route path="finance/reports" element={<FinancialReportsPage />} />
         <Route path="finance/daily-revenue" element={<DailyRevenueReport />} />
         <Route path="finance/opex" element={<OperationalExpensesReport />} />
         <Route path="finance/cogs" element={<CostOfGoodsSoldReport />} />
@@ -174,6 +251,9 @@ export default function App() {
         <Route path="finance/cash-flow" element={<CashFlowStatementReport />} />
         <Route path="finance/profit-loss" element={<ProfitLossReport />} />
         <Route path="finance/income-statement" element={<IncomeStatementPage />} />
+        <Route path="finance/cost-audit" element={<CostAuditCenterPage />} />
+        <Route path="finance/auditor" element={<FinancialAuditorPage />} />
+        <Route path="finance/manual-adjustments" element={<ManualAdjustmentsPage />} />
         <Route path="finance/charts-dashboard" element={<FinancialChartsDashboard />} />
         <Route path="finance/chart-of-accounts" element={<ChartOfAccountsPage />} />
         <Route path="finance/balance-upload" element={<BalanceUploadPage />} />
@@ -183,6 +263,9 @@ export default function App() {
       </Route>
       )}
     </Routes>
+    </ProfitVisibilityProvider>
+    </DateRangeProvider>
+    </ErrorBoundary>
     </>
   );
 }

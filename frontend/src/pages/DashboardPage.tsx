@@ -1,11 +1,14 @@
 import { useCallback, useEffect, useState, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { motion } from "framer-motion";
-import { format, subDays, startOfMonth } from "date-fns";
+import { motion, AnimatePresence } from "framer-motion";
+import { subDays, parseISO, format } from "date-fns";
+import { useDateRange } from "../contexts/DateRangeContext";
+import { useProfitVisibility } from "../contexts/ProfitVisibilityContext";
 import {
   fetchDashboardSummary,
   fetchDashboardChartData,
   fetchDashboardInsights,
+  fetchProfitSummary,
   fetchBrands,
   fetchBranches,
   fetchSubmittedBranches,
@@ -16,6 +19,7 @@ import {
 } from "../lib/api";
 import { FIXED_BRANDS } from "../config/brands";
 import { useAuth } from "../contexts/AuthContext";
+import { useNotifications } from "../contexts/NotificationContext";
 import DashboardFilterBar, { type DateRange } from "../components/DashboardFilterBar";
 import KPICard, { sar } from "../components/KPICard";
 import SalesVsForecastChart from "../components/SalesVsForecastChart";
@@ -28,6 +32,45 @@ const DEFAULT_RANGE: DateRange = {
   from: new Date(),
   to: new Date(),
 };
+
+const FILTER_STORAGE_KEY = "smart-ops-global-filters";
+
+function loadFilterPrefs(): Partial<{
+  brands: string[];
+  branches: number[];
+  reportType: string;
+  dateFrom: string;
+  dateTo: string;
+}> {
+  try {
+    const raw = localStorage.getItem(FILTER_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return {
+      brands: Array.isArray(parsed.brands) ? parsed.brands : undefined,
+      branches: Array.isArray(parsed.branches) ? parsed.branches : undefined,
+      reportType: typeof parsed.reportType === "string" ? parsed.reportType : undefined,
+      dateFrom: typeof parsed.dateFrom === "string" ? parsed.dateFrom : undefined,
+      dateTo: typeof parsed.dateTo === "string" ? parsed.dateTo : undefined,
+    };
+  } catch {
+    return {};
+  }
+}
+
+function saveFilterPrefs(prefs: {
+  brands: string[];
+  branches: number[];
+  reportType: string;
+  dateFrom: string;
+  dateTo: string;
+}) {
+  try {
+    localStorage.setItem(FILTER_STORAGE_KEY, JSON.stringify(prefs));
+  } catch {
+    /* ignore */
+  }
+}
 
 /** Filter out junk branches (Main, Branch) - Excel fallback rows; Arabic equivalents */
 const JUNK_BRANCH_NAMES = ["main", "branch"];
@@ -70,6 +113,7 @@ function daysToDateRange(days: number): DateRange {
 export default function DashboardPage() {
   const { t, i18n } = useTranslation();
   const { user } = useAuth();
+  const notifications = useNotifications();
   const isSAIF = user?.username === "SAIF" && user?.role === "owner";
   const defaultViewLoaded = useRef(false);
 
@@ -80,22 +124,72 @@ export default function DashboardPage() {
   const brands = useMemo(() => mergeBrandsWithFixed(brandsRaw), [brandsRaw]);
   const branches = useMemo(() => filterJunkBranches(branchesRaw), [branchesRaw]);
   const [selectedReportType, setSelectedReportType] = useState<string>("daily_sales");
-  const [dateRange, setDateRange] = useState<DateRange>(DEFAULT_RANGE);
+  const {
+    dateRange,
+    setDateRange,
+    dateFrom,
+    dateTo,
+    comparisonEnabled,
+    setComparisonEnabled,
+    canUseComparison,
+    compDateFrom,
+    compDateTo,
+  } = useDateRange();
+  const {
+    showFullFinancial,
+    setShowFullFinancial,
+    canUseProfitVisibility,
+  } = useProfitVisibility();
   const [summary, setSummary] = useState<DashboardSummary | null>(null);
   const [chartData, setChartData] = useState<DashboardChartData | null>(null);
+  const [prevSummary, setPrevSummary] = useState<DashboardSummary | null>(null);
+  const [prevChartData, setPrevChartData] = useState<DashboardChartData | null>(null);
   const [insights, setInsights] = useState<Awaited<ReturnType<typeof fetchDashboardInsights>>["insights"]>([]);
   const [submittedBranchIds, setSubmittedBranchIds] = useState<number[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
   const [deliveryViewMode, setDeliveryViewMode] = useState<"total" | "detailed">("total");
-
-  const dateFrom = format(dateRange.from, "yyyy-MM-dd");
-  const dateTo = format(dateRange.to, "yyyy-MM-dd");
+  const [profitSummary, setProfitSummary] = useState<Awaited<ReturnType<typeof fetchProfitSummary>> | null>(null);
+  /** لا تُجلب البيانات ولا تظهر إلا بعد اختيار العلامة واضغط تحديث البيانات */
+  const [dataRequested, setDataRequested] = useState(false);
 
   useEffect(() => {
     fetchBrands().then(setBrandsRaw);
   }, []);
+
+  /** تحميل آخر الفلاتر من localStorage (الذاكرة الذكية) */
+  const filterPrefsLoaded = useRef(false);
+  useEffect(() => {
+    if (filterPrefsLoaded.current) return;
+    filterPrefsLoaded.current = true;
+    const prefs = loadFilterPrefs();
+    if (prefs.branches?.length) pendingBranchIdsRef.current = prefs.branches;
+    if (prefs.brands?.length) setSelectedBrands(prefs.brands);
+    if (prefs.reportType) setSelectedReportType(prefs.reportType);
+    if (prefs.dateFrom && prefs.dateTo) {
+      try {
+        const from = parseISO(prefs.dateFrom);
+        const to = parseISO(prefs.dateTo);
+        if (!isNaN(from.getTime()) && !isNaN(to.getTime())) {
+          setDateRange({ from, to });
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [setDateRange]);
+
+  /** حفظ الفلاتر في localStorage عند أي تغيير */
+  useEffect(() => {
+    saveFilterPrefs({
+      brands: selectedBrands,
+      branches: selectedBranches,
+      reportType: selectedReportType,
+      dateFrom: format(dateRange.from, "yyyy-MM-dd"),
+      dateTo: format(dateRange.to, "yyyy-MM-dd"),
+    });
+  }, [selectedBrands, selectedBranches, selectedReportType, dateRange]);
 
   const pendingBranchIdsRef = useRef<number[] | null>(null);
 
@@ -116,9 +210,14 @@ export default function DashboardPage() {
   }, [selectedBrands.join(",")]);
 
   const handleRefresh = useCallback(() => {
+    if (selectedBrands.length === 0) {
+      notifications?.addToast(t("selectBrandFirst"));
+      return;
+    }
+    setDataRequested(true);
     setRefreshing(true);
     setRefreshKey((k) => k + 1);
-  }, []);
+  }, [selectedBrands.length, notifications, t]);
 
   useEffect(() => {
     const onDataUpdated = () => handleRefresh();
@@ -157,35 +256,81 @@ export default function DashboardPage() {
     fetchSubmittedBranches(dateTo).then((r) => setSubmittedBranchIds(r.branch_ids ?? []));
   }, [dateTo]);
 
-  /* Fetch on: refresh, brand, report type, date range, branch selection [Ref: 141317] */
+  /** جلب ملخص الربح عند تفعيل الرؤية المالية الكاملة */
   useEffect(() => {
+    if (!showFullFinancial || !canUseProfitVisibility) {
+      setProfitSummary(null);
+      return;
+    }
+    let mounted = true;
+    fetchProfitSummary({
+      date_from: dateFrom,
+      date_to: dateTo,
+      brands: selectedBrands.length ? selectedBrands : undefined,
+      branch_ids: selectedBranches.length ? selectedBranches : undefined,
+    })
+      .then((s) => {
+        if (mounted) setProfitSummary(s);
+      })
+      .catch(() => {
+        if (mounted) setProfitSummary(null);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [showFullFinancial, canUseProfitVisibility, dateFrom, dateTo, selectedBrands, selectedBranches]);
+
+  /** إعادة حساب صافي الربح – مسح cache وجلب من المصدر */
+  const handleRecalculateProfit = useCallback(async () => {
+    try {
+      const s = await fetchProfitSummary({
+        date_from: dateFrom,
+        date_to: dateTo,
+        brands: selectedBrands.length ? selectedBrands : undefined,
+        branch_ids: selectedBranches.length ? selectedBranches : undefined,
+        bypassCache: true,
+      });
+      setProfitSummary(s);
+      notifications?.addToast(t("recalculateSuccess"));
+    } catch {
+      setProfitSummary(null);
+    }
+  }, [dateFrom, dateTo, selectedBrands, selectedBranches, notifications, t]);
+
+  /* Fetch on: refresh, brand, report type, date range, branch selection [Ref: 141317] – لا يُجلب إلا بعد dataRequested */
+  useEffect(() => {
+    if (!dataRequested) {
+      setRefreshing(false);
+      return;
+    }
     let mounted = true;
     setError(null);
     setRefreshing(true);
-    Promise.all([
-      fetchDashboardSummary({
-        brands: selectedBrands.length ? selectedBrands : undefined,
-        branch_ids: selectedBranches.length ? selectedBranches : undefined,
-        date_from: dateFrom,
-        date_to: dateTo,
-        report_type: selectedReportType,
-      }),
-      fetchDashboardChartData({
-        brands: selectedBrands.length ? selectedBrands : undefined,
-        branch_ids: selectedBranches.length ? selectedBranches : undefined,
-        date_from: dateFrom,
-        date_to: dateTo,
-        report_type: selectedReportType,
-      }),
-      fetchDashboardInsights({
-        brands: selectedBrands.length ? selectedBrands : undefined,
-      }),
-    ])
-      .then(([s, c, i]) => {
+    const baseParams = {
+      brands: selectedBrands.length ? selectedBrands : undefined,
+      branch_ids: selectedBranches.length ? selectedBranches : undefined,
+      report_type: selectedReportType,
+    };
+    const fetchCurrent = Promise.all([
+      fetchDashboardSummary({ ...baseParams, date_from: dateFrom, date_to: dateTo }),
+      fetchDashboardChartData({ ...baseParams, date_from: dateFrom, date_to: dateTo }),
+      fetchDashboardInsights({ brands: selectedBrands.length ? selectedBrands : undefined }),
+    ]);
+    const fetchPrev =
+      comparisonEnabled && compDateFrom && compDateTo && canUseComparison
+        ? Promise.all([
+            fetchDashboardSummary({ ...baseParams, date_from: compDateFrom, date_to: compDateTo }),
+            fetchDashboardChartData({ ...baseParams, date_from: compDateFrom, date_to: compDateTo }),
+          ])
+        : Promise.all([null, null]);
+    Promise.all([fetchCurrent, fetchPrev])
+      .then(([[s, c, i], [ps, pc]]) => {
         if (mounted) {
           setSummary(s);
           setChartData(c);
           setInsights(i.insights ?? []);
+          setPrevSummary(ps ?? null);
+          setPrevChartData(pc ?? null);
         }
       })
       .catch(() => {
@@ -197,7 +342,7 @@ export default function DashboardPage() {
     return () => {
       mounted = false;
     };
-  }, [refreshKey, selectedBrands, selectedReportType, dateFrom, dateTo, selectedBranches]);
+  }, [dataRequested, refreshKey, selectedBrands, selectedReportType, dateFrom, dateTo, selectedBranches, comparisonEnabled, compDateFrom, compDateTo, canUseComparison]);
 
   const netSales = summary?.totals?.system_total_sales ?? 0;
   const financial = summary?.financial_summary;
@@ -210,6 +355,16 @@ export default function DashboardPage() {
   const avgCheck =
     summary?.totals?.avg_check ??
     (ordersCount && netSales ? netSales / ordersCount : shiftsCount && netSales ? netSales / shiftsCount : 0);
+
+  /** مقارنة الفترات: قيم الفترة السابقة */
+  const prevFinancial = prevSummary?.financial_summary;
+  const prevNetSales = prevFinancial?.total_sales ?? prevSummary?.totals?.system_total_sales ?? 0;
+  const prevOrdersCount = prevSummary?.totals?.orders_count ?? 0;
+  const prevShiftsCount = prevSummary?.totals?.shifts_count ?? 0;
+  const prevAvgCheck =
+    prevSummary?.totals?.avg_check ??
+    (prevOrdersCount && prevNetSales ? prevNetSales / prevOrdersCount : prevShiftsCount && prevNetSales ? prevNetSales / prevShiftsCount : 0);
+  const prevActiveBranches = prevSummary?.totals?.active_branches ?? 0;
 
   const sparklineSales = useMemo(
     () => (chartData?.daily_series ?? []).map((d) => d.sales),
@@ -247,10 +402,27 @@ export default function DashboardPage() {
         onDateRangeChange={setDateRange}
         onRefresh={handleRefresh}
         onApplySavedView={handleApplySavedView}
+        canUseComparison={canUseComparison}
+        comparisonEnabled={comparisonEnabled}
+        onComparisonChange={setComparisonEnabled}
         />
       </div>
 
-      {error && (
+      {!dataRequested && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="flex flex-1 items-center justify-center float-card rounded-2xl px-6 py-8 text-center"
+        >
+          <div>
+            <div className="text-4xl">📊</div>
+            <h3 className="mt-3 text-lg font-semibold [color:var(--glass-text)]">{t("dashboard")}</h3>
+            <p className="mt-2 text-sm [color:var(--glass-text-muted)]">{t("dashboardSelectBrandHint")}</p>
+          </div>
+        </motion.div>
+      )}
+
+      {dataRequested && error && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -260,7 +432,7 @@ export default function DashboardPage() {
         </motion.div>
       )}
 
-      {hasNoData && (
+      {dataRequested && hasNoData && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -276,16 +448,20 @@ export default function DashboardPage() {
       )}
 
       {/* Main content: overflow-y auto on data only; header/footer remain visible */}
-      {!hasNoData && (
+      {dataRequested && !hasNoData && (
         <div className="dashboard-scroll flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto overflow-x-hidden md:gap-2" style={{ width: "100%", margin: "0 auto" }}>
           <div className="dashboard-data flex min-h-0 flex-1 flex-col gap-1.5 md:gap-2">
       {/* Metrics block: Financial Summary + KPI (locked ~20% min-height) */}
       <div className="dashboard-metrics flex flex-col gap-1.5 md:gap-2">
-      {/* Financial Summary - Payments Report ONLY [Ref: 86561c, 873374, 874561] */}
-      {financial && (
+      {/* Financial Summary - Payments Report ONLY [Ref: 86561c, 873374, 874561] – يُخفى في الوضع التشغيلي */}
+      <AnimatePresence mode="wait">
+      {financial && showFullFinancial && (
         <motion.section
+          key="financial-summary"
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={{ duration: 0.25 }}
           className="w-full shrink-0"
         >
           <div className="mb-2 flex flex-wrap items-center justify-between gap-1.5">
@@ -460,6 +636,86 @@ export default function DashboardPage() {
             )}
         </motion.section>
       )}
+      </AnimatePresence>
+
+      {/* بطاقات الربح عند الرؤية المالية الكاملة */}
+      <AnimatePresence mode="wait">
+      {showFullFinancial && canUseProfitVisibility && profitSummary && (
+        <motion.section
+          key="profit-cards"
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: "auto" }}
+          exit={{ opacity: 0, height: 0 }}
+          transition={{ duration: 0.25 }}
+          className="grid shrink-0 grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3"
+        >
+          <div className="float-card flex flex-col rounded-2xl p-3">
+            <div className="text-xs font-medium uppercase tracking-wider text-slate-400">
+              {t("operatingCosts") ?? "Operating Costs"}
+            </div>
+            <div className="metric-glow mt-2 text-xl font-bold text-slate-100">
+              {sar(parseFloat(profitSummary.total_cogs ?? "0"))}
+            </div>
+          </div>
+          <div className="float-card flex flex-col rounded-2xl p-3">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-medium uppercase tracking-wider text-slate-400">
+                {t("netProfit")}
+              </span>
+              <button
+                type="button"
+                onClick={handleRecalculateProfit}
+                title={t("recalculate")}
+                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-white/10 hover:text-[#00ffcc]"
+              >
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </button>
+            </div>
+            <div className={`metric-glow mt-2 text-xl font-bold ${
+              parseFloat(profitSummary.gross_profit ?? "0") >= 0 ? "text-emerald-400" : "text-rose-400"
+            }`}>
+              {sar(parseFloat(profitSummary.gross_profit ?? "0"))}
+            </div>
+          </div>
+          <div className="float-card flex flex-col rounded-2xl p-3">
+            <div className="text-xs font-medium uppercase tracking-wider text-slate-400">
+              {t("netIncome") ?? "Net Income"}
+            </div>
+            <div className="metric-glow mt-2 text-xl font-bold text-slate-100">
+              {sar(parseFloat(profitSummary.total_sales ?? "0"))}
+            </div>
+          </div>
+        </motion.section>
+      )}
+      </AnimatePresence>
+
+      {/* تنبيه SAIF: مصاريف معلّقة لمراجعة يدوية */}
+      {isSAIF && profitSummary?.flagged_for_review && profitSummary.flagged_for_review.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="shrink-0 rounded-2xl border border-amber-500/50 bg-amber-500/10 px-4 py-3"
+        >
+          <h3 className="text-sm font-semibold text-amber-200">
+            {t("expensesFlaggedForReview")}
+          </h3>
+          <p className="mt-1 text-xs text-amber-200/90">
+            {t("expensesFlaggedForReviewDesc")}
+          </p>
+          <ul className="mt-2 space-y-1 text-xs text-amber-100">
+            {profitSummary.flagged_for_review.slice(0, 5).map((f, i) => (
+              <li key={i}>
+                {f.ingredient_name} ({f.serial_code}): {f.cost} ر.س – {f.reason === "invalid_unit_cost" ? "تكلفة غير صالحة" : "تجاوز نسبة المبيعات"}
+              </li>
+            ))}
+            {profitSummary.flagged_for_review.length > 5 && (
+              <li className="text-amber-300">+{profitSummary.flagged_for_review.length - 5} أخرى</li>
+            )}
+          </ul>
+        </motion.div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid shrink-0 grid-cols-2 gap-1.5 md:grid-cols-4 md:gap-2 [&>*]:min-h-[56px] md:[&>*]:min-h-[60px]">
@@ -470,6 +726,7 @@ export default function DashboardPage() {
           sparklineData={sparklineSales}
           trend={sparklineSales.length > 1 && sparklineSales[0] < sparklineSales[sparklineSales.length - 1] ? "up" : "neutral"}
           delay={0}
+          previousValue={comparisonEnabled && canUseComparison ? prevNetSales : undefined}
         />
         <KPICard
           label={t("orderCount")}
@@ -478,6 +735,7 @@ export default function DashboardPage() {
           sparklineData={[]}
           delay={0.05}
           hint={ordersCount === 0 ? t("orderCountHint") : undefined}
+          previousValue={comparisonEnabled && canUseComparison ? prevOrdersCount : undefined}
         />
         <KPICard
           label={t("averageOrder")}
@@ -485,35 +743,49 @@ export default function DashboardPage() {
           formatter={(n) => (n ? sar(n) : "—")}
           delay={0.1}
           hint={avgCheck === 0 ? t("averageOrderHint") : undefined}
+          previousValue={comparisonEnabled && canUseComparison ? prevAvgCheck : undefined}
         />
         <KPICard
           label={t("activeBranches")}
           value={summary?.totals?.active_branches ?? 0}
           formatter={(n) => (n ? n.toLocaleString() : "—")}
           delay={0.15}
+          previousValue={comparisonEnabled && canUseComparison ? prevActiveBranches : undefined}
         />
       </div>
       </div>
       {/* end dashboard-metrics */}
 
       {/* Charts Row – Sales vs AI Forecast + Revenue Distribution (locked 40% min) */}
-      <div className="dashboard-charts grid shrink-0 grid-cols-1 gap-2 md:grid-cols-2 md:gap-3 lg:grid-cols-3">
-        <div className="min-w-0 md:col-span-2 lg:col-span-2">
+      <div className={`dashboard-charts grid shrink-0 grid-cols-1 gap-2 md:grid-cols-2 md:gap-3 ${showFullFinancial ? "lg:grid-cols-3" : "lg:grid-cols-1"}`}>
+        <div className={`min-w-0 md:col-span-2 ${showFullFinancial ? "lg:col-span-2" : "lg:col-span-1"}`}>
           <SalesVsForecastChart
             data={chartData?.daily_series ?? []}
+            previousSeries={comparisonEnabled && canUseComparison ? prevChartData?.daily_series ?? [] : undefined}
             height={280}
             showFooter={isSAIF}
             variant="white"
           />
         </div>
-        <div className="min-w-0 flex flex-col">
-          <RevenueSplitChart
-            data={chartData?.revenue_split ?? []}
-            height={280}
-            showFooter={isSAIF}
-            variant="white"
-          />
-        </div>
+        <AnimatePresence mode="wait">
+          {showFullFinancial && (
+            <motion.div
+              key="revenue-split"
+              initial={{ opacity: 0, scale: 0.98 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.98 }}
+              transition={{ duration: 0.25 }}
+              className="min-w-0 flex flex-col"
+            >
+              <RevenueSplitChart
+                data={chartData?.revenue_split ?? []}
+                height={280}
+                showFooter={isSAIF}
+                variant="white"
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Product Analytics Charts */}

@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useNotifications } from "../contexts/NotificationContext";
-import { fetchBrands, fetchBranches, uploadExcel, logActivity, type Brand, type Branch } from "../lib/api";
+import { fetchBrands, fetchBranches, uploadExcel, fetchUploadStatus, logActivity, type Brand, type Branch } from "../lib/api";
 import { getBrandDisplayName, getBranchDisplayName } from "../lib/localization";
 
 type UploadState = "idle" | "uploading" | "success" | "error";
@@ -26,6 +26,7 @@ export default function UploadCenterPage() {
   const [status, setStatus] = useState<UploadState>("idle");
   const [message, setMessage] = useState<string | null>(null);
   const [variances, setVariances] = useState<VarianceItem[]>([]);
+  const [uploadProgress, setUploadProgress] = useState<{ pct: number; message: string } | null>(null);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBrandId, setSelectedBrandId] = useState<number | null>(null);
@@ -45,6 +46,7 @@ export default function UploadCenterPage() {
     if (!file) return;
     setStatus("uploading");
     setMessage(null);
+    setUploadProgress(null);
 
     try {
       const result = await uploadExcel({
@@ -53,13 +55,51 @@ export default function UploadCenterPage() {
         brand_id: selectedBrandId ?? undefined,
         branch_id: selectedBranchId ?? undefined,
       });
+      if (result.status === "processing") {
+        setUploadProgress({ pct: result.progress_pct ?? 0, message: result.progress_message ?? "" });
+        const poll = async (): Promise<void> => {
+          const key = result.uuid ?? result.id;
+          const status = await fetchUploadStatus(key);
+          setUploadProgress({ pct: status.progress_pct ?? 0, message: status.progress_message ?? "" });
+          if (status.status === "processed") {
+            setStatus("success");
+            setMessage("File ingested and archived successfully.");
+            setVariances((status.variances ?? []) as VarianceItem[]);
+            const msg =
+              reportType === "product_sales"
+                ? t("productSalesSuccess")
+                : reportType === "payments_report"
+                  ? t("paymentsReportSuccess")
+                  : t("styledHeaderToast");
+            addToast(t("uploadSuccess"), msg);
+            logActivity({
+              action_type: "file_upload",
+              page_path: "/upload-center",
+              file_name: file?.name ?? "Excel",
+              description: `رفع ${reportType} - ${file?.name ?? ""}`,
+            });
+            window.dispatchEvent(new CustomEvent("smart-ops-dashboard-refresh"));
+            setUploadProgress(null);
+            return;
+          }
+          if (status.status === "failed") {
+            setStatus("error");
+            setMessage(status.error_message ?? "Upload failed");
+            setUploadProgress(null);
+            return;
+          }
+          setTimeout(poll, 1500);
+        };
+        setTimeout(poll, 1500);
+        return;
+      }
       setStatus("success");
       setMessage("File ingested and archived successfully.");
       setVariances((result.variances ?? []) as VarianceItem[]);
       const msg =
         reportType === "product_sales"
           ? t("productSalesSuccess")
-          :           reportType === "payments_report"
+          : reportType === "payments_report"
             ? t("paymentsReportSuccess")
             : t("styledHeaderToast");
       addToast(t("uploadSuccess"), msg);
@@ -74,6 +114,7 @@ export default function UploadCenterPage() {
       setStatus("error");
       setMessage(err instanceof Error ? err.message : "Upload failed");
       setVariances([]);
+      setUploadProgress(null);
     }
   };
 
@@ -162,6 +203,17 @@ export default function UploadCenterPage() {
           </label>
         </div>
 
+        {uploadProgress && (
+          <div className="flex flex-col gap-2">
+            <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200">
+              <div
+                className="h-full rounded-full bg-slate-700 transition-all duration-300"
+                style={{ width: `${uploadProgress.pct}%` }}
+              />
+            </div>
+            <span className="text-xs text-slate-600">{uploadProgress.message || "Processing…"}</span>
+          </div>
+        )}
         <button
           type="submit"
           disabled={!file || status === "uploading"}

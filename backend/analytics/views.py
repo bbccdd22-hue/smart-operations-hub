@@ -6,6 +6,7 @@ from django.db.models import Avg, Count, F, Q, Sum
 from rest_framework import permissions, response, views
 
 from analytics.forecasting import forecast_next_days, predict_sales_for_date
+from core.permissions import get_user_scope
 from accounting.models import FoodicsPaymentCategory, FoodicsPaymentRecord
 from accounting.services import get_financial_summary
 from inventory.models import BranchStock
@@ -13,24 +14,29 @@ from imports.models import DailySale, ExcelReportType, ExcelUpload, ProductSale
 from org.models import Branch, Brand
 from shifts.models import ShiftClosing
 
-# [Ref: 135441, 161033] Exclude summary/total rows when aggregating ProductSale (صافي المبيعات only)
-# Must match 981,459.30 - strictly skip Total, المجموع in product, sku, branch, or brand.
-_PRODUCT_SALE_EXCLUDE_SUMMARY = (
-    Q(product_name__icontains="total")
-    | Q(product_name__icontains="المجموع")
-    | Q(product_name__icontains="مجموع")
-    | Q(product_name__icontains="subtotal")
-    | Q(product_name__icontains="الإجمالي")
-    | Q(product_name__icontains="إجمالي")
-    | Q(product_name__icontains="اجمالي")
-    | Q(product_sku__icontains="total")
-    | Q(product_sku__icontains="المجموع")
-    | Q(branch__name__icontains="total")
-    | Q(branch__name__icontains="المجموع")
-    | Q(branch__name__icontains="مجموع")
-    | Q(branch__brand__name__icontains="total")
-    | Q(branch__brand__name__icontains="المجموع")
+# [Ref: 135441, 161033, SAIF] Universal Data Mapping – single source for all reports
+from analytics.report_data_sources import (
+    PRODUCT_SALE_EXCLUDE_SUMMARY as _PRODUCT_SALE_EXCLUDE_SUMMARY,
 )
+
+_PRODUCT_SALE_EXCLUDE_SUMMARY = _PRODUCT_SALE_EXCLUDE_SUMMARY
+
+
+def _apply_branch_scope(request, branch_qs):
+    """
+    Apply branch/brand scoping from get_user_scope.
+    Users see only data for branches they are allowed to access.
+    """
+    if not request.user or not request.user.is_authenticated:
+        return branch_qs
+    scope = get_user_scope(request.user)
+    if scope["branch_ids"] is not None:
+        allowed = scope["branch_ids"] or []
+        branch_qs = branch_qs.filter(id__in=allowed)
+    if scope["brand_ids"] is not None:
+        allowed = scope["brand_ids"] or []
+        branch_qs = branch_qs.filter(brand_id__in=allowed)
+    return branch_qs
 
 
 def _product_sales_qs(branch_ids, date_from, date_to):
@@ -90,11 +96,12 @@ def _product_sales_qs_by_branch_name(brand_id, branch_name, date_from, date_to):
 
 
 class OwnerDashboardSummaryView(views.APIView):
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         """
         Dashboard: aggregates from ShiftClosing + DailySale. Supports date range, brand, branch/branch_ids.
+        Branch scoping applied – users see only their allowed branches.
         """
         city = request.query_params.get("city")
         brand = request.query_params.get("brand")
@@ -126,6 +133,8 @@ class OwnerDashboardSummaryView(views.APIView):
                 branch_qs = branch_qs.filter(id=int(branch_id))
             except ValueError:
                 pass
+
+        branch_qs = _apply_branch_scope(request, branch_qs)
 
         today = datetime.now().date()
         if not date_from:
@@ -385,7 +394,7 @@ class OwnerDashboardSummaryView(views.APIView):
 
 class DashboardChartView(views.APIView):
     """Daily sales series + revenue split + top products + branch performance + sales vs qty."""
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         city = request.query_params.get("city")
@@ -427,6 +436,7 @@ class DashboardChartView(views.APIView):
             branch_qs = branch_qs.filter(
                 Q(name__icontains=branch_name_param) | Q(name_ar__icontains=branch_name_param)
             )
+        branch_qs = _apply_branch_scope(request, branch_qs)
 
         today = datetime.now().date()
         if not date_from:
@@ -668,13 +678,17 @@ class DashboardChartView(views.APIView):
 
 class ForecastView(views.APIView):
     """Predictive sales for next 7 and 30 days from archived Daily Sales (DB only)."""
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         branch_id = request.query_params.get("branch_id")
         branch_id = int(branch_id) if branch_id else None
         brand_id = request.query_params.get("brand_id")
         brand_id = int(brand_id) if brand_id else None
+        scope = get_user_scope(request.user)
+        if scope["branch_ids"] is not None and branch_id is not None:
+            if branch_id not in (scope["branch_ids"] or []):
+                return response.Response({"next_7_days": [], "next_30_days": [], "warnings": ["Branch access denied"]}, status=403)
         horizon = request.query_params.get("horizon", "7")
         horizon = 30 if str(horizon) == "30" else 7
 
@@ -694,7 +708,7 @@ class ForecastView(views.APIView):
 
 class PredictDateView(views.APIView):
     """Predicted sales for a specific future date (Dashboard & Production Planner)."""
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         from datetime import datetime
@@ -703,6 +717,10 @@ class PredictDateView(views.APIView):
         branch_id = int(branch_id) if branch_id else None
         brand_id = request.query_params.get("brand_id")
         brand_id = int(brand_id) if brand_id else None
+        scope = get_user_scope(request.user)
+        if scope["branch_ids"] is not None and branch_id is not None:
+            if branch_id not in (scope["branch_ids"] or []):
+                return response.Response({"predicted_sales": 0, "error": "Branch access denied"}, status=403)
         date_str = request.query_params.get("date")
         target = None
         if date_str:
@@ -718,7 +736,7 @@ class PredictDateView(views.APIView):
 
 class DashboardInsightsView(views.APIView):
     """Smart Insights: Zero variance branch, recurring shortages, forecast warnings."""
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         from datetime import date
@@ -812,7 +830,7 @@ class DashboardInsightsView(views.APIView):
 
 class SystemHealthView(views.APIView):
     """Last Excel sync and data coverage/gaps."""
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         last_uploads = []
@@ -835,7 +853,7 @@ class SystemHealthView(views.APIView):
 
 class HeartbeatView(views.APIView):
     """Cafe Heartbeat Dashboard: burn rate, sales mix, basket ratio, waste monitor."""
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         from datetime import datetime
@@ -857,7 +875,17 @@ class HeartbeatView(views.APIView):
             except (TypeError, ValueError):
                 pass
         if not branch_ids:
-            branch_ids = list(Branch.objects.filter(is_active=True).values_list("id", flat=True)[:50])
+            branch_qs = Branch.objects.filter(is_active=True)[:50]
+            branch_qs = _apply_branch_scope(request, branch_qs)
+            branch_ids = list(branch_qs.values_list("id", flat=True))
+        else:
+            scope = get_user_scope(request.user)
+            if scope["branch_ids"] is not None:
+                allowed = set(scope["branch_ids"] or [])
+                branch_ids = [b for b in branch_ids if b in allowed]
+            if scope["brand_ids"] is not None:
+                allowed_branches = set(Branch.objects.filter(brand_id__in=(scope["brand_ids"] or [])).values_list("id", flat=True))
+                branch_ids = [b for b in branch_ids if b in allowed_branches]
 
         dt = None
         if date_str:

@@ -25,6 +25,7 @@ import {
   uploadExcel,
   batchUploadExcel,
   fetchUploadAnalytics,
+  fetchUploadStatus,
   fetchBrands,
   fetchBranches,
   logActivity,
@@ -74,6 +75,7 @@ export default function SmartUploadPage() {
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadId, setUploadId] = useState<number | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<{ pct: number; message: string } | null>(null);
   const [analytics, setAnalytics] = useState<UploadAnalytics | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -237,6 +239,7 @@ export default function SmartUploadPage() {
     }
     setUploading(true);
     setError(null);
+    setUploadProgress(null);
     try {
       const result = await uploadExcel({
         file,
@@ -246,6 +249,44 @@ export default function SmartUploadPage() {
         branch_id: selectedBranchId,
       });
       setUploadId(result.id);
+      if (result.status === "processing") {
+        setUploadProgress({ pct: result.progress_pct ?? 0, message: result.progress_message ?? "" });
+        const poll = async (): Promise<void> => {
+          const key = result.uuid ?? result.id;
+          const status = await fetchUploadStatus(key);
+          setUploadProgress({ pct: status.progress_pct ?? 0, message: status.progress_message ?? "" });
+          if (status.status === "processed") {
+            const msg =
+              reportType === "product_sales"
+                ? t("productSalesSuccess")
+                : reportType === "payments_report"
+                  ? t("paymentsReportSuccess")
+                  : t("styledHeaderToast");
+            addToast(t("uploadSuccess"), msg);
+            logActivity({
+              action_type: "file_upload",
+              page_path: "/admin-hub/smart-upload",
+              file_name: file?.name ?? "",
+              description: `رفع ${reportType} - ${file?.name ?? ""}`,
+            });
+            window.dispatchEvent(new CustomEvent("smart-ops-dashboard-refresh"));
+            const analyticsData = await fetchUploadAnalytics(key);
+            setAnalytics(analyticsData);
+            setUploading(false);
+            setUploadProgress(null);
+            return;
+          }
+          if (status.status === "failed") {
+            setError(status.error_message ?? "Upload failed");
+            setUploading(false);
+            setUploadProgress(null);
+            return;
+          }
+          setTimeout(poll, 1500);
+        };
+        setTimeout(poll, 1500);
+        return;
+      }
       const msg =
         reportType === "product_sales"
           ? t("productSalesSuccess")
@@ -260,13 +301,14 @@ export default function SmartUploadPage() {
         description: `رفع ${reportType} - ${file?.name ?? ""}`,
       });
       window.dispatchEvent(new CustomEvent("smart-ops-dashboard-refresh"));
-      const analyticsData = await fetchUploadAnalytics(result.id);
+      const analyticsData = await fetchUploadAnalytics(result.uuid ?? result.id);
       setAnalytics(analyticsData);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err || "Upload failed");
       setError(msg);
     } finally {
       setUploading(false);
+      setUploadProgress(null);
     }
   };
 
@@ -732,6 +774,17 @@ export default function SmartUploadPage() {
                   ))}
                 </select>
               </div>
+              {uploadProgress && (
+                <div className="flex flex-1 flex-col gap-2">
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-white/10">
+                    <div
+                      className="h-full rounded-full bg-[#7c3aed] transition-all duration-300"
+                      style={{ width: `${uploadProgress.pct}%` }}
+                    />
+                  </div>
+                  <span className="text-xs text-white/70">{uploadProgress.message || "جاري المعالجة…"}</span>
+                </div>
+              )}
               <button
                 type="button"
                 onClick={handleConfirm}

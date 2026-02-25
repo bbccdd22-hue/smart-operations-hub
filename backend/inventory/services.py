@@ -31,6 +31,9 @@ class IngredientRequirement:
     """Exact required qty in base unit for display (e.g. 1080g)"""
     exact_required: str | None = None
     exact_unit_label: str | None = None
+    """الوحدة الافتراضية: النص المعروض في التقارير حسب إعداد الصنف"""
+    primary_display_ar: str | None = None
+    primary_display_en: str | None = None
 
 
 def _round_workable(val: Decimal) -> str:
@@ -115,18 +118,71 @@ def _to_display_unit(base_qty: Decimal, base_unit: Unit) -> tuple[Decimal, str, 
     return base_qty, base_unit.code, base_unit.name_en or base_unit.code
 
 
+def _explode_product_to_ingredients(
+    product: FoodicsProduct,
+    count: Decimal,
+    agg: dict,
+    meta: dict,
+    visited_products: set,
+) -> None:
+    """
+    تفكيك منتج إلى مكونات خام (مع دعم الوصفات المتداخلة).
+    يُضاف إلى agg و meta مباشرة.
+    """
+    if product.id in visited_products:
+        return
+    visited_products.add(product.id)
+
+    recipe = Recipe.objects.filter(product=product).select_related("yield_unit").first()
+    if not recipe:
+        visited_products.discard(product.id)
+        return
+
+    yield_qty = recipe.yield_qty if recipe.yield_qty and recipe.yield_qty > 0 else Decimal("1")
+    lines = (
+        RecipeLine.objects.filter(recipe=recipe)
+        .select_related("ingredient", "ingredient__base_unit", "ingredient__linked_product", "ingredient__linked_product__recipe", "ingredient__linked_product__recipe__yield_unit", "unit")
+        .all()
+    )
+    for line in lines:
+        ing = line.ingredient
+        base_unit = ing.base_unit
+        qty_per_product = line.qty / yield_qty
+        total_for_product = qty_per_product * count
+
+        # وصفة فرعية (نصف مصنع): المكوّن مرتبط بمنتج له وصفة – تفكيك هرمي
+        if ing.linked_product_id and ing.linked_product:
+            sub_product = ing.linked_product
+            sub_recipe = getattr(sub_product, "recipe", None)
+            sub_yield_unit = sub_recipe.yield_unit if sub_recipe else (line.unit or base_unit)
+            sub_count = _to_base_qty(line.unit, total_for_product, sub_yield_unit) if line.unit else total_for_product
+            _explode_product_to_ingredients(sub_product, sub_count, agg, meta, visited_products)
+        else:
+            # مكوّن خام
+            base_qty = _to_base_qty(line.unit, total_for_product, base_unit)
+            agg[line.ingredient_id] += base_qty
+            meta[line.ingredient_id] = (
+                ing.name_en,
+                ing.name_ar or "",
+                ing.serial_code or "",
+                base_unit,
+                ing,
+            )
+    visited_products.discard(product.id)
+
+
 def explode_recipe_requirements(expected_sales: dict[str, int]) -> list[IngredientRequirement]:
     """
     Given expected sales as a mapping of Foodics product SKU -> expected count,
     return an aggregated list of raw material requirements.
     Sums (Ingredient Qty * Forecasted Product Qty) for all products, aggregated by ingredient.
+    يدعم الوصفات المتداخلة: مكوّن مرتبط بمنتج (linked_product) يُفكك إلى مكونات خام.
     SKU lookup is case-insensitive to match 'sku-0108', 'SKU-0108', etc.
     """
     if not expected_sales:
         return []
 
     sku_keys = [k.strip() for k in expected_sales.keys() if k and str(k).strip()]
-    # Case-insensitive match via foodics_product_id__iexact (product SKU)
     products_by_lower: dict[str, FoodicsProduct] = {}
     if sku_keys:
         q_filters = Q()
@@ -140,6 +196,7 @@ def explode_recipe_requirements(expected_sales: dict[str, int]) -> list[Ingredie
 
     agg: dict[int, Decimal] = defaultdict(lambda: Decimal("0"))
     meta: dict[int, tuple[str, Unit]] = {}
+    visited: set = set()
 
     for foodics_product_id, count in expected_sales.items():
         if count <= 0:
@@ -148,33 +205,7 @@ def explode_recipe_requirements(expected_sales: dict[str, int]) -> list[Ingredie
         product = products_by_lower.get(key)
         if not product:
             continue
-        recipe = Recipe.objects.filter(product=product).select_related("yield_unit").first()
-        if not recipe:
-            continue
-
-        # Per-product qty: line.qty is per recipe batch, yield_qty = servings per batch
-        yield_qty = recipe.yield_qty if recipe.yield_qty and recipe.yield_qty > 0 else Decimal("1")
-
-        lines = (
-            RecipeLine.objects.filter(recipe=recipe)
-            .select_related("ingredient", "ingredient__base_unit", "unit")
-            .all()
-        )
-        for line in lines:
-            ing = line.ingredient
-            base_unit = ing.base_unit
-            # CRITICAL: (Ingredient Qty per Product) × (Forecasted Qty) = total required
-            qty_per_product = line.qty / yield_qty
-            total_for_product = qty_per_product * Decimal(count)
-            base_qty = _to_base_qty(line.unit, total_for_product, base_unit)
-            agg[line.ingredient_id] += base_qty
-            meta[line.ingredient_id] = (
-                ing.name_en,
-                ing.name_ar or "",
-                ing.serial_code or "",
-                base_unit,
-                ing,
-            )
+        _explode_product_to_ingredients(product, Decimal(count), agg, meta, visited)
 
     out: list[IngredientRequirement] = []
     for ingredient_id, base_qty in agg.items():
@@ -185,6 +216,7 @@ def explode_recipe_requirements(expected_sales: dict[str, int]) -> list[Ingredie
             ing.package_conversion_factor
             and ing.package_conversion_factor > 0
             and (ing.package_name_en or ing.package_name_ar)
+            and getattr(ing, "package_is_active", True)
         ):
             pkg_ar = ing.package_name_ar or ing.package_name_en or "علبة"
             pkg_en = ing.package_name_en or ing.package_name_ar or "package"
@@ -219,6 +251,13 @@ def explode_recipe_requirements(expected_sales: dict[str, int]) -> list[Ingredie
             wk_unit_ar = workable_unit_ar or (base_unit.name_ar or base_unit.name_en or display_code)
             wk_unit_en = workable_unit_en or (display_label or display_code)
         exact_label = base_unit.name_en or base_unit.name_ar or base_unit.code
+        use_package_default = (
+            getattr(ing, "default_display_unit", "base") == "package"
+            and workable_ar is not None
+            and workable_en is not None
+        )
+        primary_ar = workable_ar if use_package_default else f"{_format_exact_qty(base_qty)} {exact_label}"
+        primary_en = workable_en if use_package_default else f"{_format_exact_qty(base_qty)} {exact_label}"
         out.append(
             IngredientRequirement(
                 ingredient_id=ingredient_id,
@@ -237,6 +276,8 @@ def explode_recipe_requirements(expected_sales: dict[str, int]) -> list[Ingredie
                 workable_unit_en=wk_unit_en,
                 exact_required=_format_exact_qty(base_qty),
                 exact_unit_label=exact_label,
+                primary_display_ar=primary_ar,
+                primary_display_en=primary_en,
             )
         )
     out.sort(key=lambda r: (r.ingredient_name, r.unit_code))
@@ -384,6 +425,10 @@ def production_plan_requirements(
             item["exact_required"] = r.exact_required
         if r.exact_unit_label:
             item["exact_unit_label"] = r.exact_unit_label
+        if r.primary_display_ar:
+            item["primary_display_ar"] = r.primary_display_ar
+        if r.primary_display_en:
+            item["primary_display_en"] = r.primary_display_en
         out.append(item)
     return out, products_without_recipe
 

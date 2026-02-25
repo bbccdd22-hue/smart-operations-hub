@@ -1,3 +1,5 @@
+import uuid
+
 from django.db import models
 
 from config.constants import (
@@ -28,7 +30,7 @@ class ExcelUpload(TimestampedModel):
     Raw file archive + basic metadata.
     ETL: Parse once → save to DB models → mark PROCESSED. UI fetches from DB only.
     """
-
+    uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, db_index=True)
     system_code = models.CharField(
         max_length=16, default=SYSTEM_CODE_EXCEL_UPLOAD, db_index=True,
         help_text="ERP hierarchy code",
@@ -43,6 +45,8 @@ class ExcelUpload(TimestampedModel):
     )
     processed_at = models.DateTimeField(null=True, blank=True)
     error_message = models.TextField(blank=True, default="")
+    progress_pct = models.PositiveSmallIntegerField(default=0, help_text="0–100 أثناء المعالجة")
+    progress_message = models.CharField(max_length=200, blank=True, default="")
 
     brand = models.ForeignKey(Brand, on_delete=models.PROTECT, null=True, blank=True)
     branch = models.ForeignKey(Branch, on_delete=models.PROTECT, null=True, blank=True)

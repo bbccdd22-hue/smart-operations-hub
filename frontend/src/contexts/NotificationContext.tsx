@@ -58,10 +58,10 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
     try {
       await markNotificationsRead(ids);
       setNotifications((prev) => prev.filter((n) => !ids.includes(n.id)));
-    } catch {
-      // ignore
+    } catch (err) {
+      addToast(err instanceof Error ? err.message : "فشل في تعليم التنبيهات كمقروءة");
     }
-  }, []);
+  }, [addToast]);
 
   const dismissToast = useCallback((id: number) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
