@@ -552,26 +552,26 @@ export default function ItemFilePage() {
           )}
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-sm text-slate-500 dark:text-slate-400">
+          <span className="hidden sm:inline text-sm text-slate-500 dark:text-slate-400">
             {isRTL ? "بحث حسب" : "Search by"}
           </span>
-          <label className="flex items-center gap-1.5 text-sm">
+          <label className="flex items-center gap-1.5 text-sm cursor-pointer min-h-[44px] px-1">
             <input
               type="radio"
               name="searchBy"
               checked={searchBy === "name"}
               onChange={() => setSearchBy("name")}
-              className="rounded"
+              className="h-4 w-4 accent-emerald-500"
             />
             {isRTL ? "الاسم" : "Name"}
           </label>
-          <label className="flex items-center gap-1.5 text-sm">
+          <label className="flex items-center gap-1.5 text-sm cursor-pointer min-h-[44px] px-1">
             <input
               type="radio"
               name="searchBy"
               checked={searchBy === "serial"}
               onChange={() => setSearchBy("serial")}
-              className="rounded"
+              className="h-4 w-4 accent-emerald-500"
             />
             {isRTL ? "رقم الصنف" : "Serial"}
           </label>
@@ -873,10 +873,10 @@ export default function ItemFilePage() {
                             }
                             disabled={savingDefaultUnit}
                             onClick={() => handleSetDefaultUnit(row.type)}
-                            className="flex w-full cursor-pointer items-center justify-center gap-1 rounded p-1.5 transition hover:bg-slate-100 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="flex w-full cursor-pointer items-center justify-center gap-1 rounded p-2 sm:p-1.5 min-h-[44px] min-w-[44px] transition hover:bg-slate-100 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             <span
-                              className={`inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${
+                              className={`inline-flex h-5 w-5 sm:h-4 sm:w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${
                                 (row.type === "base" && form.default_display_unit === "base") ||
                                 (row.type === "package" && form.default_display_unit === "package")
                                   ? "border-blue-500 bg-blue-500"
@@ -885,7 +885,7 @@ export default function ItemFilePage() {
                             >
                               {((row.type === "base" && form.default_display_unit === "base") ||
                                 (row.type === "package" && form.default_display_unit === "package")) && (
-                                <span className="h-2 w-2 rounded-full bg-white" aria-hidden />
+                                <span className="h-2.5 w-2.5 sm:h-2 sm:w-2 rounded-full bg-white" aria-hidden />
                               )}
                             </span>
                           </button>
@@ -899,7 +899,7 @@ export default function ItemFilePage() {
                                 type="button"
                                 onClick={scrollToPackageConversion}
                                 title={isRTL ? "تعديل" : "Edit"}
-                                className="rounded p-1.5 text-slate-500 hover:bg-slate-200 hover:text-slate-700 dark:hover:bg-slate-600 dark:hover:text-slate-200"
+                                className="rounded p-2 sm:p-1.5 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center text-slate-500 hover:bg-slate-200 hover:text-slate-700 dark:hover:bg-slate-600 dark:hover:text-slate-200"
                               >
                                 <Pencil className="h-4 w-4" />
                               </button>
@@ -909,7 +909,7 @@ export default function ItemFilePage() {
                                   onClick={handleDeletePackage}
                                   disabled={saving}
                                   title={isRTL ? "حذف العبوة" : "Delete package"}
-                                  className="rounded p-1.5 text-red-500 hover:bg-red-500/10 disabled:opacity-50"
+                                  className="rounded p-2 sm:p-1.5 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center text-red-500 hover:bg-red-500/10 disabled:opacity-50"
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </button>
@@ -920,7 +920,7 @@ export default function ItemFilePage() {
                                   onClick={handleDisablePackage}
                                   disabled={saving}
                                   title={isRTL ? "إيقاف العبوة" : "Disable package"}
-                                  className="rounded p-1.5 text-amber-500 hover:bg-amber-500/10 disabled:opacity-50"
+                                  className="rounded p-2 sm:p-1.5 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center text-amber-500 hover:bg-amber-500/10 disabled:opacity-50"
                                 >
                                   <PowerOff className="h-4 w-4" />
                                 </button>
@@ -931,7 +931,7 @@ export default function ItemFilePage() {
                                   onClick={handleEnablePackage}
                                   disabled={saving}
                                   title={isRTL ? "تفعيل العبوة" : "Enable package"}
-                                  className="rounded p-1.5 text-emerald-500 hover:bg-emerald-500/10 disabled:opacity-50"
+                                  className="rounded p-2 sm:p-1.5 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center text-emerald-500 hover:bg-emerald-500/10 disabled:opacity-50"
                                 >
                                   <Power className="h-4 w-4" />
                                 </button>
@@ -954,13 +954,13 @@ export default function ItemFilePage() {
             )}
 
             {/* Action Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-200 bg-slate-50/50 px-6 py-4 dark:border-slate-700 dark:bg-slate-800/30">
-              <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-200 bg-slate-50/50 px-4 sm:px-6 py-4 dark:border-slate-700 dark:bg-slate-800/30">
+              <div className="flex items-center gap-1 sm:gap-2">
                 <button
                   type="button"
                   onClick={() => goTo(0)}
                   disabled={isAddingNew || currentIndex <= 0}
-                  className="rounded-lg p-2 text-slate-500 hover:bg-slate-200 disabled:opacity-40 dark:hover:bg-slate-700"
+                  className="rounded-lg p-2.5 sm:p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-500 hover:bg-slate-200 disabled:opacity-40 dark:hover:bg-slate-700"
                   title={isRTL ? "الأول" : "First"}
                 >
                   <ChevronsLeft className="h-5 w-5" />
@@ -969,19 +969,19 @@ export default function ItemFilePage() {
                   type="button"
                   onClick={() => goTo(currentIndex - 1)}
                   disabled={isAddingNew || currentIndex <= 0}
-                  className="rounded-lg p-2 text-slate-500 hover:bg-slate-200 disabled:opacity-40 dark:hover:bg-slate-700"
+                  className="rounded-lg p-2.5 sm:p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-500 hover:bg-slate-200 disabled:opacity-40 dark:hover:bg-slate-700"
                   title={isRTL ? "السابق" : "Previous"}
                 >
                   <ChevronLeft className="h-5 w-5" />
                 </button>
-                <span className="min-w-[120px] text-center text-sm text-slate-600 dark:text-slate-400">
+                <span className="min-w-[80px] sm:min-w-[120px] text-center text-sm text-slate-600 dark:text-slate-400">
                   {isAddingNew ? (isRTL ? "جديد" : "New") : `${currentIndex + 1} / ${totalCount}`}
                 </span>
                 <button
                   type="button"
                   onClick={() => goTo(currentIndex + 1)}
                   disabled={isAddingNew || currentIndex >= totalCount - 1}
-                  className="rounded-lg p-2 text-slate-500 hover:bg-slate-200 disabled:opacity-40 dark:hover:bg-slate-700"
+                  className="rounded-lg p-2.5 sm:p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-500 hover:bg-slate-200 disabled:opacity-40 dark:hover:bg-slate-700"
                   title={isRTL ? "التالي" : "Next"}
                 >
                   <ChevronRight className="h-5 w-5" />
@@ -990,18 +990,18 @@ export default function ItemFilePage() {
                   type="button"
                   onClick={() => goTo(totalCount - 1)}
                   disabled={isAddingNew || currentIndex >= totalCount - 1}
-                  className="rounded-lg p-2 text-slate-500 hover:bg-slate-200 disabled:opacity-40 dark:hover:bg-slate-700"
+                  className="rounded-lg p-2.5 sm:p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-500 hover:bg-slate-200 disabled:opacity-40 dark:hover:bg-slate-700"
                   title={isRTL ? "الأخير" : "Last"}
                 >
                   <ChevronsRight className="h-5 w-5" />
                 </button>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3">
                 <button
                   type="button"
                   onClick={currentId ? handleSave : handleCreate}
                   disabled={saving}
-                  className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                  className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 sm:py-2 min-h-[44px] text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
                 >
                   <Save className="h-4 w-4" />
                   {saving ? t("saving") : t("save")}
