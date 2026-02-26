@@ -115,7 +115,10 @@ class ShiftClosingCreateView(APIView):
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("You can only close shifts for your assigned branch.")
 
-        branch = Branch.objects.get(id=branch_id)
+        try:
+            branch = Branch.objects.get(id=branch_id)
+        except Branch.DoesNotExist:
+            return Response({"detail": "Branch not found"}, status=status.HTTP_404_NOT_FOUND)
         opened_at = datetime.combine(target_date, datetime.min.time())
 
         shift = Shift.objects.filter(
@@ -243,7 +246,10 @@ class ShiftClosingSubmitView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, pk):
-        closing = ShiftClosing.objects.select_related("shift").get(pk=pk)
+        try:
+            closing = ShiftClosing.objects.select_related("shift").get(pk=pk)
+        except ShiftClosing.DoesNotExist:
+            return Response({"detail": "Shift closing not found"}, status=status.HTTP_404_NOT_FOUND)
         if closing.status == "submitted":
             return Response({"detail": "Already submitted"}, status=400)
         scope = get_user_scope(request.user)
@@ -336,7 +342,10 @@ class ShiftClosingAttachmentListCreateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, closing_pk):
-        closing = ShiftClosing.objects.get(pk=closing_pk)
+        try:
+            closing = ShiftClosing.objects.get(pk=closing_pk)
+        except ShiftClosing.DoesNotExist:
+            return Response({"detail": "Shift closing not found"}, status=status.HTTP_404_NOT_FOUND)
         scope = get_user_scope(request.user)
         can_view = (
             has_financial_auditor_access(request.user)
@@ -351,7 +360,10 @@ class ShiftClosingAttachmentListCreateView(APIView):
         return Response(ser.data)
 
     def post(self, request, closing_pk):
-        closing = ShiftClosing.objects.get(pk=closing_pk)
+        try:
+            closing = ShiftClosing.objects.get(pk=closing_pk)
+        except ShiftClosing.DoesNotExist:
+            return Response({"detail": "Shift closing not found"}, status=status.HTTP_404_NOT_FOUND)
         scope = get_user_scope(request.user)
         if scope["branch_ids"] is not None and closing.shift.branch_id not in (scope["branch_ids"] or []):
             from rest_framework.exceptions import PermissionDenied
@@ -433,7 +445,10 @@ class ShiftClosingAttachmentDestroyView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def delete(self, request, pk):
-        att = ShiftClosingAttachment.objects.select_related("closing__shift").get(pk=pk)
+        try:
+            att = ShiftClosingAttachment.objects.select_related("closing__shift").get(pk=pk)
+        except ShiftClosingAttachment.DoesNotExist:
+            return Response({"detail": "Attachment not found"}, status=status.HTTP_404_NOT_FOUND)
         scope = get_user_scope(request.user)
         if scope["branch_ids"] is not None and att.closing.shift.branch_id not in (scope["branch_ids"] or []):
             from rest_framework.exceptions import PermissionDenied

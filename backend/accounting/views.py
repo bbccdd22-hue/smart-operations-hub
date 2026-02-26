@@ -79,10 +79,19 @@ class DiscrepancyAlertsView(views.APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
-        days = int(request.query_params.get("days", "30"))
+        try:
+            days = int(request.query_params.get("days", "30"))
+        except (TypeError, ValueError):
+            days = 30
         brand = request.query_params.get("brand")
-        min_occurrences = int(request.query_params.get("min_occurrences", "2"))
-        threshold = float(request.query_params.get("threshold", "50"))
+        try:
+            min_occurrences = int(request.query_params.get("min_occurrences", "2"))
+        except (TypeError, ValueError):
+            min_occurrences = 2
+        try:
+            threshold = float(request.query_params.get("threshold", "50"))
+        except (TypeError, ValueError):
+            threshold = 50.0
 
         alerts = get_discrepancy_alerts(
             days=days,
