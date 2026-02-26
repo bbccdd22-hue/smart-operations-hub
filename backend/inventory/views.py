@@ -11,6 +11,7 @@ from inventory.models import (
     BranchStock,
     FoodicsProduct,
     Ingredient,
+    IngredientPackage,
     StockMovement,
     StockTransfer,
     StockTransferLine,
@@ -127,6 +128,16 @@ class IngredientListView(views.APIView):
         out = []
         for ing in qs:
             bu = ing.base_unit
+            pkgs = IngredientPackage.objects.filter(ingredient=ing).order_by("sort_order", "id")
+            packages_data = [{
+                "id": p.id,
+                "name_en": p.name_en,
+                "name_ar": p.name_ar,
+                "conversion_factor": str(p.conversion_factor),
+                "is_active": p.is_active,
+                "is_default": p.is_default,
+                "sort_order": p.sort_order,
+            } for p in pkgs]
             out.append({
                 "id": ing.id,
                 "serial_code": ing.serial_code or "",
@@ -145,6 +156,7 @@ class IngredientListView(views.APIView):
                 "default_display_unit": getattr(ing, "default_display_unit", "base"),
                 "has_transactions": ing.id in all_with_transactions,
                 "unit_cost": str(ing.unit_cost) if ing.unit_cost is not None else None,
+                "packages": packages_data,
             })
         return response.Response(out)
 
@@ -221,6 +233,15 @@ class IngredientDetailView(views.APIView):
             "default_display_unit": getattr(ing, "default_display_unit", "base"),
             "has_transactions": has_transactions,
             "unit_cost": str(ing.unit_cost) if ing.unit_cost is not None else None,
+            "packages": [{
+                "id": p.id,
+                "name_en": p.name_en,
+                "name_ar": p.name_ar,
+                "conversion_factor": str(p.conversion_factor),
+                "is_active": p.is_active,
+                "is_default": p.is_default,
+                "sort_order": p.sort_order,
+            } for p in ing.packages.order_by("sort_order", "id")],
         })
 
     def patch(self, request, pk):
@@ -289,6 +310,111 @@ class IngredientDetailView(views.APIView):
             return response.Response({"detail": "Not found"}, status=404)
         ing.is_active = False
         ing.save()
+        return response.Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class IngredientPackageListCreateView(views.APIView):
+    """قائمة وإنشاء عبوات لصنف معين — يدعم عبوات متعددة."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, ingredient_id):
+        ing = Ingredient.objects.filter(id=ingredient_id).first()
+        if not ing:
+            return response.Response({"detail": "Ingredient not found"}, status=404)
+        pkgs = ing.packages.order_by("sort_order", "id")
+        return response.Response([{
+            "id": p.id,
+            "name_en": p.name_en,
+            "name_ar": p.name_ar,
+            "conversion_factor": str(p.conversion_factor),
+            "is_active": p.is_active,
+            "is_default": p.is_default,
+            "sort_order": p.sort_order,
+        } for p in pkgs])
+
+    def post(self, request, ingredient_id):
+        ing = Ingredient.objects.filter(id=ingredient_id).first()
+        if not ing:
+            return response.Response({"detail": "Ingredient not found"}, status=404)
+        data = request.data
+        name_en = (data.get("name_en") or "").strip()
+        name_ar = (data.get("name_ar") or "").strip()
+        factor = data.get("conversion_factor")
+        if not name_en or not factor:
+            return response.Response(
+                {"detail": "name_en and conversion_factor are required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            factor_val = Decimal(str(factor))
+            if factor_val <= 0:
+                raise ValueError
+        except (Exception,):
+            return response.Response({"detail": "conversion_factor must be a positive number"}, status=400)
+        is_default = bool(data.get("is_default", False))
+        if is_default:
+            ing.packages.update(is_default=False)
+        pkg = IngredientPackage.objects.create(
+            ingredient=ing,
+            name_en=name_en,
+            name_ar=name_ar,
+            conversion_factor=factor_val,
+            is_active=data.get("is_active", True),
+            is_default=is_default,
+            sort_order=data.get("sort_order", 0),
+        )
+        return response.Response({
+            "id": pkg.id,
+            "name_en": pkg.name_en,
+            "name_ar": pkg.name_ar,
+            "conversion_factor": str(pkg.conversion_factor),
+            "is_active": pkg.is_active,
+            "is_default": pkg.is_default,
+            "sort_order": pkg.sort_order,
+        }, status=status.HTTP_201_CREATED)
+
+
+class IngredientPackageDetailView(views.APIView):
+    """تعديل / حذف / تعيين كافتراضي — عبوة صنف."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, ingredient_id, pk):
+        pkg = IngredientPackage.objects.filter(id=pk, ingredient_id=ingredient_id).first()
+        if not pkg:
+            return response.Response({"detail": "Package not found"}, status=404)
+        data = request.data
+        if "name_en" in data:
+            pkg.name_en = (data["name_en"] or "").strip() or pkg.name_en
+        if "name_ar" in data:
+            pkg.name_ar = (data.get("name_ar") or "").strip()
+        if "conversion_factor" in data and data["conversion_factor"]:
+            try:
+                pkg.conversion_factor = Decimal(str(data["conversion_factor"]))
+            except (Exception,):
+                pass
+        if "is_active" in data:
+            pkg.is_active = bool(data["is_active"])
+        if "is_default" in data and data["is_default"]:
+            pkg.ingredient.packages.exclude(id=pkg.id).update(is_default=False)
+            pkg.is_default = True
+        if "sort_order" in data:
+            pkg.sort_order = int(data.get("sort_order", 0))
+        pkg.save()
+        return response.Response({
+            "id": pkg.id,
+            "name_en": pkg.name_en,
+            "name_ar": pkg.name_ar,
+            "conversion_factor": str(pkg.conversion_factor),
+            "is_active": pkg.is_active,
+            "is_default": pkg.is_default,
+            "sort_order": pkg.sort_order,
+        })
+
+    def delete(self, request, ingredient_id, pk):
+        pkg = IngredientPackage.objects.filter(id=pk, ingredient_id=ingredient_id).first()
+        if not pkg:
+            return response.Response({"detail": "Package not found"}, status=404)
+        pkg.delete()
         return response.Response(status=status.HTTP_204_NO_CONTENT)
 
 

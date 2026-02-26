@@ -104,6 +104,31 @@ class Ingredient(TimestampedModel):
         return self.name_en
 
 
+class IngredientPackage(TimestampedModel):
+    """عبوة صنف — يدعم عبوات متعددة لكل صنف (كرتون، علبة، باليت، إلخ)."""
+    ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE, related_name="packages")
+    name_en = models.CharField(max_length=120)
+    name_ar = models.CharField(max_length=120, blank=True, default="")
+    conversion_factor = models.DecimalField(
+        max_digits=18, decimal_places=6,
+        help_text="عدد الوحدات الأساسية في هذه العبوة (مثل: 12 قطعة في الكرتون)",
+    )
+    is_active = models.BooleanField(default=True)
+    is_default = models.BooleanField(
+        default=False, db_index=True,
+        help_text="العبوة الافتراضية التي تظهر في التقارير والمشتريات",
+    )
+    sort_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["sort_order", "id"]
+        verbose_name = "Ingredient Package"
+        verbose_name_plural = "Ingredient Packages"
+
+    def __str__(self) -> str:
+        return f"{self.ingredient.name_en} → {self.name_en} (×{self.conversion_factor})"
+
+
 class FoodicsProduct(TimestampedModel):
     """
     Product (final item sold). From Product Catalog upload or Foodics sync.
