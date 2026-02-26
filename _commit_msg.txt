@@ -1,0 +1,10 @@
+FINAL_STABLE_ITEM_FILE_V2
+
+Multi-package support: replace single-package form with full CRUD table
+(add / edit inline / delete / toggle active / set default per package).
+Backend: IngredientPackage model with is_default, is_active, sort_order.
+Migrations 0018-0021 applied; packages API at /inventory/ingredients/{id}/packages/.
+default_display_unit persisted via PATCH (editable=True, varchar(16)).
+SmartPurchasePage: added Actual Stock column with live purchase recalculation.
+Touch targets: min-h-[44px] min-w-[44px] on all nav/action buttons.
+useEffect syncs form from API on every ingredient change (lines 185-216).

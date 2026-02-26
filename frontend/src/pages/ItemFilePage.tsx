@@ -21,6 +21,9 @@ import {
   Trash2,
   Power,
   PowerOff,
+  Check,
+  X,
+  Star,
 } from "lucide-react";
 import {
   fetchInventoryUnits,
@@ -28,8 +31,12 @@ import {
   fetchIngredientDetail,
   createIngredient,
   updateIngredient,
+  createIngredientPackage,
+  updateIngredientPackage,
+  deleteIngredientPackage,
   type ManageIngredient,
   type InventoryUnit,
+  type IngredientPackageData,
 } from "../lib/api";
 
 const SYSTEM_GROUPS = [
@@ -94,6 +101,14 @@ export default function ItemFilePage() {
     default_display_unit: "base",
     unit_cost: "",
   });
+  /* ── Multi-package state ── */
+  const [pkgs, setPkgs] = useState<IngredientPackageData[]>([]);
+  const [editingPkgId, setEditingPkgId] = useState<number | null>(null);
+  const [editingPkg, setEditingPkg] = useState({ name_en: "", name_ar: "", conversion_factor: "" });
+  const [addingPkg, setAddingPkg] = useState(false);
+  const [newPkg, setNewPkg] = useState({ name_en: "", name_ar: "", conversion_factor: "" });
+  const [pkgSaving, setPkgSaving] = useState(false);
+
   const packageConversionRef = useRef<HTMLDivElement>(null);
   const packageNameEnRef = useRef<HTMLInputElement>(null);
   const skipFormSyncRef = useRef(false);
@@ -191,6 +206,14 @@ export default function ItemFilePage() {
       setDirty(false);
     }
   }, [currentIngredient, units]);
+
+  /* Sync packages when the selected ingredient changes */
+  useEffect(() => {
+    setPkgs(currentIngredient?.packages ?? []);
+    setEditingPkgId(null);
+    setAddingPkg(false);
+    setNewPkg({ name_en: "", name_ar: "", conversion_factor: "" });
+  }, [currentIngredient?.id]);
 
   const showSearchDropdown =
     searchFocused && searchQuery.trim().length > 0;
@@ -507,6 +530,109 @@ export default function ItemFilePage() {
     }
   };
 
+  /* ── Multi-package CRUD ──────────────────────────────────── */
+  const handleAddPkg = async () => {
+    if (!currentId) return;
+    const factor = parseFloat(newPkg.conversion_factor);
+    if (!newPkg.name_en.trim()) { setError(isRTL ? "الاسم الإنجليزي مطلوب" : "English name is required"); return; }
+    if (!factor || factor <= 0)  { setError(isRTL ? "معامل التحويل يجب أن يكون أكبر من صفر" : "Conversion factor must be > 0"); return; }
+    setPkgSaving(true);
+    setError(null);
+    try {
+      const created = await createIngredientPackage(currentId, {
+        name_en: newPkg.name_en.trim(),
+        name_ar: newPkg.name_ar.trim(),
+        conversion_factor: factor,
+        is_default: pkgs.length === 0, // first package is default
+      });
+      setPkgs(prev => [...prev, created]);
+      setAddingPkg(false);
+      setNewPkg({ name_en: "", name_ar: "", conversion_factor: "" });
+      addToast(isRTL ? "تمت إضافة العبوة" : "Package added");
+      loadIngredients();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to add package");
+    } finally {
+      setPkgSaving(false);
+    }
+  };
+
+  const handleSaveEditPkg = async (pkgId: number) => {
+    if (!currentId) return;
+    const factor = parseFloat(editingPkg.conversion_factor);
+    if (!editingPkg.name_en.trim()) { setError(isRTL ? "الاسم الإنجليزي مطلوب" : "English name is required"); return; }
+    if (!factor || factor <= 0)     { setError(isRTL ? "معامل التحويل يجب أن يكون أكبر من صفر" : "Conversion factor must be > 0"); return; }
+    setPkgSaving(true);
+    setError(null);
+    try {
+      const updated = await updateIngredientPackage(currentId, pkgId, {
+        name_en: editingPkg.name_en.trim(),
+        name_ar: editingPkg.name_ar.trim(),
+        conversion_factor: factor,
+      });
+      setPkgs(prev => prev.map(p => p.id === pkgId ? updated : p));
+      setEditingPkgId(null);
+      addToast(isRTL ? "تم تعديل العبوة" : "Package updated");
+      loadIngredients();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update package");
+    } finally {
+      setPkgSaving(false);
+    }
+  };
+
+  const handleDeletePkg = async (pkgId: number) => {
+    if (!currentId) return;
+    if (!window.confirm(isRTL ? "حذف هذه العبوة؟" : "Delete this package?")) return;
+    setPkgSaving(true);
+    setError(null);
+    try {
+      await deleteIngredientPackage(currentId, pkgId);
+      setPkgs(prev => prev.filter(p => p.id !== pkgId));
+      addToast(isRTL ? "تم حذف العبوة" : "Package deleted");
+      loadIngredients();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete package");
+    } finally {
+      setPkgSaving(false);
+    }
+  };
+
+  const handleTogglePkgActive = async (pkgId: number, currentActive: boolean) => {
+    if (!currentId) return;
+    setPkgSaving(true);
+    setError(null);
+    try {
+      const updated = await updateIngredientPackage(currentId, pkgId, { is_active: !currentActive });
+      setPkgs(prev => prev.map(p => p.id === pkgId ? updated : p));
+      loadIngredients();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setPkgSaving(false);
+    }
+  };
+
+  const handleSetDefaultPkg = async (pkgId: number) => {
+    if (!currentId) return;
+    setPkgSaving(true);
+    setError(null);
+    try {
+      const updated = await updateIngredientPackage(currentId, pkgId, { is_default: true });
+      setPkgs(prev => prev.map(p => ({ ...p, is_default: p.id === pkgId })));
+      // Also set ingredient default_display_unit to "package"
+      await updateIngredient(currentId, { default_display_unit: "package" });
+      setForm(f => ({ ...f, default_display_unit: "package" }));
+      addToast(isRTL ? "تم تعيين العبوة كافتراضية" : "Default package set");
+      loadIngredients();
+      return updated;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed");
+    } finally {
+      setPkgSaving(false);
+    }
+  };
+
   if (loading && ingredients.length === 0) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
@@ -798,247 +924,356 @@ export default function ItemFilePage() {
               </div>
             </div>
 
-            {/* Package Conversion */}
+            {/* ═══ عبوات الصنف — Multi-Package Management ═══ */}
             <div
               ref={packageConversionRef}
-              className={`scroll-mt-4 border-b border-slate-200 p-4 sm:p-6 transition-all duration-500 dark:border-slate-700 ${
+              className={`scroll-mt-4 border-b border-slate-200 dark:border-slate-700 transition-all duration-500 ${
                 packageSectionHighlight ? "ring-2 ring-emerald-500 ring-offset-2 dark:ring-offset-slate-900" : ""
               }`}
             >
-              <h3 className="mb-5 text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                {isRTL ? "تحويل العبوة" : "Package Conversion"}
-              </h3>
+              {/* Section header + Add button */}
+              <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700/60 px-4 sm:px-6 py-4">
+                <div className="flex items-center gap-3">
+                  <Package2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400" />
+                  <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                    {isRTL ? "عبوات الصنف" : "Package Units"}
+                  </h3>
+                  {pkgs.length > 0 && (
+                    <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                      {pkgs.length}
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  disabled={!currentId || pkgSaving || addingPkg}
+                  onClick={() => {
+                    setAddingPkg(true);
+                    setNewPkg({ name_en: "", name_ar: "", conversion_factor: "" });
+                    setError(null);
+                  }}
+                  className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Plus className="h-4 w-4" />
+                  {isRTL ? "إضافة عبوة" : "Add Package"}
+                </button>
+              </div>
 
-              {/* Default Display Unit - separated clearly */}
-              <div className="mb-6 rounded-xl border border-slate-100 bg-slate-50/50 p-4 dark:border-slate-700 dark:bg-slate-800/30">
-                <label className="mb-2 block text-xs font-medium text-slate-600 dark:text-slate-300">
-                  {isRTL ? "الوحدة الافتراضية للعرض" : "Default Display Unit"}
-                </label>
-                <p className="mb-3 text-xs text-slate-400 dark:text-slate-500">
-                  {isRTL ? "الوحدة التي تظهر في التقارير والمشتريات الذكية والجرد" : "The unit shown in reports, smart purchases and inventory"}
-                </p>
+              {/* Default Display Unit row */}
+              <div className="flex flex-wrap items-center gap-3 bg-slate-50/60 px-4 sm:px-6 py-3 dark:bg-slate-800/20">
+                <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                  {isRTL ? "الوحدة الافتراضية للعرض:" : "Default display unit:"}
+                </span>
                 <select
                   value={form.default_display_unit}
-                  onChange={(e) => {
-                    void handleSetDefaultUnit(e.target.value as "base" | "package");
-                  }}
+                  onChange={(e) => void handleSetDefaultUnit(e.target.value as "base" | "package")}
                   disabled={savingDefaultUnit}
-                  className="w-full max-w-md rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                  className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-800 focus:border-emerald-400 focus:outline-none dark:border-slate-600 dark:bg-slate-800 dark:text-white"
                 >
                   <option value="base">
-                    {isRTL
-                      ? `الوحدة الأساسية (${baseUnit?.code || "—"})`
-                      : `Base Unit (${baseUnit?.code || "—"})`}
+                    {isRTL ? `الوحدة الأساسية (${baseUnit?.code || "—"})` : `Base Unit (${baseUnit?.code || "—"})`}
                   </option>
-                  <option value="package" disabled={!packageOptionEnabled}>
-                    {packageDefaultLabel}
+                  <option value="package" disabled={pkgs.filter(p => p.is_active).length === 0}>
+                    {isRTL ? "عبوة" : "Package"}
+                    {pkgs.find(p => p.is_default)
+                      ? ` (${pkgs.find(p => p.is_default)!.name_en})`
+                      : ""}
                   </option>
                 </select>
-                {!packageOptionEnabled && (
-                  <p className="mt-2 text-xs text-amber-500 dark:text-amber-400">
-                    {isRTL
-                      ? "لتفعيل خيار العبوة: أدخل معامل تحويل أكبر من صفر وتأكد أن حالة العبوة مفعلة."
-                      : "To enable package default: set conversion factor > 0 and keep package active."}
-                  </p>
-                )}
+                {savingDefaultUnit && <span className="text-xs text-slate-400 animate-pulse">{isRTL ? "جاري الحفظ…" : "Saving…"}</span>}
               </div>
 
-              {/* Conversion formula */}
-              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-                <span className="text-sm text-slate-600 dark:text-slate-400 shrink-0">
-                  {isRTL ? "كل 1" : "Every 1"}
-                </span>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <input
-                    ref={packageNameEnRef}
-                    type="text"
-                    value={form.package_name_en}
-                    onChange={(e) => {
-                      setForm((f) => ({ ...f, package_name_en: e.target.value }));
-                      setDirty(true);
-                    }}
-                    className="w-28 sm:w-24 rounded-lg border border-slate-200 px-3 py-2.5 sm:px-2 sm:py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-                    placeholder="Carton"
-                  />
-                  <span className="text-slate-400">/</span>
-                  <input
-                    type="text"
-                    value={form.package_name_ar}
-                    onChange={(e) => {
-                      setForm((f) => ({ ...f, package_name_ar: e.target.value }));
-                      setDirty(true);
-                    }}
-                    className="w-28 sm:w-24 rounded-lg border border-slate-200 px-3 py-2.5 sm:px-2 sm:py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-                    placeholder="كرتون"
-                    dir="rtl"
-                  />
-                </div>
-                <span className="text-sm text-slate-600 dark:text-slate-400 shrink-0">
-                  {isRTL ? "يحتوي" : "contains"}
-                </span>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    dir="ltr"
-                    value={form.package_conversion_factor}
-                    onChange={(e) => {
-                      const v = normalizeNumericInput(e.target.value).replace(/[^\d.]/g, "");
-                      const parts = v.split(".");
-                      const sanitized = parts.length > 2
-                        ? `${parts[0]}.${parts.slice(1).join("")}`
-                        : v;
-                      setForm((f) => ({ ...f, package_conversion_factor: sanitized }));
-                      setDirty(true);
-                    }}
-                    className="w-24 sm:w-20 rounded-lg border border-slate-200 px-3 py-2.5 sm:px-2 sm:py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-                    placeholder="12"
-                  />
-                  <span className="text-sm text-slate-500 font-medium">
-                    {baseUnit?.code ?? "unit"}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Item Units Grid */}
-            <div className="p-4 sm:p-6">
-              <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                {isRTL ? "عبوات الصنف" : "Item Units"}
-              </h3>
-              <div className="overflow-x-auto -mx-4 sm:mx-0 rounded-xl border border-slate-200 dark:border-slate-700">
-                <table className={`w-full text-sm ${isRTL ? "text-right" : "text-left"}`} style={{ minWidth: 600 }}>
+              {/* Packages table */}
+              <div className="overflow-x-auto px-4 sm:px-6 py-4">
+                <table className="w-full text-sm" style={{ minWidth: 580 }}>
                   <thead>
-                    <tr className="border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/50">
-                      <th className="px-4 py-3 font-medium text-slate-600 dark:text-slate-400">
+                    <tr className="border-b-2 border-slate-200 text-xs dark:border-slate-700">
+                      <th className={`pb-2 font-semibold text-slate-500 dark:text-slate-400 ${isRTL ? "text-right" : "text-left"}`}>
                         {isRTL ? "الاسم" : "Name"}
                       </th>
-                      <th className="px-4 py-3 font-medium text-slate-600 dark:text-slate-400">
-                        {isRTL ? "الكمية" : "Qty"}
+                      <th className={`pb-2 font-semibold text-slate-500 dark:text-slate-400 ${isRTL ? "text-right" : "text-left"}`}>
+                        {isRTL ? "الاسم (عربي)" : "Arabic Name"}
                       </th>
-                      <th className="px-4 py-3 font-medium text-slate-600 dark:text-slate-400">
-                        {isRTL ? "الوحدة" : "Unit"}
+                      <th className="pb-2 text-center font-semibold text-slate-500 dark:text-slate-400">
+                        {isRTL ? "معامل التحويل" : "Conversion"}
                       </th>
-                      <th className="px-4 py-3 font-medium text-slate-600 dark:text-slate-400">
-                        {isRTL ? "عبوة" : "Package"}
+                      <th className="pb-2 text-center font-semibold text-slate-500 dark:text-slate-400">
+                        {isRTL ? "الحالة" : "Status"}
                       </th>
-                      <th className="px-4 py-3 font-medium text-slate-600 dark:text-slate-400">
-                        {isRTL ? "التكلفة" : "Cost"}
-                      </th>
-                      <th className="px-4 py-3 font-medium text-slate-600 dark:text-slate-400">
+                      <th className="pb-2 text-center font-semibold text-slate-500 dark:text-slate-400">
                         {isRTL ? "افتراضي" : "Default"}
                       </th>
-                      <th className="px-4 py-3 font-medium text-slate-600 dark:text-slate-400">
+                      <th className="pb-2 text-center font-semibold text-slate-500 dark:text-slate-400">
                         {isRTL ? "إجراءات" : "Actions"}
                       </th>
                     </tr>
                   </thead>
-                  <tbody>
-                    {unitsGridRows.map((row, i) => (
-                      <tr
-                        key={i}
-                        className={`border-b border-slate-100 last:border-0 dark:border-slate-700 ${row.type === "package" && !packageIsActive ? "opacity-60" : ""}`}
-                      >
-                        <td className="px-4 py-3 text-slate-800 dark:text-white">
-                          <span>{row.name}</span>
-                          {row.isPackage && !packageIsActive && (
-                            <span className="ml-2 rounded bg-amber-500/20 px-2 py-0.5 text-xs text-amber-600 dark:text-amber-400">
-                              {isRTL ? "موقفة" : "Disabled"}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 font-mono">{row.qty}</td>
-                        <td className="px-4 py-3">{row.unitCode}</td>
-                        <td className="px-4 py-3">
-                          {row.isPackage ? (
-                            <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-xs text-emerald-600 dark:text-emerald-400">
-                              ✓
-                            </span>
-                          ) : (
-                            <span className="text-slate-400">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 font-medium">
-                          {row.cost != null ? `${row.cost.toFixed(2)} ر.س` : "—"}
-                        </td>
-                        <td className="px-4 py-3">
-                          <button
-                            type="button"
-                            role="radio"
-                            aria-checked={
-                              (row.type === "base" && form.default_display_unit === "base") ||
-                              (row.type === "package" && form.default_display_unit === "package")
-                            }
-                            disabled={savingDefaultUnit || (row.type === "package" && !packageOptionEnabled)}
-                            onClick={() => handleSetDefaultUnit(row.type)}
-                            className="flex w-full cursor-pointer items-center justify-center gap-1 rounded p-2 sm:p-1.5 min-h-[44px] min-w-[44px] transition hover:bg-slate-100 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-                          >
-                            <span
-                              className={`inline-flex h-5 w-5 sm:h-4 sm:w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${
-                                (row.type === "base" && form.default_display_unit === "base") ||
-                                (row.type === "package" && form.default_display_unit === "package")
-                                  ? "border-blue-500 bg-blue-500"
-                                  : "border-slate-300 dark:border-slate-500"
-                              }`}
-                            >
-                              {((row.type === "base" && form.default_display_unit === "base") ||
-                                (row.type === "package" && form.default_display_unit === "package")) && (
-                                <span className="h-2.5 w-2.5 sm:h-2 sm:w-2 rounded-full bg-white" aria-hidden />
-                              )}
-                            </span>
-                          </button>
-                        </td>
-                        <td className="px-4 py-3">
-                          {row.type === "base" ? (
-                            <span className="text-slate-400">—</span>
-                          ) : (
-                            <div className="flex flex-wrap gap-1">
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-700/60">
+
+                    {/* ── Base unit row (read-only) ── */}
+                    <tr className="bg-blue-50/40 dark:bg-blue-900/10">
+                      <td className="py-3 pe-4 font-medium text-slate-700 dark:text-slate-200">
+                        {baseUnit?.name_en || baseUnit?.code || "—"}
+                      </td>
+                      <td className="py-3 pe-4 text-slate-500 dark:text-slate-400">
+                        {baseUnit?.name_ar || "—"}
+                      </td>
+                      <td className="py-3 text-center font-mono text-slate-600 dark:text-slate-300">1</td>
+                      <td className="py-3 text-center">
+                        <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                          {isRTL ? "نشط" : "Active"}
+                        </span>
+                      </td>
+                      <td className="py-3 text-center">
+                        <button
+                          type="button"
+                          disabled={savingDefaultUnit}
+                          onClick={() => void handleSetDefaultUnit("base")}
+                          className="inline-flex h-5 w-5 items-center justify-center rounded-full border-2 transition disabled:opacity-50"
+                          style={{
+                            borderColor: form.default_display_unit === "base" ? "#3b82f6" : "#cbd5e1",
+                            background: form.default_display_unit === "base" ? "#3b82f6" : "transparent",
+                          }}
+                          title={isRTL ? "تعيين كافتراضي" : "Set as default"}
+                        >
+                          {form.default_display_unit === "base" && <span className="h-2 w-2 rounded-full bg-white" />}
+                        </button>
+                      </td>
+                      <td className="py-3 text-center text-slate-400">—</td>
+                    </tr>
+
+                    {/* ── Existing package rows ── */}
+                    {pkgs.map(pkg => (
+                      editingPkgId === pkg.id ? (
+                        /* Edit mode row */
+                        <tr key={pkg.id} className="bg-amber-50/40 dark:bg-amber-900/10">
+                          <td className="py-2 pe-3">
+                            <input
+                              type="text"
+                              value={editingPkg.name_en}
+                              onChange={e => setEditingPkg(p => ({ ...p, name_en: e.target.value }))}
+                              className="w-full rounded-lg border border-amber-300 bg-white px-2 py-1.5 text-sm dark:border-amber-600 dark:bg-slate-800 dark:text-white"
+                              placeholder="Carton"
+                              autoFocus
+                            />
+                          </td>
+                          <td className="py-2 pe-3">
+                            <input
+                              type="text"
+                              value={editingPkg.name_ar}
+                              onChange={e => setEditingPkg(p => ({ ...p, name_ar: e.target.value }))}
+                              dir="rtl"
+                              className="w-full rounded-lg border border-amber-300 bg-white px-2 py-1.5 text-sm dark:border-amber-600 dark:bg-slate-800 dark:text-white"
+                              placeholder="كرتون"
+                            />
+                          </td>
+                          <td className="py-2 pe-3">
+                            <div className="flex items-center justify-center gap-1.5">
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                dir="ltr"
+                                value={editingPkg.conversion_factor}
+                                onChange={e => {
+                                  const v = normalizeNumericInput(e.target.value).replace(/[^\d.]/g, "");
+                                  const parts = v.split(".");
+                                  setEditingPkg(p => ({ ...p, conversion_factor: parts.length > 2 ? `${parts[0]}.${parts.slice(1).join("")}` : v }));
+                                }}
+                                className="w-20 rounded-lg border border-amber-300 bg-white px-2 py-1.5 text-center text-sm font-mono dark:border-amber-600 dark:bg-slate-800 dark:text-white"
+                                placeholder="12"
+                              />
+                              <span className="text-xs text-slate-500">{baseUnit?.code}</span>
+                            </div>
+                          </td>
+                          <td className="py-2 text-center text-xs text-slate-400">—</td>
+                          <td className="py-2 text-center text-xs text-slate-400">—</td>
+                          <td className="py-2">
+                            <div className="flex items-center justify-center gap-1">
                               <button
                                 type="button"
-                                onClick={scrollToPackageConversion}
+                                onClick={() => void handleSaveEditPkg(pkg.id)}
+                                disabled={pkgSaving}
+                                title={isRTL ? "حفظ" : "Save"}
+                                className="rounded-lg bg-emerald-600 p-1.5 text-white hover:bg-emerald-700 disabled:opacity-50"
+                              >
+                                {pkgSaving ? <span className="block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <Check className="h-4 w-4" />}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setEditingPkgId(null)}
+                                title={isRTL ? "إلغاء" : "Cancel"}
+                                className="rounded-lg border border-slate-300 p-1.5 text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:hover:bg-slate-700"
+                              >
+                                <X className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
+                        /* Display mode row */
+                        <tr key={pkg.id} className={`transition-colors hover:bg-slate-50/60 dark:hover:bg-slate-800/30 ${!pkg.is_active ? "opacity-50" : ""}`}>
+                          <td className="py-3 pe-4 font-medium text-slate-800 dark:text-white">
+                            {pkg.name_en}
+                            {pkg.is_default && (
+                              <Star className="ms-1.5 inline h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                            )}
+                          </td>
+                          <td className="py-3 pe-4 text-slate-500 dark:text-slate-400">
+                            {pkg.name_ar || "—"}
+                          </td>
+                          <td className="py-3 text-center font-mono text-slate-700 dark:text-slate-200">
+                            {parseFloat(pkg.conversion_factor).toLocaleString()}
+                            <span className="ms-1 text-xs text-slate-400">{baseUnit?.code}</span>
+                          </td>
+                          <td className="py-3 text-center">
+                            {pkg.is_active ? (
+                              <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                                {isRTL ? "نشط" : "Active"}
+                              </span>
+                            ) : (
+                              <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500 dark:bg-slate-700 dark:text-slate-400">
+                                {isRTL ? "موقف" : "Inactive"}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3 text-center">
+                            <button
+                              type="button"
+                              disabled={pkgSaving || pkg.is_default}
+                              onClick={() => void handleSetDefaultPkg(pkg.id)}
+                              title={pkg.is_default ? (isRTL ? "هذه العبوة الافتراضية" : "This is the default") : (isRTL ? "تعيين كافتراضي" : "Set as default")}
+                              className="inline-flex h-5 w-5 items-center justify-center rounded-full border-2 transition disabled:cursor-default"
+                              style={{
+                                borderColor: pkg.is_default ? "#3b82f6" : "#cbd5e1",
+                                background: pkg.is_default ? "#3b82f6" : "transparent",
+                              }}
+                            >
+                              {pkg.is_default && <span className="h-2 w-2 rounded-full bg-white" />}
+                            </button>
+                          </td>
+                          <td className="py-3">
+                            <div className="flex items-center justify-center gap-1">
+                              {/* Edit */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingPkgId(pkg.id);
+                                  setEditingPkg({ name_en: pkg.name_en, name_ar: pkg.name_ar, conversion_factor: pkg.conversion_factor });
+                                }}
                                 title={isRTL ? "تعديل" : "Edit"}
-                                className="rounded p-1.5 text-slate-500 hover:bg-slate-200 hover:text-slate-700 dark:hover:bg-slate-600 dark:hover:text-slate-200"
+                                className="rounded p-1.5 text-slate-500 hover:bg-slate-200 hover:text-slate-700 dark:hover:bg-slate-600"
                               >
                                 <Pencil className="h-4 w-4" />
                               </button>
-                              {!hasTransactions && (
-                                <button
-                                  type="button"
-                                  onClick={handleDeletePackage}
-                                  disabled={saving}
-                                  title={isRTL ? "حذف العبوة" : "Delete package"}
-                                  className="rounded p-1.5 text-red-500 hover:bg-red-500/10 disabled:opacity-50"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                              )}
-                              {hasTransactions && packageIsActive && (
-                                <button
-                                  type="button"
-                                  onClick={handleDisablePackage}
-                                  disabled={saving}
-                                  title={isRTL ? "إيقاف العبوة" : "Disable package"}
-                                  className="rounded p-1.5 text-amber-500 hover:bg-amber-500/10 disabled:opacity-50"
-                                >
-                                  <PowerOff className="h-4 w-4" />
-                                </button>
-                              )}
-                              {hasTransactions && !packageIsActive && (
-                                <button
-                                  type="button"
-                                  onClick={handleEnablePackage}
-                                  disabled={saving}
-                                  title={isRTL ? "تفعيل العبوة" : "Enable package"}
-                                  className="rounded p-1.5 text-emerald-500 hover:bg-emerald-500/10 disabled:opacity-50"
-                                >
-                                  <Power className="h-4 w-4" />
-                                </button>
-                              )}
+                              {/* Toggle active */}
+                              <button
+                                type="button"
+                                disabled={pkgSaving}
+                                onClick={() => void handleTogglePkgActive(pkg.id, pkg.is_active)}
+                                title={pkg.is_active ? (isRTL ? "إيقاف" : "Disable") : (isRTL ? "تفعيل" : "Enable")}
+                                className={`rounded p-1.5 disabled:opacity-50 ${pkg.is_active ? "text-amber-500 hover:bg-amber-500/10" : "text-emerald-500 hover:bg-emerald-500/10"}`}
+                              >
+                                {pkg.is_active ? <PowerOff className="h-4 w-4" /> : <Power className="h-4 w-4" />}
+                              </button>
+                              {/* Delete */}
+                              <button
+                                type="button"
+                                disabled={pkgSaving}
+                                onClick={() => void handleDeletePkg(pkg.id)}
+                                title={isRTL ? "حذف" : "Delete"}
+                                className="rounded p-1.5 text-red-500 hover:bg-red-500/10 disabled:opacity-50"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
                             </div>
-                          )}
+                          </td>
+                        </tr>
+                      )
+                    ))}
+
+                    {/* ── New package form row ── */}
+                    {addingPkg && (
+                      <tr className="bg-emerald-50/40 dark:bg-emerald-900/10">
+                        <td className="py-2 pe-3">
+                          <input
+                            type="text"
+                            value={newPkg.name_en}
+                            onChange={e => setNewPkg(p => ({ ...p, name_en: e.target.value }))}
+                            className="w-full rounded-lg border border-emerald-300 bg-white px-2 py-1.5 text-sm placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none dark:border-emerald-600 dark:bg-slate-800 dark:text-white"
+                            placeholder="Carton"
+                            autoFocus
+                          />
+                        </td>
+                        <td className="py-2 pe-3">
+                          <input
+                            type="text"
+                            value={newPkg.name_ar}
+                            onChange={e => setNewPkg(p => ({ ...p, name_ar: e.target.value }))}
+                            dir="rtl"
+                            className="w-full rounded-lg border border-emerald-300 bg-white px-2 py-1.5 text-sm placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none dark:border-emerald-600 dark:bg-slate-800 dark:text-white"
+                            placeholder="كرتون"
+                          />
+                        </td>
+                        <td className="py-2 pe-3">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              dir="ltr"
+                              value={newPkg.conversion_factor}
+                              onChange={e => {
+                                const v = normalizeNumericInput(e.target.value).replace(/[^\d.]/g, "");
+                                const parts = v.split(".");
+                                setNewPkg(p => ({ ...p, conversion_factor: parts.length > 2 ? `${parts[0]}.${parts.slice(1).join("")}` : v }));
+                              }}
+                              className="w-20 rounded-lg border border-emerald-300 bg-white px-2 py-1.5 text-center text-sm font-mono placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none dark:border-emerald-600 dark:bg-slate-800 dark:text-white"
+                              placeholder="12"
+                            />
+                            <span className="text-xs text-slate-500">{baseUnit?.code}</span>
+                          </div>
+                        </td>
+                        <td className="py-2 text-center text-xs text-slate-400">—</td>
+                        <td className="py-2 text-center text-xs text-slate-400">—</td>
+                        <td className="py-2">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => void handleAddPkg()}
+                              disabled={pkgSaving}
+                              title={isRTL ? "حفظ" : "Save"}
+                              className="rounded-lg bg-emerald-600 p-1.5 text-white hover:bg-emerald-700 disabled:opacity-50"
+                            >
+                              {pkgSaving ? <span className="block h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" /> : <Check className="h-4 w-4" />}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => { setAddingPkg(false); setNewPkg({ name_en: "", name_ar: "", conversion_factor: "" }); }}
+                              title={isRTL ? "إلغاء" : "Cancel"}
+                              className="rounded-lg border border-slate-300 p-1.5 text-slate-600 hover:bg-slate-100 dark:border-slate-600 dark:hover:bg-slate-700"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
-                    ))}
+                    )}
+
+                    {/* ── Empty state ── */}
+                    {pkgs.length === 0 && !addingPkg && (
+                      <tr>
+                        <td colSpan={6} className="py-8 text-center">
+                          <Package2 className="mx-auto mb-2 h-10 w-10 text-slate-200 dark:text-slate-700" />
+                          <p className="text-sm text-slate-400 dark:text-slate-500">
+                            {isRTL ? "لا توجد عبوات بعد" : "No packages yet"}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-400 dark:text-slate-500">
+                            {isRTL
+                              ? "اضغط «إضافة عبوة» لإضافة كرتون أو علبة أو أي وحدة تعبئة"
+                              : "Click «Add Package» to add a carton, box, or any packaging unit"}
+                          </p>
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
               </div>
