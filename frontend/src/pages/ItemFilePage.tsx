@@ -520,11 +520,11 @@ export default function ItemFilePage() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-8rem)] space-y-4">
+    <div className="min-h-[calc(100vh-8rem)] space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-800 dark:text-white">
+          <h1 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white">
             {isRTL ? "ملف الأصناف" : "Item File"}
           </h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
@@ -533,15 +533,15 @@ export default function ItemFilePage() {
         </div>
         <Link
           to="/inventory/manage-ingredients"
-          className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
+          className="rounded-lg bg-slate-200 px-4 py-2.5 min-h-[44px] flex items-center text-sm font-medium text-slate-700 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
         >
           {t("back")}
         </Link>
       </div>
 
       {/* Search & Sort Bar */}
-      <div className={`float-card flex flex-wrap items-center gap-4 rounded-2xl p-4 ${showSearchDropdown ? "relative z-[9999]" : ""}`}>
-        <div ref={searchContainerRef} className="relative flex flex-1 min-w-[280px] flex-col">
+      <div className={`float-card flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 sm:gap-4 rounded-2xl p-3 sm:p-4 ${showSearchDropdown ? "relative z-[9999]" : ""}`}>
+        <div ref={searchContainerRef} className="relative flex flex-1 min-w-0 sm:min-w-[280px] flex-col">
           <div className="flex items-center gap-2">
             <Search className="h-5 w-5 shrink-0 text-slate-400" />
             <input
@@ -606,27 +606,27 @@ export default function ItemFilePage() {
             </div>
           )}
         </div>
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-slate-500 dark:text-slate-400">
+        <div className="flex items-center gap-2 sm:gap-3">
+          <span className="hidden sm:inline text-sm text-slate-500 dark:text-slate-400">
             {isRTL ? "بحث حسب" : "Search by"}
           </span>
-          <label className="flex items-center gap-1.5 text-sm">
+          <label className="flex items-center gap-1.5 text-sm cursor-pointer min-h-[44px] px-1">
             <input
               type="radio"
               name="searchBy"
               checked={searchBy === "name"}
               onChange={() => setSearchBy("name")}
-              className="rounded"
+              className="h-4 w-4 accent-emerald-500"
             />
             {isRTL ? "الاسم" : "Name"}
           </label>
-          <label className="flex items-center gap-1.5 text-sm">
+          <label className="flex items-center gap-1.5 text-sm cursor-pointer min-h-[44px] px-1">
             <input
               type="radio"
               name="searchBy"
               checked={searchBy === "serial"}
               onChange={() => setSearchBy("serial")}
-              className="rounded"
+              className="h-4 w-4 accent-emerald-500"
             />
             {isRTL ? "رقم الصنف" : "Serial"}
           </label>
@@ -676,13 +676,13 @@ export default function ItemFilePage() {
         <div className="space-y-6">
           <div className="float-card overflow-hidden rounded-2xl">
             {/* Identification & Categorization */}
-            <div className="grid gap-6 border-b border-slate-200 p-6 dark:border-slate-700 lg:grid-cols-2">
-              <div className="space-y-4">
+            <div className="grid gap-x-8 gap-y-6 border-b border-slate-200 p-4 sm:p-6 dark:border-slate-700 md:grid-cols-2">
+              <div className="space-y-5">
                 <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   {isRTL ? "بيانات التعريف" : "Identification"}
                 </h3>
                 <div>
-                  <label className="mb-1 block text-xs text-slate-500">
+                  <label className="mb-1.5 block text-xs font-medium text-slate-500 dark:text-slate-400">
                     {isRTL ? "اسم الصنف" : "Item Name"} (EN)
                   </label>
                   <input
@@ -692,12 +692,12 @@ export default function ItemFilePage() {
                       setForm((f) => ({ ...f, name_en: e.target.value }));
                       setDirty(true);
                     }}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
                     placeholder="e.g. Whole Milk"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs text-slate-500">
+                  <label className="mb-1.5 block text-xs font-medium text-slate-500 dark:text-slate-400">
                     {isRTL ? "اسم الصنف" : "Item Name"} (AR)
                   </label>
                   <input
@@ -707,13 +707,13 @@ export default function ItemFilePage() {
                       setForm((f) => ({ ...f, name_ar: e.target.value }));
                       setDirty(true);
                     }}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
                     placeholder="حليب كامل الدسم"
                     dir="rtl"
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs text-slate-500">
+                  <label className="mb-1.5 block text-xs font-medium text-slate-500 dark:text-slate-400">
                     {isRTL ? "رقم الصنف / الرمز" : "Serial Code"}
                   </label>
                   <input
@@ -723,17 +723,17 @@ export default function ItemFilePage() {
                       setForm((f) => ({ ...f, serial_code: e.target.value }));
                       setDirty(true);
                     }}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm font-mono text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
                     placeholder="RM-001"
                   />
                 </div>
               </div>
-              <div className="space-y-4">
+              <div className="space-y-5">
                 <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   {isRTL ? "التصنيف والشراء" : "Category & Purchase"}
                 </h3>
                 <div>
-                  <label className="mb-1 block text-xs text-slate-500">
+                  <label className="mb-1.5 block text-xs font-medium text-slate-500 dark:text-slate-400">
                     {isRTL ? "مجموعة النظام" : "System Group"}
                   </label>
                   <select
@@ -742,7 +742,7 @@ export default function ItemFilePage() {
                       setForm((f) => ({ ...f, system_group: e.target.value as typeof form.system_group }));
                       setDirty(true);
                     }}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
                   >
                     {SYSTEM_GROUPS.map((g) => (
                       <option key={g.value} value={g.value}>
@@ -752,7 +752,7 @@ export default function ItemFilePage() {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs text-slate-500">
+                  <label className="mb-1.5 block text-xs font-medium text-slate-500 dark:text-slate-400">
                     {isRTL ? "الوحدة الرئيسية" : "Base Unit"}
                   </label>
                   <select
@@ -761,7 +761,7 @@ export default function ItemFilePage() {
                       setForm((f) => ({ ...f, base_unit_id: Number(e.target.value) }));
                       setDirty(true);
                     }}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
                   >
                     {units.map((u) => (
                       <option key={u.id} value={u.id}>
@@ -771,7 +771,7 @@ export default function ItemFilePage() {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs text-slate-500">
+                  <label className="mb-1.5 block text-xs font-medium text-slate-500 dark:text-slate-400">
                     {isRTL ? "تكلفة الوحدة (ر.س)" : "Unit Cost (SAR)"}
                   </label>
                   <input
@@ -788,9 +788,16 @@ export default function ItemFilePage() {
                       setForm((f) => ({ ...f, unit_cost: sanitized }));
                       setDirty(true);
                     }}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
                     placeholder="0.00"
                   />
+                  {factor > 0 && unitCost != null && (
+                    <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
+                      {isRTL ? "تكلفة العبوة = الوحدة × معامل التحويل" : "Package cost = Unit × Factor"}
+                      {" = "}
+                      <span className="font-semibold text-slate-600 dark:text-slate-300">{(unitCost * factor).toFixed(2)} {isRTL ? "ر.س" : "SAR"}</span>
+                    </p>
+                  )}
                 </div>
               </div>
             </div>
@@ -798,24 +805,29 @@ export default function ItemFilePage() {
             {/* Package Conversion */}
             <div
               ref={packageConversionRef}
-              className={`scroll-mt-4 border-b border-slate-200 p-6 transition-all duration-500 dark:border-slate-700 ${
+              className={`scroll-mt-4 border-b border-slate-200 p-4 sm:p-6 transition-all duration-500 dark:border-slate-700 ${
                 packageSectionHighlight ? "ring-2 ring-emerald-500 ring-offset-2 dark:ring-offset-slate-900" : ""
               }`}
             >
-              <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+              <h3 className="mb-5 text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 {isRTL ? "تحويل العبوة" : "Package Conversion"}
               </h3>
-              <div className="mb-4 max-w-md">
-                <label className="mb-1 block text-xs text-slate-500">
+
+              {/* Default Display Unit - separated clearly */}
+              <div className="mb-6 rounded-xl border border-slate-100 bg-slate-50/50 p-4 dark:border-slate-700 dark:bg-slate-800/30">
+                <label className="mb-2 block text-xs font-medium text-slate-600 dark:text-slate-300">
                   {isRTL ? "الوحدة الافتراضية للعرض" : "Default Display Unit"}
                 </label>
+                <p className="mb-3 text-xs text-slate-400 dark:text-slate-500">
+                  {isRTL ? "الوحدة التي تظهر في التقارير والمشتريات الذكية والجرد" : "The unit shown in reports, smart purchases and inventory"}
+                </p>
                 <select
                   value={form.default_display_unit}
                   onChange={(e) => {
                     void handleSetDefaultUnit(e.target.value as "base" | "package");
                   }}
                   disabled={savingDefaultUnit}
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                  className="w-full max-w-md rounded-lg border border-slate-200 px-3 py-2.5 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
                 >
                   <option value="base">
                     {isRTL
@@ -827,73 +839,79 @@ export default function ItemFilePage() {
                   </option>
                 </select>
                 {!packageOptionEnabled && (
-                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  <p className="mt-2 text-xs text-amber-500 dark:text-amber-400">
                     {isRTL
                       ? "لتفعيل خيار العبوة: أدخل معامل تحويل أكبر من صفر وتأكد أن حالة العبوة مفعلة."
                       : "To enable package default: set conversion factor > 0 and keep package active."}
                   </p>
                 )}
               </div>
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="text-slate-600 dark:text-slate-400">
+
+              {/* Conversion formula */}
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+                <span className="text-sm text-slate-600 dark:text-slate-400 shrink-0">
                   {isRTL ? "كل 1" : "Every 1"}
                 </span>
-                <input
-                  ref={packageNameEnRef}
-                  type="text"
-                  value={form.package_name_en}
-                  onChange={(e) => {
-                    setForm((f) => ({ ...f, package_name_en: e.target.value }));
-                    setDirty(true);
-                  }}
-                  className="w-24 rounded-lg border border-slate-200 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-                  placeholder="Carton"
-                />
-                <span className="text-slate-400">/</span>
-                <input
-                  type="text"
-                  value={form.package_name_ar}
-                  onChange={(e) => {
-                    setForm((f) => ({ ...f, package_name_ar: e.target.value }));
-                    setDirty(true);
-                  }}
-                  className="w-24 rounded-lg border border-slate-200 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-                  placeholder="كرتون"
-                  dir="rtl"
-                />
-                <span className="text-slate-600 dark:text-slate-400">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <input
+                    ref={packageNameEnRef}
+                    type="text"
+                    value={form.package_name_en}
+                    onChange={(e) => {
+                      setForm((f) => ({ ...f, package_name_en: e.target.value }));
+                      setDirty(true);
+                    }}
+                    className="w-28 sm:w-24 rounded-lg border border-slate-200 px-3 py-2.5 sm:px-2 sm:py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                    placeholder="Carton"
+                  />
+                  <span className="text-slate-400">/</span>
+                  <input
+                    type="text"
+                    value={form.package_name_ar}
+                    onChange={(e) => {
+                      setForm((f) => ({ ...f, package_name_ar: e.target.value }));
+                      setDirty(true);
+                    }}
+                    className="w-28 sm:w-24 rounded-lg border border-slate-200 px-3 py-2.5 sm:px-2 sm:py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                    placeholder="كرتون"
+                    dir="rtl"
+                  />
+                </div>
+                <span className="text-sm text-slate-600 dark:text-slate-400 shrink-0">
                   {isRTL ? "يحتوي" : "contains"}
                 </span>
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  dir="ltr"
-                  value={form.package_conversion_factor}
-                  onChange={(e) => {
-                    const v = normalizeNumericInput(e.target.value).replace(/[^\d.]/g, "");
-                    const parts = v.split(".");
-                    const sanitized = parts.length > 2
-                      ? `${parts[0]}.${parts.slice(1).join("")}`
-                      : v;
-                    setForm((f) => ({ ...f, package_conversion_factor: sanitized }));
-                    setDirty(true);
-                  }}
-                  className="w-20 rounded-lg border border-slate-200 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-                  placeholder="12"
-                />
-                <span className="text-slate-500 font-medium">
-                  {baseUnit?.code ?? "unit"}
-                </span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    dir="ltr"
+                    value={form.package_conversion_factor}
+                    onChange={(e) => {
+                      const v = normalizeNumericInput(e.target.value).replace(/[^\d.]/g, "");
+                      const parts = v.split(".");
+                      const sanitized = parts.length > 2
+                        ? `${parts[0]}.${parts.slice(1).join("")}`
+                        : v;
+                      setForm((f) => ({ ...f, package_conversion_factor: sanitized }));
+                      setDirty(true);
+                    }}
+                    className="w-24 sm:w-20 rounded-lg border border-slate-200 px-3 py-2.5 sm:px-2 sm:py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                    placeholder="12"
+                  />
+                  <span className="text-sm text-slate-500 font-medium">
+                    {baseUnit?.code ?? "unit"}
+                  </span>
+                </div>
               </div>
             </div>
 
             {/* Item Units Grid */}
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 {isRTL ? "عبوات الصنف" : "Item Units"}
               </h3>
-              <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
-                <table className="w-full text-left text-sm">
+              <div className="overflow-x-auto -mx-4 sm:mx-0 rounded-xl border border-slate-200 dark:border-slate-700">
+                <table className={`w-full text-sm ${isRTL ? "text-right" : "text-left"}`} style={{ minWidth: 600 }}>
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/50">
                       <th className="px-4 py-3 font-medium text-slate-600 dark:text-slate-400">
@@ -957,10 +975,10 @@ export default function ItemFilePage() {
                             }
                             disabled={savingDefaultUnit || (row.type === "package" && !packageOptionEnabled)}
                             onClick={() => handleSetDefaultUnit(row.type)}
-                            className="flex w-full cursor-pointer items-center justify-center gap-1 rounded p-1.5 transition hover:bg-slate-100 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="flex w-full cursor-pointer items-center justify-center gap-1 rounded p-2 sm:p-1.5 min-h-[44px] min-w-[44px] transition hover:bg-slate-100 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             <span
-                              className={`inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${
+                              className={`inline-flex h-5 w-5 sm:h-4 sm:w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${
                                 (row.type === "base" && form.default_display_unit === "base") ||
                                 (row.type === "package" && form.default_display_unit === "package")
                                   ? "border-blue-500 bg-blue-500"
@@ -969,7 +987,7 @@ export default function ItemFilePage() {
                             >
                               {((row.type === "base" && form.default_display_unit === "base") ||
                                 (row.type === "package" && form.default_display_unit === "package")) && (
-                                <span className="h-2 w-2 rounded-full bg-white" aria-hidden />
+                                <span className="h-2.5 w-2.5 sm:h-2 sm:w-2 rounded-full bg-white" aria-hidden />
                               )}
                             </span>
                           </button>
@@ -1038,13 +1056,13 @@ export default function ItemFilePage() {
             )}
 
             {/* Action Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-200 bg-slate-50/50 px-6 py-4 dark:border-slate-700 dark:bg-slate-800/30">
-              <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/50 px-4 sm:px-6 py-4 dark:border-slate-700 dark:bg-slate-800/30">
+              <div className="flex items-center gap-1 sm:gap-2">
                 <button
                   type="button"
                   onClick={() => goTo(0)}
                   disabled={isAddingNew || currentIndex <= 0}
-                  className="rounded-lg p-2 text-slate-500 hover:bg-slate-200 disabled:opacity-40 dark:hover:bg-slate-700"
+                  className="rounded-lg p-2.5 sm:p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-500 hover:bg-slate-200 disabled:opacity-40 dark:hover:bg-slate-700"
                   title={isRTL ? "الأول" : "First"}
                 >
                   <ChevronsLeft className="h-5 w-5" />
@@ -1053,19 +1071,19 @@ export default function ItemFilePage() {
                   type="button"
                   onClick={() => goTo(currentIndex - 1)}
                   disabled={isAddingNew || currentIndex <= 0}
-                  className="rounded-lg p-2 text-slate-500 hover:bg-slate-200 disabled:opacity-40 dark:hover:bg-slate-700"
+                  className="rounded-lg p-2.5 sm:p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-500 hover:bg-slate-200 disabled:opacity-40 dark:hover:bg-slate-700"
                   title={isRTL ? "السابق" : "Previous"}
                 >
                   <ChevronLeft className="h-5 w-5" />
                 </button>
-                <span className="min-w-[120px] text-center text-sm text-slate-600 dark:text-slate-400">
+                <span className="min-w-[80px] sm:min-w-[120px] text-center text-sm text-slate-600 dark:text-slate-400">
                   {isAddingNew ? (isRTL ? "جديد" : "New") : `${currentIndex + 1} / ${totalCount}`}
                 </span>
                 <button
                   type="button"
                   onClick={() => goTo(currentIndex + 1)}
                   disabled={isAddingNew || currentIndex >= totalCount - 1}
-                  className="rounded-lg p-2 text-slate-500 hover:bg-slate-200 disabled:opacity-40 dark:hover:bg-slate-700"
+                  className="rounded-lg p-2.5 sm:p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-500 hover:bg-slate-200 disabled:opacity-40 dark:hover:bg-slate-700"
                   title={isRTL ? "التالي" : "Next"}
                 >
                   <ChevronRight className="h-5 w-5" />
@@ -1074,18 +1092,18 @@ export default function ItemFilePage() {
                   type="button"
                   onClick={() => goTo(totalCount - 1)}
                   disabled={isAddingNew || currentIndex >= totalCount - 1}
-                  className="rounded-lg p-2 text-slate-500 hover:bg-slate-200 disabled:opacity-40 dark:hover:bg-slate-700"
+                  className="rounded-lg p-2.5 sm:p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-500 hover:bg-slate-200 disabled:opacity-40 dark:hover:bg-slate-700"
                   title={isRTL ? "الأخير" : "Last"}
                 >
                   <ChevronsRight className="h-5 w-5" />
                 </button>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3">
                 <button
                   type="button"
                   onClick={currentId ? handleSave : handleCreate}
                   disabled={saving}
-                  className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                  className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 sm:py-2 min-h-[44px] text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
                 >
                   <Save className="h-4 w-4" />
                   {saving ? t("saving") : t("save")}
