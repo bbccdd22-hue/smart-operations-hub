@@ -1605,6 +1605,8 @@ export async function createIngredient(data: {
   package_conversion_factor?: number;
   package_name_en?: string;
   package_name_ar?: string;
+  default_display_unit?: "base" | "package";
+  unit_cost?: string;
 }): Promise<ManageIngredient> {
   const res = await fetchWithCsrf(`${API_BASE}/inventory/ingredients/`, {
     method: "POST",

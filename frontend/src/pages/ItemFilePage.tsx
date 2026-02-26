@@ -71,7 +71,7 @@ export default function ItemFilePage() {
     name_ar: "",
     base_unit_id: 0,
     serial_code: "",
-    system_group: "raw_materials" as const,
+    system_group: "raw_materials" as "raw_materials" | "packaging" | "other",
     package_conversion_factor: "" as string | number,
     package_name_en: "",
     package_name_ar: "",
@@ -159,9 +159,8 @@ export default function ItemFilePage() {
     }
     if (currentIngredient) {
       setSearchParams({ id: String(currentIngredient.id) }, { replace: true });
-      const isNewIngredient = lastSyncedIngredientIdRef.current !== currentIngredient.id;
       lastSyncedIngredientIdRef.current = currentIngredient.id;
-      setForm((prev) => ({
+      setForm({
         name_en: currentIngredient.name_en,
         name_ar: currentIngredient.name_ar || "",
         base_unit_id: currentIngredient.base_unit_id ?? units[0]?.id ?? 0,
@@ -171,11 +170,9 @@ export default function ItemFilePage() {
         package_name_en: currentIngredient.package_name_en || "",
         package_name_ar: currentIngredient.package_name_ar || "",
         package_is_active: currentIngredient.package_is_active ?? true,
-        default_display_unit: isNewIngredient
-          ? (currentIngredient.default_display_unit ?? "base")
-          : prev.default_display_unit,
+        default_display_unit: (currentIngredient.default_display_unit ?? "base") as "base" | "package",
         unit_cost: currentIngredient.unit_cost ?? "",
-      }));
+      });
       setDirty(false);
     }
   }, [currentIngredient, units]);
@@ -273,12 +270,12 @@ export default function ItemFilePage() {
       name_ar: "",
       base_unit_id: units[0]?.id ?? 0,
       serial_code: "",
-      system_group: "raw_materials",
+      system_group: "raw_materials" as "raw_materials" | "packaging" | "other",
       package_conversion_factor: "",
       package_name_en: "",
       package_name_ar: "",
       package_is_active: true,
-      default_display_unit: "base",
+      default_display_unit: "base" as "base" | "package",
       unit_cost: "",
     });
     setIsAddingNew(true);
@@ -304,6 +301,8 @@ export default function ItemFilePage() {
           : undefined,
         package_name_en: form.package_name_en?.trim(),
         package_name_ar: form.package_name_ar?.trim(),
+        default_display_unit: form.default_display_unit,
+        unit_cost: form.unit_cost !== "" ? String(form.unit_cost) : undefined,
       });
       setDirty(false);
       setIsAddingNew(false);
