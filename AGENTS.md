@@ -23,4 +23,5 @@ Cloud ERP (SaaS) for multi-brand F&B operations. Two-service monorepo: Django ba
 - The frontend has pre-existing TypeScript errors (`tsc -b` will fail). `vite build` succeeds despite this — Vite does not type-check at build time.
 - There is no ESLint config and no automated test suite (0 tests). Django system check (`python3 manage.py check`) is the backend lint equivalent.
 - No `.env` file is required for local development — sensible defaults are built into `backend/config/settings.py`.
+- There is a pending `org` model migration (`manage.py makemigrations` reports changes not yet reflected). This is a known state and does not block `migrate` or runtime.
 - Standard dev commands are documented in the root `README.md`.
