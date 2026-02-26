@@ -174,9 +174,8 @@ export default function ItemFilePage() {
     }
     if (currentIngredient) {
       setSearchParams({ id: String(currentIngredient.id) }, { replace: true });
-      const isNewIngredient = lastSyncedIngredientIdRef.current !== currentIngredient.id;
       lastSyncedIngredientIdRef.current = currentIngredient.id;
-      setForm((prev) => ({
+      setForm({
         name_en: currentIngredient.name_en,
         name_ar: currentIngredient.name_ar || "",
         base_unit_id: currentIngredient.base_unit_id ?? units[0]?.id ?? 0,
@@ -186,11 +185,9 @@ export default function ItemFilePage() {
         package_name_en: currentIngredient.package_name_en || "",
         package_name_ar: currentIngredient.package_name_ar || "",
         package_is_active: currentIngredient.package_is_active ?? true,
-        default_display_unit: isNewIngredient
-          ? (currentIngredient.default_display_unit ?? "base")
-          : prev.default_display_unit,
+        default_display_unit: (currentIngredient.default_display_unit ?? "base") as DefaultDisplayUnit,
         unit_cost: currentIngredient.unit_cost ?? "",
-      }));
+      });
       setDirty(false);
     }
   }, [currentIngredient, units]);
@@ -419,18 +416,17 @@ export default function ItemFilePage() {
             }
           : { default_display_unit: val };
         await updateIngredient(currentId, nextPayload);
-        skipFormSyncRef.current = true;
-        lastSyncedIngredientIdRef.current = currentId;
         const detail = await fetchIngredientDetail(currentId, true);
         if (detail) {
-          const savedVal = (detail.default_display_unit ?? "base") as "base" | "package";
+          const savedVal = (detail.default_display_unit ?? "base") as DefaultDisplayUnit;
           formRef.current = { ...formRef.current, default_display_unit: savedVal };
           setForm((f) => ({ ...f, default_display_unit: savedVal }));
+          skipFormSyncRef.current = true;
+          lastSyncedIngredientIdRef.current = currentId;
           setIngredients((prev) =>
             prev.map((ing) => (ing.id === currentId ? { ...ing, ...detail } : ing)),
           );
         }
-        await loadIngredients(true);
         addToast(
           isRTL ? "تم تغيير العبوة الافتراضية بنجاح" : "Default unit updated successfully",
         );
