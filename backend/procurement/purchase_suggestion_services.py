@@ -10,7 +10,7 @@ from django.db.models import Sum
 from django.db.models import Q
 
 from imports.models import ProductSale
-from inventory.models import BranchStock, Ingredient
+from inventory.models import BranchStock, Ingredient, IngredientPackage
 from inventory.services import explode_recipe_requirements
 
 
@@ -19,13 +19,46 @@ def _fmt_qty(value: Decimal) -> str:
     return format(rounded, "f").rstrip("0").rstrip(".") or "0"
 
 
-def _can_use_package_as_default(ing: Ingredient) -> bool:
-    return (
-        getattr(ing, "default_display_unit", "base") == "package"
-        and getattr(ing, "package_is_active", True)
+def _get_default_package(ing: Ingredient):
+    """
+    Returns the best default IngredientPackage to display for this ingredient.
+    Priority:
+      1. New multi-package system: package with is_default=True and is_active=True
+      2. New multi-package system: first active package (fallback)
+      3. Legacy single-package fields (package_name_en/ar + conversion_factor)
+    Returns None if default_display_unit != "package" or no valid package found.
+    """
+    if getattr(ing, "default_display_unit", "base") != "package":
+        return None
+
+    # ── New multi-package system ───────────────────────────────
+    # packages are prefetched via select_related / prefetch_related
+    try:
+        pkgs = list(ing.packages.filter(is_active=True).order_by("-is_default", "sort_order", "id"))
+    except Exception:
+        pkgs = []
+
+    if pkgs:
+        # prefer the one marked is_default
+        for p in pkgs:
+            if p.is_default:
+                return p
+        return pkgs[0]  # fallback to first active
+
+    # ── Legacy single-package fields ──────────────────────────
+    if (
+        getattr(ing, "package_is_active", True)
         and bool(ing.package_conversion_factor and ing.package_conversion_factor > 0)
         and bool((ing.package_name_en or "").strip() or (ing.package_name_ar or "").strip())
-    )
+    ):
+        # Return a lightweight namespace so callers can treat it uniformly
+        class _LegacyPkg:
+            name_en = ing.package_name_en or ""
+            name_ar = ing.package_name_ar or ""
+            conversion_factor = ing.package_conversion_factor
+        return _LegacyPkg()
+
+    return None
 
 
 def get_purchase_suggestions(
@@ -96,7 +129,9 @@ def get_purchase_suggestions(
 
     ingredients_by_id = {
         ing.id: ing
-        for ing in Ingredient.objects.filter(pk__in=ingredient_ids).select_related("base_unit")
+        for ing in Ingredient.objects.filter(pk__in=ingredient_ids)
+            .select_related("base_unit")
+            .prefetch_related("packages")   # load multi-package data
     }
 
     # 5. حساب الاقتراح (base qty + preferred display qty حسب default_display_unit)
@@ -117,27 +152,24 @@ def get_purchase_suggestions(
         base_unit_label = (ing.base_unit.name_en if ing.base_unit else "") or base_unit_code
         base_unit_label_ar = (ing.base_unit.name_ar if ing.base_unit else "") or base_unit_label
 
-        use_package = _can_use_package_as_default(ing)
-        conversion_factor = ing.package_conversion_factor if use_package else Decimal("1")
-        required_display = required / conversion_factor
-        on_hand_display = on_hand / conversion_factor
+        # ── Resolve default package (new or legacy) ────────────
+        default_pkg = _get_default_package(ing)
+        use_package = default_pkg is not None
+
+        conversion_factor = Decimal(str(default_pkg.conversion_factor)) if use_package else Decimal("1")
+        required_display  = required  / conversion_factor
+        on_hand_display   = on_hand   / conversion_factor
         suggested_display = suggested / conversion_factor
 
-        display_unit_code = (
-            (ing.package_name_en or ing.package_name_ar or "package")
-            if use_package
-            else base_unit_code
-        )
-        display_unit_label = (
-            (ing.package_name_en or ing.package_name_ar or "Package")
-            if use_package
-            else base_unit_label
-        )
-        display_unit_label_ar = (
-            (ing.package_name_ar or ing.package_name_en or "عبوة")
-            if use_package
-            else base_unit_label_ar
-        )
+        if use_package:
+            display_unit_code    = (default_pkg.name_en or default_pkg.name_ar or "package").strip() or "package"
+            display_unit_label   = (default_pkg.name_en or default_pkg.name_ar or "Package").strip() or "Package"
+            display_unit_label_ar = (default_pkg.name_ar or default_pkg.name_en or "عبوة").strip() or "عبوة"
+        else:
+            display_unit_code    = base_unit_code
+            display_unit_label   = base_unit_label
+            display_unit_label_ar = base_unit_label_ar
+
         effective_display_unit = "package" if use_package else "base"
 
         out.append({
@@ -145,13 +177,13 @@ def get_purchase_suggestions(
             "ingredient_name": r.ingredient_name,
             "ingredient_name_ar": r.ingredient_name_ar or "",
             "serial_code": r.serial_code or "",
-            # Backward-compatible keys now reflect effective display unit
+            # Main display keys
             "unit_code": display_unit_code,
             "required_qty": _fmt_qty(required_display),
             "on_hand": _fmt_qty(on_hand_display),
             "suggested_purchase_qty": _fmt_qty(suggested_display),
             "horizon_days": horizon_days,
-            # Explicit base quantities for auditing/math verification
+            # Base quantities for auditing / math verification
             "base_unit_code": base_unit_code,
             "base_unit_label": base_unit_label,
             "required_base_qty": _fmt_qty(required),
@@ -164,8 +196,8 @@ def get_purchase_suggestions(
             "display_unit_label": display_unit_label,
             "display_unit_label_ar": display_unit_label_ar,
             "package_conversion_factor": (
-                _fmt_qty(ing.package_conversion_factor)
-                if ing.package_conversion_factor
+                _fmt_qty(Decimal(str(default_pkg.conversion_factor)))
+                if use_package
                 else None
             ),
         })

@@ -18,4 +18,10 @@ urlpatterns = [
     path("transfers/", views.StockTransferListCreateView.as_view(), name="stock-transfers"),
     path("transfers/<uuid:uuid>/confirm/", views.StockTransferConfirmView.as_view(), name="stock-transfer-confirm"),
     path("transfers/<uuid:uuid>/reject/", views.StockTransferRejectView.as_view(), name="stock-transfer-reject"),
+    path("products/search/", views.FoodicsProductSearchView.as_view(), name="product-search"),
+    path("products/", views.ProductListView.as_view(), name="product-list"),
+    path("products/<int:pk>/", views.ProductDetailView.as_view(), name="product-detail"),
+    path("products/<int:pk>/recipe/lines/", views.ProductRecipeLinesView.as_view(), name="product-recipe-lines"),
+    path("products/<int:pk>/recipe/lines/<int:line_id>/", views.ProductRecipeLineDetailView.as_view(), name="product-recipe-line-detail"),
+    path("ingredients/<int:pk>/cost/", views.IngredientCostUpdateView.as_view(), name="ingredient-cost-update"),
 ]

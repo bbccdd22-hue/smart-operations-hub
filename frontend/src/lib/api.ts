@@ -2683,4 +2683,166 @@ export async function fetchPOSKitchenOrders(branchId: number): Promise<
   return j.orders ?? [];
 }
 
+// ─── Manual Purchase Forecast ────────────────────────────────────────────────
 
+export interface FoodicsProductItem {
+  id: number;
+  sku: string;
+  name: string;
+}
+
+export interface ManualForecastIngredient {
+  ingredient_id: number;
+  ingredient_name: string;
+  ingredient_name_ar: string;
+  serial_code: string;
+  unit_code: string;
+  unit_label: string;
+  unit_label_ar: string;
+  required_qty: string;
+  on_hand: string;
+  suggested_purchase_qty: string;
+  base_unit_code: string;
+}
+
+export async function searchFoodicsProducts(q: string): Promise<FoodicsProductItem[]> {
+  const qs = new URLSearchParams({ q });
+  const res = await fetch(`${API_BASE}/inventory/products/search/?${qs}`, { credentials: "include" });
+  if (!res.ok) return [];
+  const data = (await res.json()) as { products: FoodicsProductItem[] };
+  return data.products ?? [];
+}
+
+export async function fetchManualPurchaseForecast(params: {
+  branch_id: number;
+  products: Array<{ sku: string; qty: number }>;
+}): Promise<{ ingredients: ManualForecastIngredient[] }> {
+  const res = await fetchWithCsrf(`${API_BASE}/procurement/manual-purchase-forecast/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({})) as { detail?: string };
+    throw new Error(err.detail || "Failed to compute manual forecast");
+  }
+  return (await res.json()) as { ingredients: ManualForecastIngredient[] };
+}
+
+// ─── Products (FoodicsProduct) ───────────────────────────────────────────────
+
+export interface ProductSummary {
+  id: number;
+  sku: string;
+  name: string;
+  is_active: boolean;
+  price_excl_tax: string | null;
+  sales_unit: string | null;
+  has_recipe: boolean;
+  recipe_lines_count: number;
+  total_cost: string | null;
+}
+
+export interface ProductRecipeLine {
+  id: number;
+  ingredient_id: number;
+  ingredient_name: string;
+  ingredient_name_ar: string;
+  serial_code: string;
+  qty: string;
+  unit_code: string;
+  unit_label: string;
+  unit_label_ar: string;
+  base_unit_code: string;
+  unit_cost: string | null;
+  line_cost: string | null;
+}
+
+export interface ProductDetail extends ProductSummary {
+  created_at: string | null;
+  updated_at: string | null;
+  recipe: {
+    id: number;
+    yield_qty: string;
+    yield_unit: string;
+    lines_count: number;
+    lines: ProductRecipeLine[];
+    total_cost: string | null;
+    has_cost_data: boolean;
+    profit_margin: string | null;
+    profit_amount: string | null;
+  } | null;
+}
+
+export async function fetchProductsList(params?: {
+  q?: string;
+  active?: "true" | "false";
+}): Promise<{ products: ProductSummary[]; count: number }> {
+  const qs = new URLSearchParams();
+  if (params?.q) qs.set("q", params.q);
+  if (params?.active) qs.set("active", params.active);
+  const res = await fetch(`${API_BASE}/inventory/products/?${qs}`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to fetch products");
+  return (await res.json()) as { products: ProductSummary[]; count: number };
+}
+
+export async function fetchProductDetail(id: number): Promise<ProductDetail> {
+  const res = await fetch(`${API_BASE}/inventory/products/${id}/`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to fetch product detail");
+  return (await res.json()) as ProductDetail;
+}
+
+export async function addRecipeLine(
+  productId: number,
+  payload: { ingredient_id: number; qty: number; unit_code: string }
+): Promise<ProductRecipeLine> {
+  const res = await fetch(`${API_BASE}/inventory/products/${productId}/recipe/lines/`, {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() || "" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error((err as { error?: string }).error || "Failed to add line");
+  }
+  return (await res.json()) as ProductRecipeLine;
+}
+
+export async function updateRecipeLine(
+  productId: number,
+  lineId: number,
+  payload: { qty?: number; unit_code?: string }
+): Promise<ProductRecipeLine> {
+  const res = await fetch(`${API_BASE}/inventory/products/${productId}/recipe/lines/${lineId}/`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() || "" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("Failed to update line");
+  return (await res.json()) as ProductRecipeLine;
+}
+
+export async function deleteRecipeLine(productId: number, lineId: number): Promise<void> {
+  const res = await fetch(`${API_BASE}/inventory/products/${productId}/recipe/lines/${lineId}/`, {
+    method: "DELETE",
+    credentials: "include",
+    headers: { "X-CSRFToken": getCsrfToken() || "" },
+  });
+  if (!res.ok) throw new Error("Failed to delete line");
+}
+
+export async function updateIngredientCost(
+  ingredientId: number,
+  unitCost: number | null
+): Promise<{ id: number; name_ar: string; name_en: string; unit_cost: string | null }> {
+  const res = await fetch(`${API_BASE}/inventory/ingredients/${ingredientId}/cost/`, {
+    method: "PATCH",
+    credentials: "include",
+    headers: { "Content-Type": "application/json", "X-CSRFToken": getCsrfToken() || "" },
+    body: JSON.stringify({ unit_cost: unitCost }),
+  });
+  if (!res.ok) throw new Error("Failed to update ingredient cost");
+  return await res.json();
+}

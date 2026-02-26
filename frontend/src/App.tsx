@@ -27,6 +27,8 @@ import ItemFilePage from "./pages/ItemFilePage";
 import StockTransfersPage from "./pages/StockTransfersPage";
 import CentralKitchenPage from "./pages/CentralKitchenPage";
 import SmartPurchasePage from "./pages/SmartPurchasePage";
+import ManualPurchaseForecastPage from "./pages/ManualPurchaseForecastPage";
+import ProductsPage from "./pages/ProductsPage";
 import UsersPage from "./pages/UsersPage";
 import UserProfilePage from "./pages/UserProfilePage";
 import RolesPage from "./pages/RolesPage";
@@ -191,6 +193,8 @@ export default function App() {
           <Route path="stock-transfers" element={<StockTransfersPage />} />
           <Route path="central-kitchen" element={<CentralKitchenPage />} />
           <Route path="smart-purchase" element={<SmartPurchasePage />} />
+          <Route path="manual-purchase-forecast" element={<ManualPurchaseForecastPage />} />
+          <Route path="products" element={<ProductsPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       ) : (
@@ -242,6 +246,8 @@ export default function App() {
           <Route path="stock-transfers" element={<StockTransfersPage />} />
           <Route path="central-kitchen" element={<CentralKitchenPage />} />
           <Route path="smart-purchase" element={<SmartPurchasePage />} />
+          <Route path="manual-purchase-forecast" element={<ManualPurchaseForecastPage />} />
+          <Route path="products" element={<ProductsPage />} />
           <Route path="finance" element={<FinanceHubPage />} />
         <Route path="finance/reports" element={<FinancialReportsPage />} />
         <Route path="finance/daily-revenue" element={<DailyRevenueReport />} />

@@ -9,6 +9,8 @@ import {
   Wallet,
   FileCheck,
   Users,
+  ClipboardList,
+  ShoppingBag,
   type LucideIcon,
 } from "lucide-react";
 import type { NavConfig, NavItem } from "../layouts/AppShellLayout";
@@ -99,6 +101,8 @@ const ROUTE_PERM: Record<string, string> = {
   "/employee-self": "perm_management_reports",
   "/central-kitchen": "perm_management_reports",
   "/smart-purchase": "perm_management_reports",
+  "/manual-purchase-forecast": "perm_management_reports",
+  "/products": "perm_management_reports",
 };
 
 function filterByPermission<T extends { to: string }>(items: T[], perms: Record<string, boolean>, isSAIF: boolean): T[] {
@@ -165,6 +169,7 @@ export function buildNestedNavConfig(t: (k: string) => string, opts: {
     [
       { to: "/ingredients", label: t("recipeInventory"), icon: icons.ingredients },
       { to: "/inventory/item-file", label: t("itemFile") ?? "Item File", icon: icons.itemFile },
+      { to: "/products", label: t("productsList") ?? "Products", icon: <ShoppingBag className="h-5 w-5" /> },
       { to: "/prep-list", label: t("opsPrepList"), icon: icons.prepList, primary: isBranchSupervisor },
     ],
     permissions,
@@ -176,11 +181,12 @@ export function buildNestedNavConfig(t: (k: string) => string, opts: {
       { to: "/stock-transfers", label: t("stockTransfers"), icon: icons.stockTransfers },
       { to: "/central-kitchen", label: t("centralKitchen"), icon: icons.centralKitchen },
       { to: "/smart-purchase", label: t("smartPurchase"), icon: icons.smartPurchase },
+      { to: "/manual-purchase-forecast", label: t("manualPurchaseForecast"), icon: <ClipboardList className="h-5 w-5" /> },
       { to: "/waste-tracker", label: t("wasteEntry"), icon: icons.waste },
     ],
     permissions,
     isSAIF
-  ).filter((i) => !(isBranchSupervisor && ["/stock-transfers", "/central-kitchen", "/smart-purchase"].includes(i.to)));
+  ).filter((i) => !(isBranchSupervisor && ["/stock-transfers", "/central-kitchen", "/smart-purchase", "/manual-purchase-forecast"].includes(i.to)));
 
   const financialReportsItems = filterByPermission(
     [
