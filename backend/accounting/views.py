@@ -29,7 +29,7 @@ from core.permissions import get_user_scope
 
 class DailyReconciliationView(views.APIView):
     """Reconciliation table for a given date."""
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         date_str = request.query_params.get("date")
@@ -58,7 +58,7 @@ class DailyReconciliationView(views.APIView):
 
 class CashToBankView(views.APIView):
     """Cash-to-Bank report for Owner."""
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         date_str = request.query_params.get("date")
@@ -76,7 +76,7 @@ class CashToBankView(views.APIView):
 
 class DiscrepancyAlertsView(views.APIView):
     """Recurring shortage alerts by branch."""
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         days = int(request.query_params.get("days", "30"))
@@ -95,7 +95,7 @@ class DiscrepancyAlertsView(views.APIView):
 
 class DailyReportExportView(views.APIView):
     """Download Daily Financial Report (تقرير الحسابات اليومي) - Excel, Arabic, only SUBMITTED shifts."""
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         date_str = request.query_params.get("date")
@@ -118,7 +118,7 @@ class DailyReportExportView(views.APIView):
 
 class SubmittedBranchesView(views.APIView):
     """Branch IDs that have SUBMITTED shifts for a date (for dashboard green checkmark)."""
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         date_str = request.query_params.get("date")
@@ -140,7 +140,7 @@ class SubmittedBranchesView(views.APIView):
 
 class PendingSubmissionsView(views.APIView):
     """Count of shifts pending review (submitted but day not finalized) for a date."""
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         date_str = request.query_params.get("date")
@@ -171,7 +171,7 @@ class PendingSubmissionsView(views.APIView):
 
 class FinalizeDayView(views.APIView):
     """Owner finalizes the day's accounts."""
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         date_str = request.data.get("date")
@@ -195,7 +195,7 @@ class FinalizeDayView(views.APIView):
 
 class ExportReconciliationView(views.APIView):
     """Export reconciliation as Excel, CSV, or PDF."""
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         date_str = request.query_params.get("date")

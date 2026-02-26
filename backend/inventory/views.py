@@ -1,6 +1,4 @@
 from django.db.models import Q
-from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_exempt
 from decimal import Decimal
 
 from rest_framework import permissions, response, status, views
@@ -43,11 +41,9 @@ class ProductsWithRecipesView(views.APIView):
         return response.Response(out)
 
 
-@method_decorator(csrf_exempt, name="dispatch")
 class ProductionPlanView(views.APIView):
     """What-if: given branch + list of product quantities, return exploded ingredients with stock."""
-    # [TEMPORARY] AllowAny + csrf_exempt for remote access testing - restore for production
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         branch_id = request.data.get("branch_id")
@@ -81,7 +77,7 @@ class ProductionPlanView(views.APIView):
 
 class RecipeBulkUploadView(views.APIView):
     """Bulk upload recipes via Excel. Columns: Product, Ingredient, Qty, Unit."""
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         file = request.FILES.get("file")
@@ -295,7 +291,7 @@ class ProductCatalogUploadView(views.APIView):
     Headers: المنتج, الوحدة, كود تعريف المنتج, السعر غير شامل الضريبة.
     Creates/updates Products (final items sold). Ingredients uploaded separately.
     """
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         file = request.FILES.get("file")
@@ -394,7 +390,7 @@ class WasteReportView(views.APIView):
     Waste log: GET list by date (optional branch_id for theoretical from Prep List).
     POST to save. Query params: date, branch_id.
     """
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         from collections import defaultdict

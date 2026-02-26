@@ -15,7 +15,7 @@ class FinancialSummaryView(views.APIView):
     Total Sales (Foodics), Total Cost (Prep List × unit_cost), Net Profit.
     Query: branch_id, branch_ids, date_from, date_to, brands.
     """
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         branch_id = request.query_params.get("branch_id")
