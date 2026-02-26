@@ -1547,6 +1547,16 @@ export type InventoryUnit = {
   name_ar?: string;
 };
 
+export type IngredientPackageData = {
+  id: number;
+  name_en: string;
+  name_ar: string;
+  conversion_factor: string;
+  is_active: boolean;
+  is_default: boolean;
+  sort_order: number;
+};
+
 export type ManageIngredient = {
   id: number;
   serial_code: string;
@@ -1565,6 +1575,7 @@ export type ManageIngredient = {
   default_display_unit?: "base" | "package";
   has_transactions?: boolean;
   unit_cost?: string | null;
+  packages?: IngredientPackageData[];
 };
 
 export async function fetchInventoryUnits(): Promise<InventoryUnit[]> {
@@ -1648,6 +1659,52 @@ export async function updateIngredient(
     throw new Error(j.message || j.detail || "Failed to update");
   }
   return (await res.json().catch(() => ({}))) as Partial<ManageIngredient>;
+}
+
+export async function createIngredientPackage(
+  ingredientId: number,
+  data: { name_en: string; name_ar?: string; conversion_factor: number; is_default?: boolean },
+): Promise<IngredientPackageData> {
+  const res = await fetchWithCsrf(`${API_BASE}/inventory/ingredients/${ingredientId}/packages/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({}));
+    throw new Error((j as { detail?: string }).detail || "Failed to create package");
+  }
+  return (await res.json()) as IngredientPackageData;
+}
+
+export async function updateIngredientPackage(
+  ingredientId: number,
+  packageId: number,
+  data: Partial<{ name_en: string; name_ar: string; conversion_factor: number; is_active: boolean; is_default: boolean }>,
+): Promise<IngredientPackageData> {
+  const res = await fetchWithCsrf(`${API_BASE}/inventory/ingredients/${ingredientId}/packages/${packageId}/`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({}));
+    throw new Error((j as { detail?: string }).detail || "Failed to update package");
+  }
+  return (await res.json()) as IngredientPackageData;
+}
+
+export async function deleteIngredientPackage(ingredientId: number, packageId: number): Promise<void> {
+  const res = await fetchWithCsrf(`${API_BASE}/inventory/ingredients/${ingredientId}/packages/${packageId}/`, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const j = await res.json().catch(() => ({}));
+    throw new Error((j as { detail?: string }).detail || "Failed to delete package");
+  }
 }
 
 export type HeartbeatData = {
