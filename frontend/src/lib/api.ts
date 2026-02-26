@@ -1606,7 +1606,6 @@ export async function createIngredient(data: {
   package_name_en?: string;
   package_name_ar?: string;
   default_display_unit?: "base" | "package";
-  unit_cost?: string;
 }): Promise<ManageIngredient> {
   const res = await fetchWithCsrf(`${API_BASE}/inventory/ingredients/`, {
     method: "POST",
@@ -1787,22 +1786,35 @@ export async function fetchCentralKitchenTransfers(): Promise<{ transfers: Stock
   return (await res.json()) as { transfers: StockTransferItem[] };
 }
 
+export type PurchaseSuggestion = {
+  ingredient_id: number;
+  ingredient_name: string;
+  ingredient_name_ar: string;
+  serial_code: string;
+  unit_code: string;
+  required_qty: string;
+  on_hand: string;
+  suggested_purchase_qty: string;
+  horizon_days: number;
+  base_unit_code?: string;
+  base_unit_label?: string;
+  required_base_qty?: string;
+  on_hand_base_qty?: string;
+  suggested_purchase_base_qty?: string;
+  display_unit_source?: "base" | "package";
+  default_display_unit?: "base" | "package";
+  display_unit_code?: string;
+  display_unit_label?: string;
+  display_unit_label_ar?: string;
+  package_conversion_factor?: string | null;
+};
+
 export async function fetchPurchaseSuggestions(params: {
   branch_id: number;
   horizon_days?: number;
   lookback_days?: number;
 }): Promise<{
-  suggestions: Array<{
-    ingredient_id: number;
-    ingredient_name: string;
-    ingredient_name_ar: string;
-    serial_code: string;
-    unit_code: string;
-    required_qty: string;
-    on_hand: string;
-    suggested_purchase_qty: string;
-    horizon_days: number;
-  }>;
+  suggestions: PurchaseSuggestion[];
 }> {
   const qs = new URLSearchParams();
   qs.set("branch_id", String(params.branch_id));
@@ -1810,19 +1822,7 @@ export async function fetchPurchaseSuggestions(params: {
   if (params.lookback_days != null) qs.set("lookback_days", String(params.lookback_days));
   const res = await fetch(`${API_BASE}/procurement/purchase-suggestions/?${qs}`, { credentials: "include" });
   if (!res.ok) throw new Error("Failed to fetch purchase suggestions");
-  return (await res.json()) as {
-    suggestions: Array<{
-      ingredient_id: number;
-      ingredient_name: string;
-      ingredient_name_ar: string;
-      serial_code: string;
-      unit_code: string;
-      required_qty: string;
-      on_hand: string;
-      suggested_purchase_qty: string;
-      horizon_days: number;
-    }>;
-  };
+  return (await res.json()) as { suggestions: PurchaseSuggestion[] };
 }
 
 export async function fetchStockTransfers(params?: {

@@ -4,19 +4,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { fetchPurchaseSuggestions, fetchBranches } from "../lib/api";
-import type { Branch } from "../lib/api";
-
-type Suggestion = {
-  ingredient_id: number;
-  ingredient_name: string;
-  ingredient_name_ar: string;
-  serial_code: string;
-  unit_code: string;
-  required_qty: string;
-  on_hand: string;
-  suggested_purchase_qty: string;
-  horizon_days: number;
-};
+import type { Branch, PurchaseSuggestion } from "../lib/api";
 
 export default function SmartPurchasePage() {
   const { t, i18n } = useTranslation();
@@ -24,7 +12,7 @@ export default function SmartPurchasePage() {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [branchId, setBranchId] = useState<number | "">("");
   const [horizonDays, setHorizonDays] = useState(7);
-  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [suggestions, setSuggestions] = useState<PurchaseSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -35,7 +23,7 @@ export default function SmartPurchasePage() {
   }, []);
 
   const load = useCallback(async () => {
-    if (!branchId) return;
+    if (branchId === "") return;
     setLoading(true);
     setError(null);
     try {
@@ -132,11 +120,38 @@ export default function SmartPurchasePage() {
                         {s.serial_code}
                       </span>
                     )}
+                    <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      {(s.display_unit_source === "package"
+                        ? (isRTL ? "الوحدة الافتراضية: عبوة" : "Default unit: Package")
+                        : (isRTL ? "الوحدة الافتراضية: أساسية" : "Default unit: Base"))}
+                    </div>
                   </td>
-                  <td className="px-4 py-3">{s.required_qty} {s.unit_code}</td>
-                  <td className="px-4 py-3">{s.on_hand} {s.unit_code}</td>
+                  <td className="px-4 py-3">
+                    <div>{s.required_qty} {s.unit_code}</div>
+                    {s.display_unit_source === "package" && s.required_base_qty && s.base_unit_code && (
+                      <div className="text-xs text-slate-500 dark:text-slate-400">
+                        {isRTL ? "الأساس: " : "Base: "}
+                        {s.required_base_qty} {s.base_unit_code}
+                      </div>
+                    )}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div>{s.on_hand} {s.unit_code}</div>
+                    {s.display_unit_source === "package" && s.on_hand_base_qty && s.base_unit_code && (
+                      <div className="text-xs text-slate-500 dark:text-slate-400">
+                        {isRTL ? "الأساس: " : "Base: "}
+                        {s.on_hand_base_qty} {s.base_unit_code}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-4 py-3 font-semibold text-emerald-600 dark:text-emerald-400">
-                    {s.suggested_purchase_qty} {s.unit_code}
+                    <div>{s.suggested_purchase_qty} {s.unit_code}</div>
+                    {s.display_unit_source === "package" && s.suggested_purchase_base_qty && s.base_unit_code && (
+                      <div className="text-xs font-normal text-slate-500 dark:text-slate-400">
+                        {isRTL ? "الأساس: " : "Base: "}
+                        {s.suggested_purchase_base_qty} {s.base_unit_code}
+                      </div>
+                    )}
                   </td>
                 </tr>
               ))}

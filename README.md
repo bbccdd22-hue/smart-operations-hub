@@ -7,6 +7,21 @@ Cloud ERP (SaaS) for multi-brand F&B operations in KSA, designed to integrate wi
 - `backend/`: Django + DRF (PostgreSQL schema, shift reconciliation, inventory BOM engine)
 - `frontend/`: React + Tailwind (Owner Dashboard + Shift Closing UI, RTL/Arabic supported)
 
+## Cloud Agent environment setup
+
+For a fresh cloud agent machine, run one command from repo root:
+
+```bash
+./setup_cloud_agent_env.sh
+```
+
+This script will:
+
+- install backend Python dependencies from `backend/requirements.txt`
+- install frontend dependencies via `npm ci` in `frontend/`
+- verify backend with `python3 manage.py check`
+- verify frontend with `npm run build`
+
 ## Backend (Django)
 
 ### Environment
@@ -28,10 +43,10 @@ Create a `.env` (or set env vars) for Postgres:
 
 ```bash
 cd backend
-python -m pip install -r requirements.txt
-python manage.py migrate
-python manage.py create_owner saif 123    # Create SAIF user (owner) with password 123
-python manage.py runserver                # Starts API on http://localhost:8000
+python3 -m pip install -r requirements.txt
+python3 manage.py migrate
+python3 manage.py create_owner SAIF 123   # Create/refresh SAIF owner user with password 123
+python3 manage.py runserver 0.0.0.0:8000 --noreload
 ```
 
 **If login shows "Cannot connect to server"**: Start the backend first (`python manage.py runserver` in `backend/`).

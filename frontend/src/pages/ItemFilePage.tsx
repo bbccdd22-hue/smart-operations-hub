@@ -39,6 +39,21 @@ const SYSTEM_GROUPS = [
 ] as const;
 
 type SortOrder = "asc" | "desc";
+type SystemGroup = (typeof SYSTEM_GROUPS)[number]["value"];
+type DefaultDisplayUnit = "base" | "package";
+type ItemFormState = {
+  name_en: string;
+  name_ar: string;
+  base_unit_id: number;
+  serial_code: string;
+  system_group: SystemGroup;
+  package_conversion_factor: string | number;
+  package_name_en: string;
+  package_name_ar: string;
+  package_is_active: boolean;
+  default_display_unit: DefaultDisplayUnit;
+  unit_cost: string | number;
+};
 
 /** تحويل الأرقام العربية (٠١٢٣...) إلى إنجليزية (0123...) لقبول كلاهما */
 function normalizeNumericInput(val: string): string {
@@ -66,18 +81,18 @@ export default function ItemFilePage() {
   const [searchBy, setSearchBy] = useState<"serial" | "name">("name");
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isAddingNew, setIsAddingNew] = useState(false);
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<ItemFormState>({
     name_en: "",
     name_ar: "",
     base_unit_id: 0,
     serial_code: "",
-    system_group: "raw_materials" as "raw_materials" | "packaging" | "other",
-    package_conversion_factor: "" as string | number,
+    system_group: "raw_materials",
+    package_conversion_factor: "",
     package_name_en: "",
     package_name_ar: "",
     package_is_active: true,
-    default_display_unit: "base" as "base" | "package",
-    unit_cost: "" as string | number,
+    default_display_unit: "base",
+    unit_cost: "",
   });
   const packageConversionRef = useRef<HTMLDivElement>(null);
   const packageNameEnRef = useRef<HTMLInputElement>(null);
@@ -159,20 +174,23 @@ export default function ItemFilePage() {
     }
     if (currentIngredient) {
       setSearchParams({ id: String(currentIngredient.id) }, { replace: true });
+      const isNewIngredient = lastSyncedIngredientIdRef.current !== currentIngredient.id;
       lastSyncedIngredientIdRef.current = currentIngredient.id;
-      setForm({
+      setForm((prev) => ({
         name_en: currentIngredient.name_en,
         name_ar: currentIngredient.name_ar || "",
         base_unit_id: currentIngredient.base_unit_id ?? units[0]?.id ?? 0,
         serial_code: currentIngredient.serial_code || "",
-        system_group: (currentIngredient.system_group as "raw_materials" | "packaging" | "other") || "raw_materials",
+        system_group: (currentIngredient.system_group as SystemGroup) || "raw_materials",
         package_conversion_factor: currentIngredient.package_conversion_factor ?? "",
         package_name_en: currentIngredient.package_name_en || "",
         package_name_ar: currentIngredient.package_name_ar || "",
         package_is_active: currentIngredient.package_is_active ?? true,
-        default_display_unit: (currentIngredient.default_display_unit ?? "base") as "base" | "package",
+        default_display_unit: isNewIngredient
+          ? (currentIngredient.default_display_unit ?? "base")
+          : prev.default_display_unit,
         unit_cost: currentIngredient.unit_cost ?? "",
-      });
+      }));
       setDirty(false);
     }
   }, [currentIngredient, units]);
@@ -241,7 +259,7 @@ export default function ItemFilePage() {
           name_ar: detail.name_ar || "",
           base_unit_id: detail.base_unit_id ?? units[0]?.id ?? 0,
           serial_code: detail.serial_code || "",
-          system_group: (detail.system_group as "raw_materials" | "packaging" | "other") || "raw_materials",
+          system_group: (detail.system_group as SystemGroup) || "raw_materials",
           package_conversion_factor: detail.package_conversion_factor ?? "",
           package_name_en: detail.package_name_en || "",
           package_name_ar: detail.package_name_ar || "",
@@ -270,12 +288,12 @@ export default function ItemFilePage() {
       name_ar: "",
       base_unit_id: units[0]?.id ?? 0,
       serial_code: "",
-      system_group: "raw_materials" as "raw_materials" | "packaging" | "other",
+      system_group: "raw_materials",
       package_conversion_factor: "",
       package_name_en: "",
       package_name_ar: "",
       package_is_active: true,
-      default_display_unit: "base" as "base" | "package",
+      default_display_unit: "base",
       unit_cost: "",
     });
     setIsAddingNew(true);
@@ -302,7 +320,6 @@ export default function ItemFilePage() {
         package_name_en: form.package_name_en?.trim(),
         package_name_ar: form.package_name_ar?.trim(),
         default_display_unit: form.default_display_unit,
-        unit_cost: form.unit_cost !== "" ? String(form.unit_cost) : undefined,
       });
       setDirty(false);
       setIsAddingNew(false);
@@ -322,6 +339,10 @@ export default function ItemFilePage() {
 
   const hasTransactions = currentIngredient?.has_transactions ?? false;
   const packageIsActive = form.package_is_active;
+  const packageOptionEnabled = factor > 0 && packageIsActive;
+  const packageDefaultLabel = isRTL
+    ? `عبوة مرتبطة (${form.package_name_ar || form.package_name_en || "—"})`
+    : `Linked Package (${form.package_name_en || form.package_name_ar || "—"})`;
 
   const unitsGridRows = useMemo(() => {
     const rows: Array<{
@@ -363,16 +384,41 @@ export default function ItemFilePage() {
   const handleSetDefaultUnit = useCallback(
     async (type: "base" | "package") => {
       const val = type;
-      if (!currentId) return;
-      const prevVal = form.default_display_unit;
+      if (val === "package" && !packageOptionEnabled) {
+        setError(
+          isRTL
+            ? "لا يمكن اختيار العبوة كوحدة افتراضية قبل تعريف العبوة وتفعيلها."
+            : "Package cannot be default before setting package details and enabling it.",
+        );
+        return;
+      }
+      const prevVal = formRef.current.default_display_unit;
       if (val === prevVal) return;
       setError(null);
       formRef.current = { ...formRef.current, default_display_unit: val };
       setForm((f) => ({ ...f, default_display_unit: val }));
       setDirty(true);
+
+      // أثناء إضافة صنف جديد لا يوجد currentId بعد؛ نكتفي بتحديث الفورم
+      // وسيتم حفظ القيمة ضمن payload عند الإنشاء.
+      if (!currentId) return;
+
       setSavingDefaultUnit(true);
       try {
-        await updateIngredient(currentId, { default_display_unit: val });
+        const nextPayload = val === "package"
+          ? {
+              // Save package fields with default in one PATCH to avoid lock
+              // when package edits are still unsaved in the form.
+              package_conversion_factor: formRef.current.package_conversion_factor
+                ? Number(formRef.current.package_conversion_factor)
+                : null,
+              package_name_en: (formRef.current.package_name_en || "").trim(),
+              package_name_ar: (formRef.current.package_name_ar || "").trim(),
+              package_is_active: formRef.current.package_is_active,
+              default_display_unit: val,
+            }
+          : { default_display_unit: val };
+        await updateIngredient(currentId, nextPayload);
         skipFormSyncRef.current = true;
         lastSyncedIngredientIdRef.current = currentId;
         const detail = await fetchIngredientDetail(currentId, true);
@@ -396,7 +442,7 @@ export default function ItemFilePage() {
         setSavingDefaultUnit(false);
       }
     },
-    [currentId, form.default_display_unit, isRTL, addToast, loadIngredients],
+    [currentId, isRTL, addToast, loadIngredients, packageOptionEnabled],
   );
 
   const handleDeletePackage = async () => {
@@ -413,8 +459,16 @@ export default function ItemFilePage() {
         package_conversion_factor: null,
         package_name_en: "",
         package_name_ar: "",
+        default_display_unit: "base",
       });
-      setForm((f) => ({ ...f, package_conversion_factor: "", package_name_en: "", package_name_ar: "" }));
+      formRef.current = { ...formRef.current, default_display_unit: "base" };
+      setForm((f) => ({
+        ...f,
+        package_conversion_factor: "",
+        package_name_en: "",
+        package_name_ar: "",
+        default_display_unit: "base",
+      }));
       setDirty(false);
       loadIngredients();
     } catch (err) {
@@ -429,8 +483,9 @@ export default function ItemFilePage() {
     setSaving(true);
     setError(null);
     try {
-      await updateIngredient(currentId, { package_is_active: false });
-      setForm((f) => ({ ...f, package_is_active: false }));
+      await updateIngredient(currentId, { package_is_active: false, default_display_unit: "base" });
+      formRef.current = { ...formRef.current, default_display_unit: "base" };
+      setForm((f) => ({ ...f, package_is_active: false, default_display_unit: "base" }));
       setDirty(false);
       loadIngredients();
     } catch (err) {
@@ -465,11 +520,11 @@ export default function ItemFilePage() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-8rem)] space-y-4 sm:space-y-6">
+    <div className="min-h-[calc(100vh-8rem)] space-y-4">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-slate-800 dark:text-white">
+          <h1 className="text-2xl font-bold text-slate-800 dark:text-white">
             {isRTL ? "ملف الأصناف" : "Item File"}
           </h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
@@ -478,15 +533,15 @@ export default function ItemFilePage() {
         </div>
         <Link
           to="/inventory/manage-ingredients"
-          className="rounded-lg bg-slate-200 px-4 py-2.5 min-h-[44px] flex items-center text-sm font-medium text-slate-700 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
+          className="rounded-lg bg-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600"
         >
           {t("back")}
         </Link>
       </div>
 
       {/* Search & Sort Bar */}
-      <div className={`float-card flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3 sm:gap-4 rounded-2xl p-3 sm:p-4 ${showSearchDropdown ? "relative z-[9999]" : ""}`}>
-        <div ref={searchContainerRef} className="relative flex flex-1 min-w-0 sm:min-w-[280px] flex-col">
+      <div className={`float-card flex flex-wrap items-center gap-4 rounded-2xl p-4 ${showSearchDropdown ? "relative z-[9999]" : ""}`}>
+        <div ref={searchContainerRef} className="relative flex flex-1 min-w-[280px] flex-col">
           <div className="flex items-center gap-2">
             <Search className="h-5 w-5 shrink-0 text-slate-400" />
             <input
@@ -552,26 +607,26 @@ export default function ItemFilePage() {
           )}
         </div>
         <div className="flex items-center gap-3">
-          <span className="hidden sm:inline text-sm text-slate-500 dark:text-slate-400">
+          <span className="text-sm text-slate-500 dark:text-slate-400">
             {isRTL ? "بحث حسب" : "Search by"}
           </span>
-          <label className="flex items-center gap-1.5 text-sm cursor-pointer min-h-[44px] px-1">
+          <label className="flex items-center gap-1.5 text-sm">
             <input
               type="radio"
               name="searchBy"
               checked={searchBy === "name"}
               onChange={() => setSearchBy("name")}
-              className="h-4 w-4 accent-emerald-500"
+              className="rounded"
             />
             {isRTL ? "الاسم" : "Name"}
           </label>
-          <label className="flex items-center gap-1.5 text-sm cursor-pointer min-h-[44px] px-1">
+          <label className="flex items-center gap-1.5 text-sm">
             <input
               type="radio"
               name="searchBy"
               checked={searchBy === "serial"}
               onChange={() => setSearchBy("serial")}
-              className="h-4 w-4 accent-emerald-500"
+              className="rounded"
             />
             {isRTL ? "رقم الصنف" : "Serial"}
           </label>
@@ -621,13 +676,13 @@ export default function ItemFilePage() {
         <div className="space-y-6">
           <div className="float-card overflow-hidden rounded-2xl">
             {/* Identification & Categorization */}
-            <div className="grid gap-x-8 gap-y-6 border-b border-slate-200 p-4 sm:p-6 dark:border-slate-700 md:grid-cols-2">
-              <div className="space-y-5">
+            <div className="grid gap-6 border-b border-slate-200 p-6 dark:border-slate-700 lg:grid-cols-2">
+              <div className="space-y-4">
                 <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   {isRTL ? "بيانات التعريف" : "Identification"}
                 </h3>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-slate-500 dark:text-slate-400">
+                  <label className="mb-1 block text-xs text-slate-500">
                     {isRTL ? "اسم الصنف" : "Item Name"} (EN)
                   </label>
                   <input
@@ -637,12 +692,12 @@ export default function ItemFilePage() {
                       setForm((f) => ({ ...f, name_en: e.target.value }));
                       setDirty(true);
                     }}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
                     placeholder="e.g. Whole Milk"
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-slate-500 dark:text-slate-400">
+                  <label className="mb-1 block text-xs text-slate-500">
                     {isRTL ? "اسم الصنف" : "Item Name"} (AR)
                   </label>
                   <input
@@ -652,13 +707,13 @@ export default function ItemFilePage() {
                       setForm((f) => ({ ...f, name_ar: e.target.value }));
                       setDirty(true);
                     }}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
                     placeholder="حليب كامل الدسم"
                     dir="rtl"
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-slate-500 dark:text-slate-400">
+                  <label className="mb-1 block text-xs text-slate-500">
                     {isRTL ? "رقم الصنف / الرمز" : "Serial Code"}
                   </label>
                   <input
@@ -668,17 +723,17 @@ export default function ItemFilePage() {
                       setForm((f) => ({ ...f, serial_code: e.target.value }));
                       setDirty(true);
                     }}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2.5 font-mono text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
                     placeholder="RM-001"
                   />
                 </div>
               </div>
-              <div className="space-y-5">
+              <div className="space-y-4">
                 <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                   {isRTL ? "التصنيف والشراء" : "Category & Purchase"}
                 </h3>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-slate-500 dark:text-slate-400">
+                  <label className="mb-1 block text-xs text-slate-500">
                     {isRTL ? "مجموعة النظام" : "System Group"}
                   </label>
                   <select
@@ -687,7 +742,7 @@ export default function ItemFilePage() {
                       setForm((f) => ({ ...f, system_group: e.target.value as typeof form.system_group }));
                       setDirty(true);
                     }}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
                   >
                     {SYSTEM_GROUPS.map((g) => (
                       <option key={g.value} value={g.value}>
@@ -697,7 +752,7 @@ export default function ItemFilePage() {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-slate-500 dark:text-slate-400">
+                  <label className="mb-1 block text-xs text-slate-500">
                     {isRTL ? "الوحدة الرئيسية" : "Base Unit"}
                   </label>
                   <select
@@ -706,7 +761,7 @@ export default function ItemFilePage() {
                       setForm((f) => ({ ...f, base_unit_id: Number(e.target.value) }));
                       setDirty(true);
                     }}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
                   >
                     {units.map((u) => (
                       <option key={u.id} value={u.id}>
@@ -716,7 +771,7 @@ export default function ItemFilePage() {
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-slate-500 dark:text-slate-400">
+                  <label className="mb-1 block text-xs text-slate-500">
                     {isRTL ? "تكلفة الوحدة (ر.س)" : "Unit Cost (SAR)"}
                   </label>
                   <input
@@ -733,16 +788,9 @@ export default function ItemFilePage() {
                       setForm((f) => ({ ...f, unit_cost: sanitized }));
                       setDirty(true);
                     }}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2.5 text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
                     placeholder="0.00"
                   />
-                  {factor > 0 && unitCost != null && (
-                    <p className="mt-2 text-xs text-slate-400 dark:text-slate-500">
-                      {isRTL ? "تكلفة العبوة = الوحدة × معامل التحويل" : "Package cost = Unit × Conversion factor"}
-                      {" = "}
-                      <span className="font-medium text-slate-600 dark:text-slate-300">{(unitCost * factor).toFixed(2)} {isRTL ? "ر.س" : "SAR"}</span>
-                    </p>
-                  )}
                 </div>
               </div>
             </div>
@@ -750,77 +798,102 @@ export default function ItemFilePage() {
             {/* Package Conversion */}
             <div
               ref={packageConversionRef}
-              className={`scroll-mt-4 border-b border-slate-200 p-4 sm:p-6 transition-all duration-500 dark:border-slate-700 ${
+              className={`scroll-mt-4 border-b border-slate-200 p-6 transition-all duration-500 dark:border-slate-700 ${
                 packageSectionHighlight ? "ring-2 ring-emerald-500 ring-offset-2 dark:ring-offset-slate-900" : ""
               }`}
             >
               <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 {isRTL ? "تحويل العبوة" : "Package Conversion"}
               </h3>
-              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-                <span className="text-slate-600 dark:text-slate-400 shrink-0">
+              <div className="mb-4 max-w-md">
+                <label className="mb-1 block text-xs text-slate-500">
+                  {isRTL ? "الوحدة الافتراضية للعرض" : "Default Display Unit"}
+                </label>
+                <select
+                  value={form.default_display_unit}
+                  onChange={(e) => {
+                    void handleSetDefaultUnit(e.target.value as "base" | "package");
+                  }}
+                  disabled={savingDefaultUnit}
+                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-800 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                >
+                  <option value="base">
+                    {isRTL
+                      ? `الوحدة الأساسية (${baseUnit?.code || "—"})`
+                      : `Base Unit (${baseUnit?.code || "—"})`}
+                  </option>
+                  <option value="package" disabled={!packageOptionEnabled}>
+                    {packageDefaultLabel}
+                  </option>
+                </select>
+                {!packageOptionEnabled && (
+                  <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                    {isRTL
+                      ? "لتفعيل خيار العبوة: أدخل معامل تحويل أكبر من صفر وتأكد أن حالة العبوة مفعلة."
+                      : "To enable package default: set conversion factor > 0 and keep package active."}
+                  </p>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="text-slate-600 dark:text-slate-400">
                   {isRTL ? "كل 1" : "Every 1"}
                 </span>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <input
-                    ref={packageNameEnRef}
-                    type="text"
-                    value={form.package_name_en}
-                    onChange={(e) => {
-                      setForm((f) => ({ ...f, package_name_en: e.target.value }));
-                      setDirty(true);
-                    }}
-                    className="w-28 sm:w-24 rounded-lg border border-slate-200 px-3 py-2.5 sm:px-2 sm:py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-                    placeholder="Carton"
-                  />
-                  <span className="text-slate-400">/</span>
-                  <input
-                    type="text"
-                    value={form.package_name_ar}
-                    onChange={(e) => {
-                      setForm((f) => ({ ...f, package_name_ar: e.target.value }));
-                      setDirty(true);
-                    }}
-                    className="w-28 sm:w-24 rounded-lg border border-slate-200 px-3 py-2.5 sm:px-2 sm:py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-                    placeholder="كرتون"
-                    dir="rtl"
-                  />
-                </div>
-                <span className="text-slate-600 dark:text-slate-400 shrink-0">
+                <input
+                  ref={packageNameEnRef}
+                  type="text"
+                  value={form.package_name_en}
+                  onChange={(e) => {
+                    setForm((f) => ({ ...f, package_name_en: e.target.value }));
+                    setDirty(true);
+                  }}
+                  className="w-24 rounded-lg border border-slate-200 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                  placeholder="Carton"
+                />
+                <span className="text-slate-400">/</span>
+                <input
+                  type="text"
+                  value={form.package_name_ar}
+                  onChange={(e) => {
+                    setForm((f) => ({ ...f, package_name_ar: e.target.value }));
+                    setDirty(true);
+                  }}
+                  className="w-24 rounded-lg border border-slate-200 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                  placeholder="كرتون"
+                  dir="rtl"
+                />
+                <span className="text-slate-600 dark:text-slate-400">
                   {isRTL ? "يحتوي" : "contains"}
                 </span>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    dir="ltr"
-                    value={form.package_conversion_factor}
-                    onChange={(e) => {
-                      const v = normalizeNumericInput(e.target.value).replace(/[^\d.]/g, "");
-                      const parts = v.split(".");
-                      const sanitized = parts.length > 2
-                        ? `${parts[0]}.${parts.slice(1).join("")}`
-                        : v;
-                      setForm((f) => ({ ...f, package_conversion_factor: sanitized }));
-                      setDirty(true);
-                    }}
-                    className="w-24 sm:w-20 rounded-lg border border-slate-200 px-3 py-2.5 sm:px-2 sm:py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
-                    placeholder="12"
-                  />
-                  <span className="text-slate-500 font-medium">
-                    {baseUnit?.code ?? "unit"}
-                  </span>
-                </div>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  dir="ltr"
+                  value={form.package_conversion_factor}
+                  onChange={(e) => {
+                    const v = normalizeNumericInput(e.target.value).replace(/[^\d.]/g, "");
+                    const parts = v.split(".");
+                    const sanitized = parts.length > 2
+                      ? `${parts[0]}.${parts.slice(1).join("")}`
+                      : v;
+                    setForm((f) => ({ ...f, package_conversion_factor: sanitized }));
+                    setDirty(true);
+                  }}
+                  className="w-20 rounded-lg border border-slate-200 px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
+                  placeholder="12"
+                />
+                <span className="text-slate-500 font-medium">
+                  {baseUnit?.code ?? "unit"}
+                </span>
               </div>
             </div>
 
             {/* Item Units Grid */}
-            <div className="p-4 sm:p-6">
+            <div className="p-6">
               <h3 className="mb-4 text-sm font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 {isRTL ? "عبوات الصنف" : "Item Units"}
               </h3>
-              <div className="overflow-x-auto -mx-4 sm:mx-0 rounded-xl border border-slate-200 dark:border-slate-700">
-                <table className={`w-full text-sm ${isRTL ? "text-right" : "text-left"}`}>
+              <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-700">
+                <table className="w-full text-left text-sm">
                   <thead>
                     <tr className="border-b border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/50">
                       <th className="px-4 py-3 font-medium text-slate-600 dark:text-slate-400">
@@ -882,12 +955,12 @@ export default function ItemFilePage() {
                               (row.type === "base" && form.default_display_unit === "base") ||
                               (row.type === "package" && form.default_display_unit === "package")
                             }
-                            disabled={savingDefaultUnit}
+                            disabled={savingDefaultUnit || (row.type === "package" && !packageOptionEnabled)}
                             onClick={() => handleSetDefaultUnit(row.type)}
-                            className="flex w-full cursor-pointer items-center justify-center gap-1 rounded p-2 sm:p-1.5 min-h-[44px] min-w-[44px] transition hover:bg-slate-100 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+                            className="flex w-full cursor-pointer items-center justify-center gap-1 rounded p-1.5 transition hover:bg-slate-100 dark:hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
                           >
                             <span
-                              className={`inline-flex h-5 w-5 sm:h-4 sm:w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${
+                              className={`inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 ${
                                 (row.type === "base" && form.default_display_unit === "base") ||
                                 (row.type === "package" && form.default_display_unit === "package")
                                   ? "border-blue-500 bg-blue-500"
@@ -896,7 +969,7 @@ export default function ItemFilePage() {
                             >
                               {((row.type === "base" && form.default_display_unit === "base") ||
                                 (row.type === "package" && form.default_display_unit === "package")) && (
-                                <span className="h-2.5 w-2.5 sm:h-2 sm:w-2 rounded-full bg-white" aria-hidden />
+                                <span className="h-2 w-2 rounded-full bg-white" aria-hidden />
                               )}
                             </span>
                           </button>
@@ -910,7 +983,7 @@ export default function ItemFilePage() {
                                 type="button"
                                 onClick={scrollToPackageConversion}
                                 title={isRTL ? "تعديل" : "Edit"}
-                                className="rounded p-2 sm:p-1.5 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center text-slate-500 hover:bg-slate-200 hover:text-slate-700 dark:hover:bg-slate-600 dark:hover:text-slate-200"
+                                className="rounded p-1.5 text-slate-500 hover:bg-slate-200 hover:text-slate-700 dark:hover:bg-slate-600 dark:hover:text-slate-200"
                               >
                                 <Pencil className="h-4 w-4" />
                               </button>
@@ -920,7 +993,7 @@ export default function ItemFilePage() {
                                   onClick={handleDeletePackage}
                                   disabled={saving}
                                   title={isRTL ? "حذف العبوة" : "Delete package"}
-                                  className="rounded p-2 sm:p-1.5 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center text-red-500 hover:bg-red-500/10 disabled:opacity-50"
+                                  className="rounded p-1.5 text-red-500 hover:bg-red-500/10 disabled:opacity-50"
                                 >
                                   <Trash2 className="h-4 w-4" />
                                 </button>
@@ -931,7 +1004,7 @@ export default function ItemFilePage() {
                                   onClick={handleDisablePackage}
                                   disabled={saving}
                                   title={isRTL ? "إيقاف العبوة" : "Disable package"}
-                                  className="rounded p-2 sm:p-1.5 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center text-amber-500 hover:bg-amber-500/10 disabled:opacity-50"
+                                  className="rounded p-1.5 text-amber-500 hover:bg-amber-500/10 disabled:opacity-50"
                                 >
                                   <PowerOff className="h-4 w-4" />
                                 </button>
@@ -942,7 +1015,7 @@ export default function ItemFilePage() {
                                   onClick={handleEnablePackage}
                                   disabled={saving}
                                   title={isRTL ? "تفعيل العبوة" : "Enable package"}
-                                  className="rounded p-2 sm:p-1.5 min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 flex items-center justify-center text-emerald-500 hover:bg-emerald-500/10 disabled:opacity-50"
+                                  className="rounded p-1.5 text-emerald-500 hover:bg-emerald-500/10 disabled:opacity-50"
                                 >
                                   <Power className="h-4 w-4" />
                                 </button>
@@ -965,13 +1038,13 @@ export default function ItemFilePage() {
             )}
 
             {/* Action Bar */}
-            <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-200 bg-slate-50/50 px-4 sm:px-6 py-4 dark:border-slate-700 dark:bg-slate-800/30">
-              <div className="flex items-center gap-1 sm:gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-4 border-t border-slate-200 bg-slate-50/50 px-6 py-4 dark:border-slate-700 dark:bg-slate-800/30">
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => goTo(0)}
                   disabled={isAddingNew || currentIndex <= 0}
-                  className="rounded-lg p-2.5 sm:p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-500 hover:bg-slate-200 disabled:opacity-40 dark:hover:bg-slate-700"
+                  className="rounded-lg p-2 text-slate-500 hover:bg-slate-200 disabled:opacity-40 dark:hover:bg-slate-700"
                   title={isRTL ? "الأول" : "First"}
                 >
                   <ChevronsLeft className="h-5 w-5" />
@@ -980,19 +1053,19 @@ export default function ItemFilePage() {
                   type="button"
                   onClick={() => goTo(currentIndex - 1)}
                   disabled={isAddingNew || currentIndex <= 0}
-                  className="rounded-lg p-2.5 sm:p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-500 hover:bg-slate-200 disabled:opacity-40 dark:hover:bg-slate-700"
+                  className="rounded-lg p-2 text-slate-500 hover:bg-slate-200 disabled:opacity-40 dark:hover:bg-slate-700"
                   title={isRTL ? "السابق" : "Previous"}
                 >
                   <ChevronLeft className="h-5 w-5" />
                 </button>
-                <span className="min-w-[80px] sm:min-w-[120px] text-center text-sm text-slate-600 dark:text-slate-400">
+                <span className="min-w-[120px] text-center text-sm text-slate-600 dark:text-slate-400">
                   {isAddingNew ? (isRTL ? "جديد" : "New") : `${currentIndex + 1} / ${totalCount}`}
                 </span>
                 <button
                   type="button"
                   onClick={() => goTo(currentIndex + 1)}
                   disabled={isAddingNew || currentIndex >= totalCount - 1}
-                  className="rounded-lg p-2.5 sm:p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-500 hover:bg-slate-200 disabled:opacity-40 dark:hover:bg-slate-700"
+                  className="rounded-lg p-2 text-slate-500 hover:bg-slate-200 disabled:opacity-40 dark:hover:bg-slate-700"
                   title={isRTL ? "التالي" : "Next"}
                 >
                   <ChevronRight className="h-5 w-5" />
@@ -1001,18 +1074,18 @@ export default function ItemFilePage() {
                   type="button"
                   onClick={() => goTo(totalCount - 1)}
                   disabled={isAddingNew || currentIndex >= totalCount - 1}
-                  className="rounded-lg p-2.5 sm:p-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-500 hover:bg-slate-200 disabled:opacity-40 dark:hover:bg-slate-700"
+                  className="rounded-lg p-2 text-slate-500 hover:bg-slate-200 disabled:opacity-40 dark:hover:bg-slate-700"
                   title={isRTL ? "الأخير" : "Last"}
                 >
                   <ChevronsRight className="h-5 w-5" />
                 </button>
               </div>
-              <div className="flex items-center gap-2 sm:gap-3">
+              <div className="flex items-center gap-3">
                 <button
                   type="button"
                   onClick={currentId ? handleSave : handleCreate}
                   disabled={saving}
-                  className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 sm:py-2 min-h-[44px] text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
+                  className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 disabled:opacity-50"
                 >
                   <Save className="h-4 w-4" />
                   {saving ? t("saving") : t("save")}

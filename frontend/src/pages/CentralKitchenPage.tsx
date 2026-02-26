@@ -123,7 +123,7 @@ export default function CentralKitchenPage() {
                 <button
                   type="button"
                   onClick={() => tr.uuid && handleConfirm(tr.uuid)}
-                  disabled={!!confirmingId || !!rejectingId || !tr.uuid}
+                  disabled={!tr.uuid || !!confirmingId || !!rejectingId}
                   className="rounded-xl bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700 disabled:opacity-50"
                 >
                   {confirmingId === tr.uuid ? "..." : t("confirmReceive") ?? "Confirm"}
@@ -131,7 +131,7 @@ export default function CentralKitchenPage() {
                 <button
                   type="button"
                   onClick={() => tr.uuid && handleReject(tr.uuid)}
-                  disabled={!!confirmingId || !!rejectingId}
+                  disabled={!tr.uuid || !!confirmingId || !!rejectingId}
                   className="rounded-xl border border-slate-300 px-4 py-2 text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700 disabled:opacity-50"
                 >
                   {rejectingId === tr.uuid ? "..." : t("reject") ?? "Reject"}

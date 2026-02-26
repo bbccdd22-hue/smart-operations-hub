@@ -5,7 +5,7 @@
  * Optimized: React.memo + Virtual Grid for 10k+ products.
  */
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, memo } from "react";
-import { Grid } from "react-window";
+import { Grid, type CellComponentProps } from "react-window";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "../contexts/AuthContext";
@@ -37,23 +37,21 @@ const CATEGORY_STYLES: Record<string, { icon: string; gradient: string }> = {
   other: { icon: "🍽️", gradient: "from-slate-700/80 to-slate-600/60" },
 };
 
-type POSGridCellProps = {
-  columnIndex: number;
-  rowIndex: number;
-  style: React.CSSProperties;
+type POSGridCellDataProps = {
   products: POSProduct[];
   gridColumnCount: number;
   onSelect: (p: POSProduct) => void;
 };
+type POSGridCellProps = CellComponentProps<POSGridCellDataProps>;
 
-const POSGridCell = memo(function POSGridCell({
+const POSGridCell = ({
   columnIndex,
   rowIndex,
   style,
   products,
   gridColumnCount,
   onSelect,
-}: POSGridCellProps) {
+}: POSGridCellProps) => {
   const idx = rowIndex * gridColumnCount + columnIndex;
   const p = products[idx];
   if (!p) return null;
@@ -62,7 +60,7 @@ const POSGridCell = memo(function POSGridCell({
       <ProductCard product={p} onSelect={() => onSelect(p)} />
     </div>
   );
-});
+};
 
 /** بطاقة منتج مُحسّنة – React.memo لتقليل إعادة الرسم */
 const ProductCard = memo(function ProductCard({
@@ -555,7 +553,7 @@ export default function POSPage() {
             {products.length === 0 ? (
               <p className="py-12 text-center text-slate-500">{isRTL ? "لا توجد منتجات" : "No products"}</p>
             ) : gridHeight > 0 && gridWidth > 0 ? (
-              <Grid
+              <Grid<POSGridCellDataProps>
                 columnCount={gridColumnCount}
                 columnWidth={Math.floor((gridWidth - GRID_GAP * (gridColumnCount - 1)) / gridColumnCount)}
                 rowCount={gridRowCount}
