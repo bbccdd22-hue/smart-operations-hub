@@ -225,8 +225,12 @@ class ShiftClosingCreateView(APIView):
             try:
                 from accounting.journal_services import create_journal_entry_from_shift_closing
                 create_journal_entry_from_shift_closing(closing, created_by=request.user)
-            except Exception:  # noqa: BLE001
-                pass  # لا نمنع الإقفال إذا فشل إنشاء القيد
+            except Exception as exc:
+                from core.error_logging import log_system_error
+                log_system_error(
+                    "other", f"Failed to create journal entry for shift closing {closing.id}",
+                    user=request.user, context={"closing_id": closing.id}, exc=exc,
+                )
 
         return Response({
             "closing": ShiftClosingSerializer(closing).data,
@@ -265,8 +269,12 @@ class ShiftClosingSubmitView(APIView):
         try:
             from accounting.journal_services import create_journal_entry_from_shift_closing
             create_journal_entry_from_shift_closing(closing, created_by=request.user)
-        except Exception:  # noqa: BLE001
-            pass  # لا نمنع الإقفال إذا فشل إنشاء القيد
+        except Exception as exc:
+            from core.error_logging import log_system_error
+            log_system_error(
+                "other", f"Failed to create journal entry for shift closing {closing.id}",
+                user=request.user, context={"closing_id": closing.id}, exc=exc,
+            )
         return Response({
             "closing": ShiftClosingSerializer(closing).data,
             "is_submitted": True,

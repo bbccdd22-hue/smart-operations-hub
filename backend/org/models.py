@@ -326,6 +326,7 @@ class AdminNotification(models.Model):
         ("user_activated", "User account activated"),
         ("user_created", "New user added to branch"),
         ("excel_uploaded", "Excel sales uploaded"),
+        ("excel_parse_error", "Excel parse error"),
         ("shift_closed", "Shift closing submitted"),
         ("chart_account_missing", "Chart account missing - قيد يستخدم حساباً غير موجود"),
         ("negative_stock", "رصيد سالب - تنبيه حرج"),
