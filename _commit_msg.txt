@@ -1,0 +1,15 @@
+feat(nav): complete 6-system ERP sidebar with all features and routes
+
+System 1 - Operations Hub: main dashboard, executive dashboard, command center, activity log, notifications, error logs, system heartbeat
+
+System 2 - Sales System: POS/Cashier, shift closing, prep list, kitchen display, forecast, cafe heartbeat, management reports, profit dashboard
+
+System 3 - Inventory System: recipe & inventory, item file, products catalog, stock transfers, central kitchen, waste tracker
+
+System 4 - Procurement System: smart purchase (AI-based), manual purchase forecast
+
+System 5 - Accounting System: financial statements (daily revenue, P&L, income statement, cash flow, net profit margin), analysis (COGS, OPEX, financial charts, cost audit), auditing (chart of accounts, external auditor, reconciliation), uploads (balance upload, upload center)
+
+System 6 - HR System: employee self-service
+
+Also added 35+ new i18n keys for new nav labels (AR + EN) and full permission mapping for all routes
