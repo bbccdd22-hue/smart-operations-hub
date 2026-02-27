@@ -1,7 +1,12 @@
 /**
- * Navigation config – Six professional ERP systems
- * 1. مركز العمليات   2. نظام المبيعات   3. نظام المخازن
- * 4. نظام المشتريات  5. نظام الحسابات   6. نظام شؤون الموظفين
+ * Navigation config – Six Professional ERP Systems (Interconnected)
+ *
+ * 1. مركز العمليات     — Control hub, system monitoring, org settings
+ * 2. نظام المبيعات     — POS, shifts, forecasting, sales reports
+ * 3. نظام المخازن      — Items catalog, stock movements, inventory analysis
+ * 4. نظام المشتريات    — Smart & manual purchase planning, materials mgmt
+ * 5. نظام الحسابات     — Full accounting: P&L, cash flow, audit, tax, uploads
+ * 6. نظام شؤون الموظفين — Employee portal, staff mgmt, shifts, branch config
  */
 import {
   LayoutDashboard,
@@ -18,218 +23,151 @@ import {
 } from "lucide-react";
 import type { NavConfig, NavItem } from "../layouts/AppShellLayout";
 
-/* ─── icons ──────────────────────────────────────────────────────────── */
+/* ─── icon helpers ─────────────────────────────────────────────────── */
+const svg = (d: string | string[], extra?: string) => (
+  <svg className={`h-4 w-4 ${extra ?? ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    {(Array.isArray(d) ? d : [d]).map((path, i) => (
+      <path key={i} strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={path} />
+    ))}
+  </svg>
+);
+
 const Ic = {
-  /* General */
+  /* ── General ───────────────────────────────────────────────────── */
   dashboard:   <LayoutDashboard className="h-4 w-4" />,
   barChart:    <BarChart3 className="h-4 w-4" />,
   trendUp:     <TrendingUp className="h-4 w-4" />,
   users:       <Users className="h-4 w-4" />,
   briefcase:   <Briefcase className="h-4 w-4" />,
 
-  /* Ops */
-  heartbeat: (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-    </svg>
-  ),
-  activity: (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-    </svg>
-  ),
-  bell: (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538.214 1.055.595 1.43L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-    </svg>
-  ),
-  error: (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-    </svg>
-  ),
-  command: (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-    </svg>
-  ),
-  settings: (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-    </svg>
-  ),
-  system: (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2v-4M9 21H5a2 2 0 01-2-2v-4m0 0h18" />
-    </svg>
-  ),
+  /* ── Operations ────────────────────────────────────────────────── */
+  heartbeat:   svg("M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"),
+  activity:    svg("M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"),
+  bell:        svg("M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538.214 1.055.595 1.43L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"),
+  bellSettings:svg(["M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z", "M15 12a3 3 0 11-6 0 3 3 0 016 0z"]),
+  error:       svg("M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"),
+  command:     svg("M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"),
+  settings:    svg(["M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z", "M15 12a3 3 0 11-6 0 3 3 0 016 0z"]),
+  system:      svg("M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2v-4M9 21H5a2 2 0 01-2-2v-4m0 0h18"),
 
-  /* Sales */
-  pos: (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-    </svg>
-  ),
-  shift: (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  ),
-  prepList: (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
-    </svg>
-  ),
-  kitchen: (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-    </svg>
-  ),
-  forecast: (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
-    </svg>
-  ),
-  profit: (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  ),
+  /* ── Org / settings extras ─────────────────────────────────────── */
+  building:    svg("M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-2 10v-5a1 1 0 00-1-1h-2a1 1 0 00-1 1v5m4 0H9"),
+  tag:         svg("M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"),
+  code:        svg("M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"),
+  sliders:     svg("M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"),
 
-  /* Inventory */
-  ingredients: (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
-    </svg>
-  ),
-  itemFile:   <Package className="h-4 w-4" />,
-  products:   <ShoppingBag className="h-4 w-4" />,
-  transfers: (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-    </svg>
-  ),
-  centralKitchen: (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-    </svg>
-  ),
-  waste: (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-    </svg>
-  ),
+  /* ── Sales ─────────────────────────────────────────────────────── */
+  pos:         svg("M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"),
+  shift:       svg("M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"),
+  prepList:    svg("M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"),
+  kitchen:     svg(["M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"]),
+  forecast:    svg("M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"),
+  profit:      svg("M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"),
+  salesReport: svg(["M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"]),
 
-  /* Procurement */
+  /* ── Inventory ─────────────────────────────────────────────────── */
+  ingredients: svg("M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z"),
+  itemFile:    <Package className="h-4 w-4" />,
+  products:    <ShoppingBag className="h-4 w-4" />,
+  transfers:   svg("M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"),
+  centralKitchen: svg(["M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"]),
+  waste:       svg("M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"),
+  stockValue:  svg(["M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"]),
+
+  /* ── Procurement ───────────────────────────────────────────────── */
   smartPurchase: <ShoppingCart className="h-4 w-4" />,
   manualForecast: <ClipboardList className="h-4 w-4" />,
+  supplier:    svg(["M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z"]),
+  purchaseOrder: svg(["M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"]),
 
-  /* Accounting */
-  wallet:   <Wallet className="h-4 w-4" />,
-  reports:  <BarChart3 className="h-4 w-4" />,
-  check: (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  ),
-  upload: (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-    </svg>
-  ),
-  cashFlow: (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
-    </svg>
-  ),
-  chart: (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z" />
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z" />
-    </svg>
-  ),
-  audit: (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-    </svg>
-  ),
-  book: (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
-    </svg>
-  ),
-  adjustments: (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-    </svg>
-  ),
-  auditor: (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-    </svg>
-  ),
+  /* ── Accounting ────────────────────────────────────────────────── */
+  wallet:      <Wallet className="h-4 w-4" />,
+  reports:     <BarChart3 className="h-4 w-4" />,
+  check:       svg("M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"),
+  upload:      svg("M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"),
+  cashFlow:    svg(["M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"]),
+  chart:       svg(["M11 3.055A9.001 9.001 0 1020.945 13H11V3.055z", "M20.488 9H15V3.512A9.025 9.025 0 0120.488 9z"]),
+  audit:       svg(["M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"]),
+  book:        svg(["M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"]),
+  adjustments: svg("M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"),
+  auditor:     svg("M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"),
+  receipt:     svg(["M9 14l6-6m-5.5.5h.01m4.99 5h.01M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16l3.5-2 3.5 2 3.5-2 3.5 2z"]),
+  card:        svg(["M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"]),
+  income:      svg("M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"),
+  netProfit:   svg("M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"),
 
-  /* HR */
-  employee: (
-    <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
-    </svg>
-  ),
+  /* ── HR ────────────────────────────────────────────────────────── */
+  employee:    svg("M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"),
+  shield:      svg("M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"),
+  calendar:    svg(["M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"]),
+  userGroup:   svg("M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"),
+  clock:       svg(["M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"]),
+  performance: svg("M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"),
+  selfService: svg("M5.121 17.804A13.937 13.937 0 0112 16c2.5 0 4.847.655 6.879 1.804M15 10a3 3 0 11-6 0 3 3 0 016 0M19.5 6.5l-15 15"),
+  idCard:      svg(["M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"]),
 };
 
 /* ─── permission map ────────────────────────────────────────────────── */
 const ROUTE_PERM: Record<string, string> = {
-  /* Operations */
-  "/":                              "perm_management_reports",
-  "/dashboard":                     "perm_management_reports",
-  "/executive-dashboard":           "perm_full_system_access",
-  "/admin-hub":                     "perm_full_system_access",
-  "/admin-hub/command-center":      "perm_full_system_access",
-  "/admin-hub/activity-log":        "perm_full_system_access",
-  "/admin-hub/notifications":       "perm_management_reports",
-  "/admin-hub/error-logs":          "perm_full_system_access",
-  "/admin-hub/system-heartbeat":    "perm_full_system_access",
-  /* Sales */
-  "/pos":                           "perm_shift_closing",
-  "/shift-closing":                 "perm_shift_closing",
-  "/forecast":                      "perm_order_forecasting",
-  "/prep-list":                     "perm_order_forecasting",
-  "/kitchen":                       "perm_shift_closing",
-  "/dashboard/heartbeat":           "perm_management_reports",
-  "/dashboard/reports":             "perm_management_reports",
-  "/profit-dashboard":              "perm_management_reports",
-  /* Inventory */
-  "/ingredients":                   "perm_management_reports",
-  "/inventory/manage-ingredients":  "perm_management_reports",
-  "/inventory/item-file":           "perm_management_reports",
-  "/products":                      "perm_management_reports",
-  "/stock-transfers":               "perm_management_reports",
-  "/central-kitchen":               "perm_management_reports",
-  "/waste-tracker":                 "perm_management_reports",
-  /* Procurement */
-  "/smart-purchase":                "perm_management_reports",
-  "/manual-purchase-forecast":      "perm_management_reports",
-  /* Accounting */
-  "/finance":                       "perm_financial_reports",
-  "/finance/daily-revenue":         "perm_financial_reports",
-  "/finance/profit-loss":           "perm_financial_reports",
-  "/finance/income-statement":      "perm_financial_reports",
-  "/finance/cash-flow":             "perm_financial_reports",
-  "/finance/charts-dashboard":      "perm_financial_reports",
-  "/finance/opex":                  "perm_financial_reports",
-  "/finance/cogs":                  "perm_financial_reports",
-  "/finance/net-profit-margin":     "perm_financial_reports",
-  "/finance/reports":               "perm_financial_reports",
-  "/finance/chart-of-accounts":     "perm_financial_reports",
-  "/finance/cost-audit":            "perm_financial_reports",
-  "/finance/auditor":               "perm_financial_auditor",
-  "/finance/manual-adjustments":    "perm_full_system_access",
-  "/finance/balance-upload":        "perm_financial_reports",
-  "/reconciliation":                "perm_financial_reports",
-  "/upload-center":                 "perm_management_reports",
-  /* HR */
-  "/employee-self":                 "perm_management_reports",
+  /* ── Operations ─────────────────────────────────────────────────── */
+  "/":                                   "perm_management_reports",
+  "/dashboard":                          "perm_management_reports",
+  "/executive-dashboard":                "perm_full_system_access",
+  "/admin-hub":                          "perm_full_system_access",
+  "/admin-hub/command-center":           "perm_full_system_access",
+  "/admin-hub/activity-log":             "perm_full_system_access",
+  "/admin-hub/notifications":            "perm_management_reports",
+  "/admin-hub/notification-settings":    "perm_full_system_access",
+  "/admin-hub/error-logs":               "perm_full_system_access",
+  "/admin-hub/system-heartbeat":         "perm_full_system_access",
+  "/admin-hub/system-options":           "perm_full_system_access",
+  "/admin-hub/system-codes":             "perm_full_system_access",
+  /* ── Sales ──────────────────────────────────────────────────────── */
+  "/pos":                                "perm_shift_closing",
+  "/shift-closing":                      "perm_shift_closing",
+  "/forecast":                           "perm_order_forecasting",
+  "/prep-list":                          "perm_order_forecasting",
+  "/kitchen":                            "perm_shift_closing",
+  "/dashboard/heartbeat":                "perm_management_reports",
+  "/dashboard/reports":                  "perm_management_reports",
+  "/profit-dashboard":                   "perm_management_reports",
+  "/finance/daily-revenue":              "perm_financial_reports",
+  /* ── Inventory ──────────────────────────────────────────────────── */
+  "/ingredients":                        "perm_management_reports",
+  "/inventory/manage-ingredients":       "perm_management_reports",
+  "/inventory/item-file":                "perm_management_reports",
+  "/products":                           "perm_management_reports",
+  "/stock-transfers":                    "perm_management_reports",
+  "/central-kitchen":                    "perm_management_reports",
+  "/waste-tracker":                      "perm_management_reports",
+  "/finance/cost-audit":                 "perm_financial_reports",
+  "/finance/cogs":                       "perm_financial_reports",
+  /* ── Procurement ────────────────────────────────────────────────── */
+  "/smart-purchase":                     "perm_management_reports",
+  "/manual-purchase-forecast":           "perm_management_reports",
+  "/upload-center":                      "perm_management_reports",
+  /* ── Accounting ─────────────────────────────────────────────────── */
+  "/finance":                            "perm_financial_reports",
+  "/finance/profit-loss":                "perm_financial_reports",
+  "/finance/income-statement":           "perm_financial_reports",
+  "/finance/cash-flow":                  "perm_financial_reports",
+  "/finance/net-profit-margin":          "perm_financial_reports",
+  "/finance/opex":                       "perm_financial_reports",
+  "/finance/charts-dashboard":           "perm_financial_reports",
+  "/finance/chart-of-accounts":          "perm_financial_reports",
+  "/finance/auditor":                    "perm_financial_auditor",
+  "/finance/manual-adjustments":         "perm_full_system_access",
+  "/finance/balance-upload":             "perm_financial_reports",
+  "/reconciliation":                     "perm_financial_reports",
+  "/admin-hub/taxes":                    "perm_full_system_access",
+  "/admin-hub/payment-methods":          "perm_full_system_access",
+  "/admin-hub/smart-upload":             "perm_upload_files",
+  /* ── HR ──────────────────────────────────────────────────────────── */
+  "/employee-self":                      "perm_management_reports",
+  "/admin-hub/users":                    "perm_full_system_access",
+  "/admin-hub/roles":                    "perm_full_system_access",
+  "/admin-hub/branches":                 "perm_full_system_access",
+  "/admin-hub/brands":                   "perm_full_system_access",
 };
 
 function filterByPermission<T extends { to: string }>(
@@ -252,7 +190,7 @@ export type NavGroupConfig = {
 };
 
 /* ═══════════════════════════════════════════════════════════════════════
-   buildNestedNavConfig — Six professional ERP systems
+   buildNestedNavConfig — Six professional interconnected ERP systems
 ═══════════════════════════════════════════════════════════════════════ */
 export function buildNestedNavConfig(
   t: (k: string) => string,
@@ -276,12 +214,12 @@ export function buildNestedNavConfig(
   const isSAIF = isSuperAdmin;
 
   /* ─────────────────────────────────────────────────────────────────
-     Branch Supervisor – Simplified daily-ops view
+     Branch Supervisor — Simplified daily-ops view
   ───────────────────────────────────────────────────────────────── */
   if (isBranchSupervisor) {
     const branchItems = filterByPermission([
       { to: "/",              label: t("homePage"),            icon: Ic.dashboard },
-      { to: "/pos",           label: t("posCashier"),          icon: Ic.pos,     primary: true },
+      { to: "/pos",           label: t("posCashier"),          icon: Ic.pos, primary: true },
       { to: "/shift-closing", label: t("shiftClosing"),        icon: Ic.shift },
       { to: "/prep-list",     label: t("opsPrepList"),         icon: Ic.prepList },
       { to: "/kitchen",       label: t("kitchenDisplay"),      icon: Ic.kitchen },
@@ -296,123 +234,197 @@ export function buildNestedNavConfig(
     }];
   }
 
-  /* ─────────────────────────────────────────────────────────────────
+  /* ═════════════════════════════════════════════════════════════════
      SYSTEM 1 — مركز العمليات
-     Dashboards, admin tools, system monitoring
-  ───────────────────────────────────────────────────────────────── */
-  const opsMain = filterByPermission([
-    { to: "/",                      label: t("homePage"),             icon: Ic.dashboard, primary: true },
-    { to: "/executive-dashboard",   label: t("executiveDashboard"),   icon: Ic.command },
+     Control hub, system monitoring, organisation settings
+  ═════════════════════════════════════════════════════════════════ */
+
+  /* 1a — لوحات التحكم والتحليل */
+  const opsDashboards = filterByPermission([
+    { to: "/",                         label: t("homePage"),           icon: Ic.dashboard, primary: true },
+    { to: "/executive-dashboard",      label: t("executiveDashboard"), icon: Ic.command },
     { to: "/admin-hub/command-center", label: t("ownerCommandCenter"), icon: Ic.trendUp },
   ], permissions, isSAIF).filter((i) => {
-    if (i.to === "/executive-dashboard" || i.to === "/admin-hub/command-center") return showAdminHub;
+    if (i.to !== "/") return showAdminHub;
     return true;
   });
 
+  /* 1b — إدارة النظام */
   const opsAdmin = filterByPermission([
-    { to: "/admin-hub",                label: t("adminDashboard"),       icon: Ic.settings },
-    { to: "/admin-hub/activity-log",   label: t("activityLog"),          icon: Ic.activity },
-    { to: "/admin-hub/notifications",  label: t("notificationsList"),    icon: Ic.bell },
-    { to: "/admin-hub/error-logs",     label: t("systemErrorLogs"),      icon: Ic.error },
-    { to: "/admin-hub/system-heartbeat", label: t("systemHeartbeat"),    icon: Ic.system },
+    { to: "/admin-hub",                      label: t("adminDashboard"),        icon: Ic.settings },
+    { to: "/admin-hub/activity-log",         label: t("activityLog"),           icon: Ic.activity },
+    { to: "/admin-hub/notifications",        label: t("notificationsList"),     icon: Ic.bell },
+    { to: "/admin-hub/notification-settings",label: t("notificationSettings"),  icon: Ic.bellSettings },
+    { to: "/admin-hub/error-logs",           label: t("systemErrorLogs"),       icon: Ic.error },
+    { to: "/admin-hub/system-heartbeat",     label: t("systemHeartbeat"),       icon: Ic.system },
   ], permissions, isSAIF).filter(() => showAdminHub);
 
-  /* ─────────────────────────────────────────────────────────────────
+  /* 1c — إعدادات وتنظيم المنشأة */
+  const opsOrg = filterByPermission([
+    { to: "/admin-hub/system-options", label: t("systemOptions"), icon: Ic.sliders },
+    { to: "/admin-hub/system-codes",   label: t("systemCodes"),   icon: Ic.code },
+  ], permissions, isSAIF).filter(() => showAdminHub);
+
+  /* ═════════════════════════════════════════════════════════════════
      SYSTEM 2 — نظام المبيعات
-     POS, shift closing, forecasting, analytics
-  ───────────────────────────────────────────────────────────────── */
-  const salesOps = filterByPermission([
-    { to: "/pos",           label: t("posCashier"),   icon: Ic.pos },
-    { to: "/shift-closing", label: t("shiftClosing"), icon: Ic.shift },
-    { to: "/prep-list",     label: t("opsPrepList"),  icon: Ic.prepList },
-    { to: "/kitchen",       label: t("kitchenDisplay"), icon: Ic.kitchen },
+     POS, shifts, kitchen, forecasting, sales analytics
+  ═════════════════════════════════════════════════════════════════ */
+
+  /* 2a — الكاشير والعمليات اليومية */
+  const salesCashier = filterByPermission([
+    { to: "/pos",           label: t("posCashier"),    icon: Ic.pos },
+    { to: "/shift-closing", label: t("shiftClosing"),  icon: Ic.shift },
+    { to: "/prep-list",     label: t("opsPrepList"),   icon: Ic.prepList },
+    { to: "/kitchen",       label: t("kitchenDisplay"),icon: Ic.kitchen },
   ], permissions, isSAIF);
 
-  const salesDashboards = filterByPermission([
-    { to: "/forecast",            label: t("forecast"),           icon: Ic.forecast },
-    { to: "/dashboard/heartbeat", label: t("cafeHeartbeat"),      icon: Ic.heartbeat },
-    { to: "/dashboard/reports",   label: t("managementReports"),  icon: Ic.barChart },
-    { to: "/profit-dashboard",    label: t("profitDashboard"),    icon: Ic.profit },
+  /* 2b — التنبؤ والتخطيط */
+  const salesForecasting = filterByPermission([
+    { to: "/forecast",            label: t("predictiveDashboard"), icon: Ic.forecast },
+    { to: "/dashboard/heartbeat", label: t("cafeHeartbeat"),       icon: Ic.heartbeat },
   ], permissions, isSAIF);
 
-  /* ─────────────────────────────────────────────────────────────────
+  /* 2c — تقارير وتحليل المبيعات */
+  const salesReports = filterByPermission([
+    { to: "/dashboard/reports",  label: t("managementReports"), icon: Ic.salesReport },
+    { to: "/profit-dashboard",   label: t("profitDashboard"),   icon: Ic.profit },
+    { to: "/finance/daily-revenue", label: t("dailyRevenue"),   icon: Ic.barChart },
+  ], permissions, isSAIF);
+
+  /* ═════════════════════════════════════════════════════════════════
      SYSTEM 3 — نظام المخازن
-     Items, products, stock movements, waste
-  ───────────────────────────────────────────────────────────────── */
-  const itemsCatalog = filterByPermission([
-    { to: "/ingredients",          label: t("recipeInventory"),  icon: Ic.ingredients },
-    { to: "/inventory/item-file",  label: t("itemFile"),         icon: Ic.itemFile },
-    { to: "/products",             label: t("productsList"),     icon: Ic.products },
+     Items catalog, products, stock movements, inventory analysis
+  ═════════════════════════════════════════════════════════════════ */
+
+  /* 3a — دليل الأصناف والمنتجات */
+  const invCatalog = filterByPermission([
+    { to: "/ingredients",               label: t("recipeInventory"),       icon: Ic.ingredients },
+    { to: "/inventory/manage-ingredients", label: t("manageIngredientsLabel"), icon: Ic.sliders },
+    { to: "/inventory/item-file",       label: t("itemFile"),              icon: Ic.itemFile },
+    { to: "/products",                  label: t("productsList"),          icon: Ic.products },
   ], permissions, isSAIF);
 
-  const stockMovements = filterByPermission([
+  /* 3b — حركات المخزون */
+  const invMovements = filterByPermission([
     { to: "/stock-transfers",  label: t("stockTransfers"),  icon: Ic.transfers },
     { to: "/central-kitchen",  label: t("centralKitchen"),  icon: Ic.centralKitchen },
-    { to: "/waste-tracker",    label: t("wasteEntry"),       icon: Ic.waste },
+    { to: "/waste-tracker",    label: t("wasteEntry"),      icon: Ic.waste },
   ], permissions, isSAIF);
 
-  /* ─────────────────────────────────────────────────────────────────
+  /* 3c — تحليل وتقييم المخزون (cross-link with Accounting) */
+  const invAnalysis = filterByPermission([
+    { to: "/finance/cost-audit", label: t("costAuditCenter"),    icon: Ic.audit },
+    { to: "/finance/cogs",       label: t("costOfGoodsSold"),    icon: Ic.stockValue },
+  ], permissions, isSAIF);
+
+  /* ═════════════════════════════════════════════════════════════════
      SYSTEM 4 — نظام المشتريات
-     Purchase suggestions & manual forecasting
-  ───────────────────────────────────────────────────────────────── */
-  const purchaseItems = filterByPermission([
+     Smart & manual purchase planning, materials management
+  ═════════════════════════════════════════════════════════════════ */
+
+  /* 4a — تخطيط الشراء */
+  const procPlanning = filterByPermission([
     { to: "/smart-purchase",           label: t("smartPurchase"),          icon: Ic.smartPurchase },
     { to: "/manual-purchase-forecast", label: t("manualPurchaseForecast"), icon: Ic.manualForecast },
   ], permissions, isSAIF);
 
-  /* ─────────────────────────────────────────────────────────────────
-     SYSTEM 5 — نظام الحسابات
-     Full accounting: reports, P&L, cash flow, audit, reconciliation
-  ───────────────────────────────────────────────────────────────── */
-  const finStatements = filterByPermission([
-    { to: "/finance",                    label: t("financialHub"),           icon: Ic.wallet },
-    { to: "/finance/daily-revenue",      label: t("dailyRevenue"),           icon: Ic.barChart },
-    { to: "/finance/profit-loss",        label: t("profitLoss"),             icon: Ic.trendUp },
-    { to: "/finance/income-statement",   label: t("incomeStatement"),        icon: Ic.book },
-    { to: "/finance/cash-flow",          label: t("cashFlowStatement"),      icon: Ic.cashFlow },
-    { to: "/finance/net-profit-margin",  label: t("netProfitMargin"),        icon: Ic.profit },
-  ], permissions, isSAIF).filter((i) => !(isBranchSupervisor && i.to === "/finance"));
-
-  const finAnalysis = filterByPermission([
-    { to: "/finance/cogs",              label: t("costOfGoodsSold"),         icon: Ic.audit },
-    { to: "/finance/opex",              label: t("operationalExpenses"),     icon: Ic.adjustments },
-    { to: "/finance/charts-dashboard",  label: t("financialChartsDashboard"), icon: Ic.chart },
-    { to: "/finance/cost-audit",        label: t("costAuditCenter"),         icon: Ic.audit },
+  /* 4b — إدارة المواد والتوريد (cross-links) */
+  const procMaterials = filterByPermission([
+    { to: "/stock-transfers",  label: t("stockTransfers"),     icon: Ic.transfers },
+    { to: "/central-kitchen",  label: t("centralKitchen"),     icon: Ic.supplier },
+    { to: "/waste-tracker",    label: t("wasteEntry"),         icon: Ic.waste },
+    { to: "/upload-center",    label: t("uploadCenter"),       icon: Ic.upload },
   ], permissions, isSAIF);
 
+  /* ═════════════════════════════════════════════════════════════════
+     SYSTEM 5 — نظام الحسابات
+     Full double-entry accounting: statements, analysis, audit, tax, uploads
+  ═════════════════════════════════════════════════════════════════ */
+
+  /* 5a — القوائم المالية */
+  const finStatements = filterByPermission([
+    { to: "/finance",                   label: t("financialHub"),        icon: Ic.wallet },
+    { to: "/finance/profit-loss",       label: t("profitLoss"),          icon: Ic.trendUp },
+    { to: "/finance/income-statement",  label: t("incomeStatement"),     icon: Ic.book },
+    { to: "/finance/cash-flow",         label: t("cashFlowStatement"),   icon: Ic.cashFlow },
+    { to: "/finance/net-profit-margin", label: t("netProfitMargin"),     icon: Ic.netProfit },
+  ], permissions, isSAIF);
+
+  /* 5b — التحليل والربحية */
+  const finAnalysis = filterByPermission([
+    { to: "/profit-dashboard",          label: t("profitDashboard"),          icon: Ic.profit },
+    { to: "/finance/cogs",              label: t("costOfGoodsSold"),          icon: Ic.audit },
+    { to: "/finance/opex",              label: t("operationalExpenses"),      icon: Ic.adjustments },
+    { to: "/finance/charts-dashboard",  label: t("financialChartsDashboard"), icon: Ic.chart },
+    { to: "/finance/cost-audit",        label: t("costAuditCenter"),          icon: Ic.salesReport },
+  ], permissions, isSAIF);
+
+  /* 5c — التدقيق والمطابقة */
   const finAudit = filterByPermission([
-    { to: "/finance/chart-of-accounts",  label: t("chartOfAccounts"),     icon: Ic.book },
-    { to: "/finance/auditor",            label: t("financialAuditor"),     icon: Ic.auditor },
-    { to: "/finance/manual-adjustments", label: t("manualAdjustments"),   icon: Ic.adjustments },
-    { to: "/reconciliation",             label: t("reconciliation"),       icon: Ic.check },
+    { to: "/finance/chart-of-accounts", label: t("chartOfAccounts"),    icon: Ic.book },
+    { to: "/reconciliation",            label: t("reconciliation"),      icon: Ic.check },
+    { to: "/finance/auditor",           label: t("financialAuditor"),    icon: Ic.auditor },
+    { to: "/finance/manual-adjustments",label: t("manualAdjustments"),  icon: Ic.adjustments },
   ], permissions, isSAIF).filter((i) =>
-    !(isExternalAccountant && i.to === "/finance/manual-adjustments") &&
+    !(i.to === "/finance/manual-adjustments" && !isSAIF && isExternalAccountant) &&
     !(i.to === "/finance/manual-adjustments" && !isSAIF)
   );
 
+  /* 5d — الضرائب والمدفوعات (cross-link with admin-hub) */
+  const finTaxes = filterByPermission([
+    { to: "/admin-hub/taxes",           label: t("taxSettings"),    icon: Ic.receipt },
+    { to: "/admin-hub/payment-methods", label: t("paymentMethods"), icon: Ic.card },
+  ], permissions, isSAIF).filter(() => showAdminHub);
+
+  /* 5e — رفع البيانات المالية */
   const finUploads = filterByPermission([
-    { to: "/finance/balance-upload", label: t("balanceUpload"),  icon: Ic.upload },
-    { to: "/upload-center",          label: t("uploadCenter"),   icon: Ic.upload },
+    { to: "/finance/balance-upload", label: t("balanceUpload"),    icon: Ic.upload },
+    { to: "/upload-center",          label: t("uploadCenter"),     icon: Ic.upload },
+    { to: "/admin-hub/smart-upload", label: t("smartDataUpload"),  icon: Ic.trendUp },
   ], permissions, isSAIF).filter((i) =>
-    !(isExternalAccountant && i.to === "/upload-center")
+    !(isExternalAccountant && i.to === "/admin-hub/smart-upload")
   );
 
-  /* ─────────────────────────────────────────────────────────────────
+  /* ═════════════════════════════════════════════════════════════════
      SYSTEM 6 — نظام شؤون الموظفين
-  ───────────────────────────────────────────────────────────────── */
-  const hrSelf = filterByPermission([
-    { to: "/employee-self", label: t("employeeSelfService"), icon: Ic.employee },
+     Employee portal, staff management, shifts, branch/org config
+  ═════════════════════════════════════════════════════════════════ */
+
+  /* 6a — بوابة الموظف */
+  const hrPortal = filterByPermission([
+    { to: "/employee-self", label: t("employeeSelfService"), icon: Ic.selfService },
   ], permissions, isSAIF);
 
+  /* 6b — إدارة الكوادر البشرية */
+  const hrStaff = filterByPermission([
+    { to: "/admin-hub/users",  label: t("employeeDirectory"), icon: Ic.idCard },
+    { to: "/admin-hub/roles",  label: t("rolesPermissions"),  icon: Ic.shield },
+  ], permissions, isSAIF).filter(() => showAdminHub);
+
+  /* 6c — الورديات وجداول العمل (cross-link with Sales) */
+  const hrShifts = filterByPermission([
+    { to: "/shift-closing",    label: t("shiftRecords"),           icon: Ic.clock },
+    { to: "/dashboard/reports",label: t("shiftPerformanceReports"),icon: Ic.performance },
+    { to: "/prep-list",        label: t("opsPrepList"),             icon: Ic.prepList },
+  ], permissions, isSAIF);
+
+  /* 6d — إعدادات وتنظيم المنشأة */
+  const hrOrg = filterByPermission([
+    { to: "/admin-hub/branches", label: t("branchManagement"), icon: Ic.building },
+    { to: "/admin-hub/brands",   label: t("brandManagement"),  icon: Ic.tag },
+    { to: "/admin-hub",          label: t("adminDashboard"),   icon: Ic.settings },
+  ], permissions, isSAIF).filter(() => showAdminHub);
+
   /* ─────────────────────────────────────────────────────────────────
-     Assemble Groups
+     Assemble final groups
   ───────────────────────────────────────────────────────────────── */
   const groups: NavGroupConfig[] = [];
 
   /* 1 — مركز العمليات */
   const opsSubGroups = [
-    { subLabelKey: "navSubOpsCenter", items: opsMain },
-    { subLabelKey: "navSubOpsAdmin",  items: opsAdmin },
+    { subLabelKey: "navSubOpsDashboards", items: opsDashboards },
+    { subLabelKey: "navSubOpsAdmin",      items: opsAdmin },
+    { subLabelKey: "navSubOpsOrg",        items: opsOrg },
   ].filter((sg) => sg.items.length > 0);
   if (opsSubGroups.length > 0) {
     groups.push({ groupLabelKey: "navGroupOperationsHub", groupIcon: LayoutDashboard, subGroups: opsSubGroups, show: true });
@@ -420,8 +432,9 @@ export function buildNestedNavConfig(
 
   /* 2 — نظام المبيعات */
   const salesSubGroups = [
-    { subLabelKey: "navSubSalesOps",        items: salesOps },
-    { subLabelKey: "navSubSalesDashboards", items: salesDashboards },
+    { subLabelKey: "navSubSalesCashier",    items: salesCashier },
+    { subLabelKey: "navSubSalesForecasting",items: salesForecasting },
+    { subLabelKey: "navSubSalesReports",    items: salesReports },
   ].filter((sg) => sg.items.length > 0);
   if (salesSubGroups.length > 0) {
     groups.push({ groupLabelKey: "navSystemSales", groupIcon: BarChart3, subGroups: salesSubGroups, show: true });
@@ -429,16 +442,21 @@ export function buildNestedNavConfig(
 
   /* 3 — نظام المخازن */
   const invSubGroups = [
-    { subLabelKey: "navSubItemsCatalog",   items: itemsCatalog },
-    { subLabelKey: "navSubStockMovements", items: stockMovements },
+    { subLabelKey: "navSubInvCatalog",   items: invCatalog },
+    { subLabelKey: "navSubInvMovements", items: invMovements },
+    { subLabelKey: "navSubInvAnalysis",  items: invAnalysis },
   ].filter((sg) => sg.items.length > 0);
   if (invSubGroups.length > 0) {
     groups.push({ groupLabelKey: "navSystemInventory", groupIcon: Package, subGroups: invSubGroups, show: true });
   }
 
   /* 4 — نظام المشتريات */
-  if (purchaseItems.length > 0) {
-    groups.push({ groupLabelKey: "navSystemProcurement", groupIcon: ShoppingCart, subGroups: [{ subLabelKey: "navSubPurchaseOrders", items: purchaseItems }], show: true });
+  const procSubGroups = [
+    { subLabelKey: "navSubProcPlanning",  items: procPlanning },
+    { subLabelKey: "navSubProcMaterials", items: procMaterials },
+  ].filter((sg) => sg.items.length > 0);
+  if (procSubGroups.length > 0) {
+    groups.push({ groupLabelKey: "navSystemProcurement", groupIcon: ShoppingCart, subGroups: procSubGroups, show: true });
   }
 
   /* 5 — نظام الحسابات */
@@ -446,6 +464,7 @@ export function buildNestedNavConfig(
     { subLabelKey: "navSubFinStatements", items: finStatements },
     { subLabelKey: "navSubFinAnalysis",   items: finAnalysis },
     { subLabelKey: "navSubAudit",         items: finAudit },
+    { subLabelKey: "navSubFinTaxes",      items: finTaxes },
     { subLabelKey: "navSubAccUploads",    items: finUploads },
   ].filter((sg) => sg.items.length > 0);
   if (finSubGroups.length > 0) {
@@ -453,14 +472,20 @@ export function buildNestedNavConfig(
   }
 
   /* 6 — نظام شؤون الموظفين */
-  if (hrSelf.length > 0) {
-    groups.push({ groupLabelKey: "navSystemHR", groupIcon: Briefcase, subGroups: [{ subLabelKey: "navSubHRSelf", items: hrSelf }], show: true });
+  const hrSubGroups = [
+    { subLabelKey: "navSubHRPortal",  items: hrPortal },
+    { subLabelKey: "navSubHRStaff",   items: hrStaff },
+    { subLabelKey: "navSubHRShifts",  items: hrShifts },
+    { subLabelKey: "navSubHROrg",     items: hrOrg },
+  ].filter((sg) => sg.items.length > 0);
+  if (hrSubGroups.length > 0) {
+    groups.push({ groupLabelKey: "navSystemHR", groupIcon: Briefcase, subGroups: hrSubGroups, show: true });
   }
 
   return groups.filter((g) => g.show);
 }
 
-/* ── Flat list for mobile bar ──────────────────────────────────────── */
+/* ── Flat list for mobile bottom bar ──────────────────────────────── */
 export function buildMainNavConfig(
   t: (k: string) => string,
   opts: Parameters<typeof buildNestedNavConfig>[1],

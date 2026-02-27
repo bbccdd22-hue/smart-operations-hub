@@ -51,9 +51,11 @@ export default function AppShellLayout({
   const notifAnchorDesktopRef = useRef<HTMLButtonElement>(null);
   const notifAnchorMobileRef = useRef<HTMLButtonElement>(null);
   const userMenuRef = useRef<HTMLButtonElement>(null);
-  const [isLargeScreen, setIsLargeScreen] = useState(() => typeof window !== "undefined" && window.innerWidth >= 1024);
+  /* sidebar threshold: 900 px covers all iPad orientations (768-1024) */
+  const SIDEBAR_BREAKPOINT = 900;
+  const [isLargeScreen, setIsLargeScreen] = useState(() => typeof window !== "undefined" && window.innerWidth >= SIDEBAR_BREAKPOINT);
   useEffect(() => {
-    const mq = window.matchMedia("(min-width: 1024px)");
+    const mq = window.matchMedia(`(min-width: ${SIDEBAR_BREAKPOINT}px)`);
     const handler = () => setIsLargeScreen(mq.matches);
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
@@ -117,10 +119,11 @@ export default function AppShellLayout({
       className={`app-shell-root relative min-h-screen w-full max-w-[100vw] overflow-x-hidden bg-transparent font-sans antialiased ${dark ? "terminal-theme text-slate-100" : "text-slate-800"}`}
     >
       <AnimatedBackground />
-      {/* Desktop: Fixed Sidebar – right side (RTL) or left side (LTR); prevents layout shift */}
+      {/* Desktop/Tablet: Fixed Sidebar – visible at ≥900 px (covers all iPads) */}
       <aside
-        className="app-shell-sidebar fixed top-0 bottom-0 z-[9996] hidden h-screen flex-col lg:flex"
+        className="app-shell-sidebar fixed top-0 bottom-0 z-[9996] h-screen flex-col"
         style={{
+          display: isLargeScreen ? "flex" : "none",
           width: SIDEBAR_WIDTH,
           background: "var(--shell-sidebar-bg)",
           backdropFilter: "blur(12px)",
@@ -307,10 +310,11 @@ export default function AppShellLayout({
         </div>
       </aside>
 
-      {/* Slim header – fixed top, subtle blur, Aqua accent */}
+      {/* Slim header – fixed top, visible at ≥900 px */}
       <header
-        className="fixed top-0 z-[9997] hidden h-12 lg:block"
+        className="fixed top-0 z-[9997] h-12"
         style={{
+          display: isLargeScreen ? "block" : "none",
           ...(isRTL ? { left: 0, right: SIDEBAR_WIDTH, width: `calc(100vw - ${SIDEBAR_WIDTH}px)` } : { left: SIDEBAR_WIDTH, right: 0, width: `calc(100vw - ${SIDEBAR_WIDTH}px)` }),
           background: "var(--shell-header-bg)",
           backdropFilter: "blur(10px)",
@@ -406,10 +410,11 @@ export default function AppShellLayout({
         </div>
       </header>
 
-      {/* Mobile / iPad: Pinned compact header – unified deep dark theme */}
+      {/* Mobile / Small Tablet: Pinned compact header */}
       <header
-        className="fixed left-0 right-0 top-0 z-[9998] flex h-12 w-full items-center justify-between gap-3 px-4 lg:hidden"
+        className="fixed left-0 right-0 top-0 z-[9998] flex h-12 w-full items-center justify-between gap-3 px-4"
         style={{
+          display: isLargeScreen ? "none" : "flex",
           background: "var(--shell-header-bg)",
           backdropFilter: "blur(10px)",
           WebkitBackdropFilter: "blur(10px)",
@@ -534,14 +539,19 @@ export default function AppShellLayout({
         markAsRead={notifications?.markAsRead ?? (async () => {})}
       />
 
-      {/* Main content – full width mobile; viewport minus fixed sidebar on desktop */}
+      {/* Main content – offset by sidebar width when visible */}
       <main
-        className={`main-content-area relative z-10 flex flex-col overflow-x-hidden overflow-y-auto pb-mobile-nav ${isRTL ? "sidebar-right" : "sidebar-left"}`}
+        className={`main-content-area relative z-10 flex flex-col overflow-x-hidden overflow-y-auto ${isRTL ? "sidebar-right" : "sidebar-left"}`}
         style={{
-          width: "100%",
-          maxWidth: "100%",
+          width: isLargeScreen ? `calc(100vw - ${SIDEBAR_WIDTH}px)` : "100%",
+          maxWidth: isLargeScreen ? `calc(100vw - ${SIDEBAR_WIDTH}px)` : "100%",
+          ...(isLargeScreen
+            ? isRTL
+              ? { marginRight: SIDEBAR_WIDTH, marginLeft: 0 }
+              : { marginLeft: SIDEBAR_WIDTH, marginRight: 0 }
+            : {}),
           minHeight: "100vh",
-          padding: "3.5rem 24px 6rem 24px",
+          padding: isLargeScreen ? "3.5rem 24px 2rem 24px" : "3.5rem 16px 6rem 16px",
         }}
       >
         <div
@@ -561,10 +571,11 @@ export default function AppShellLayout({
         </div>
       </main>
 
-      {/* Mobile: Floating bottom bar with center prominent action */}
+      {/* Mobile: Floating bottom bar – hidden when sidebar is visible */}
       <nav
-        className="fixed inset-x-0 bottom-0 z-[9999] lg:hidden"
+        className="fixed inset-x-0 bottom-0 z-[9999]"
         style={{
+          display: isLargeScreen ? "none" : "block",
           height: MOBILE_BAR_HEIGHT,
           paddingBottom: "env(safe-area-inset-bottom, 0)",
         }}
@@ -622,15 +633,15 @@ export default function AppShellLayout({
         </div>
       </nav>
 
-      {/* Mobile / iPad: Slide-out drawer (hamburger menu) */}
+      {/* Mobile: Slide-out drawer (hamburger menu) – when sidebar not visible */}
       <AnimatePresence>
-        {drawerOpen && (
+        {drawerOpen && !isLargeScreen && (
           <>
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-[10002] bg-black/40 lg:hidden"
+              className="fixed inset-0 z-[10002] bg-black/40"
               onClick={() => setDrawerOpen(false)}
               aria-hidden
             />
@@ -639,7 +650,7 @@ export default function AppShellLayout({
               animate={{ x: 0 }}
               exit={{ x: isRTL ? SIDEBAR_WIDTH : -SIDEBAR_WIDTH }}
               transition={{ type: "tween", duration: 0.25, ease: "easeOut" }}
-              className="fixed top-0 z-[10003] flex h-full flex-col bg-white/95 shadow-2xl backdrop-blur-xl dark:bg-slate-900/95 lg:hidden"
+              className="fixed top-0 z-[10003] flex h-full flex-col bg-white/95 shadow-2xl backdrop-blur-xl dark:bg-slate-900/95"
               style={{
                 width: SIDEBAR_WIDTH,
                 ...(isRTL ? { right: 0 } : { left: 0 }),

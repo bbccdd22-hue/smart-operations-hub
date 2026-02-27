@@ -8,13 +8,16 @@ import {
   Package2, Tag, Clock, BarChart3, Layers, AlertCircle,
   Printer, RefreshCw, SlidersHorizontal, ChevronDown, ChevronUp,
   ChevronLeft, ChevronRight, TrendingUp, TrendingDown, DollarSign,
-  Info, Edit2, Save, Trash2, Plus, Check, XCircle,
+  Info, Edit2, Save, Trash2, Plus, Check, XCircle, Camera, Link2,
 } from "lucide-react";
 import {
   fetchProductsList, fetchProductDetail,
   addRecipeLine, updateRecipeLine, deleteRecipeLine, updateIngredientCost,
   fetchIngredients, fetchInventoryUnits,
 } from "../lib/api";
+import {
+  getProductTheme, getCustomImages, saveCustomImage, deleteCustomImage,
+} from "../lib/productThemes";
 import type {
   ProductSummary, ProductDetail, ProductRecipeLine,
   ManageIngredient, InventoryUnit,
@@ -52,6 +55,36 @@ const fmtDate = (iso: string | null) => {
   } catch { return iso; }
 };
 
+/* ─── ProductThumbnail ─────────────────────────────────────────────── */
+function ProductThumbnail({
+  img,
+  size = 40,
+}: {
+  img: { url: string; emoji: string; gradient: string };
+  size?: number;
+}) {
+  const [err, setErr] = useState(false);
+  return (
+    <div
+      className="relative flex-shrink-0 overflow-hidden rounded-xl"
+      style={{ width: size, height: size }}
+    >
+      <div className={`absolute inset-0 bg-gradient-to-br ${img.gradient}`} />
+      {img.url && !err && (
+        <img
+          src={img.url}
+          alt=""
+          onError={() => setErr(true)}
+          className="absolute inset-0 w-full h-full object-cover"
+        />
+      )}
+      <div className="absolute inset-0 flex items-center justify-center text-base select-none">
+        {(!img.url || err) && img.emoji}
+      </div>
+    </div>
+  );
+}
+
 /* ─── component ───────────────────────────────────────────────────────── */
 export default function ProductsPage() {
   const { t: _t, i18n } = useTranslation();
@@ -82,6 +115,12 @@ export default function ProductsPage() {
   const [editLines, setEditLines]         = useState<EditLine[]>([]);
   const [saving, setSaving]               = useState(false);
   const [saveError, setSaveError]         = useState<string | null>(null);
+
+  /* product image state */
+  const [customImages, setCustomImages]   = useState<Record<number, string>>(() => getCustomImages());
+  const [imgEditOpen, setImgEditOpen]     = useState(false);
+  const [imgEditUrl, setImgEditUrl]       = useState("");
+  const [imgEditId, setImgEditId]         = useState<number | null>(null);
 
   /* add-ingredient form state */
   const [addIngSearch, setAddIngSearch]   = useState("");
@@ -292,6 +331,35 @@ export default function ProductsPage() {
   const unmarkDeleted = (id: number) =>
     setEditLines((prev) => prev.map((l) => l.id === id ? { ...l, _deleted: false } : l));
 
+  /* ── image helpers ── */
+  const openImgEdit = (productId: number) => {
+    setImgEditId(productId);
+    setImgEditUrl(customImages[productId] || "");
+    setImgEditOpen(true);
+  };
+  const applyImgEdit = () => {
+    if (imgEditId == null) return;
+    saveCustomImage(imgEditId, imgEditUrl);
+    setCustomImages(getCustomImages());
+    setImgEditOpen(false);
+    // notify POS page if open in same tab
+    window.dispatchEvent(new Event("storage"));
+  };
+  const clearImg = (productId: number) => {
+    deleteCustomImage(productId);
+    setCustomImages(getCustomImages());
+    window.dispatchEvent(new Event("storage"));
+    setImgEditOpen(false);
+  };
+  const getProductImage = (p: { id: number; name: string }): { url: string; emoji: string; gradient: string } => {
+    const theme = getProductTheme(p.name || "");
+    return {
+      url: customImages[p.id] || theme.imageUrl,
+      emoji: theme.emoji,
+      gradient: theme.gradientFallback,
+    };
+  };
+
   /* filtered + sorted list */
   const displayed = useMemo(() => {
     let rows = [...products];
@@ -499,6 +567,7 @@ export default function ProductsPage() {
                 <thead>
                     <tr className="bg-[#1e2533] text-xs text-gray-400 uppercase tracking-wide">
                       <th className="px-4 py-3 text-start w-8">#</th>
+                      <th className="px-2 py-3 w-12">{T("صورة", "")}</th>
                       <th className="px-4 py-3 text-start cursor-pointer hover:text-white select-none" onClick={() => toggleSort("name")}>
                         {T("اسم المنتج", "Product Name")} <SortIcon field="name" />
                       </th>
@@ -526,6 +595,9 @@ export default function ProductsPage() {
                       onClick={() => openPanel(p.id)}
                     >
                       <td className="px-4 py-3 text-xs text-gray-600">{idx + 1}</td>
+                      <td className="px-2 py-2">
+                        <ProductThumbnail img={getProductImage(p)} size={40} />
+                      </td>
                       <td className="px-4 py-3">
                         <span className="font-medium text-white">{p.name}</span>
                       </td>
@@ -594,6 +666,94 @@ export default function ProductsPage() {
       {/* ══════════════════════════════════════════════════════
           CENTERED MODAL — ملف المنتج
       ══════════════════════════════════════════════════════ */}
+      {/* ══ IMAGE EDIT MODAL ══ */}
+      {imgEditOpen && imgEditId != null && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] no-print"
+            onClick={() => setImgEditOpen(false)}
+          />
+          <div className="fixed inset-0 z-[61] flex items-center justify-center p-4 no-print">
+            <div
+              className="relative w-full max-w-md bg-[#111827] border border-white/15 rounded-2xl shadow-2xl p-6"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="flex items-center justify-between mb-5">
+                <div className="flex items-center gap-2">
+                  <Camera className="h-5 w-5 text-violet-400" />
+                  <h3 className="font-bold text-white">{T("تغيير صورة المنتج", "Change Product Image")}</h3>
+                </div>
+                <button
+                  onClick={() => setImgEditOpen(false)}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/10 hover:bg-white/20 text-gray-400 hover:text-white transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              {/* Preview */}
+              {(() => {
+                const previewImg = imgEditUrl.trim() || getProductTheme(
+                  products.find(p => p.id === imgEditId)?.name || ""
+                ).imageUrl;
+                return previewImg ? (
+                  <div className="relative w-full rounded-xl overflow-hidden mb-4" style={{ height: 140 }}>
+                    <img
+                      src={previewImg}
+                      alt="preview"
+                      className="w-full h-full object-cover"
+                      onError={(e) => { (e.currentTarget as HTMLImageElement).style.opacity = "0"; }}
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                    <span className="absolute bottom-2 start-3 text-xs text-white/60">{T("معاينة", "Preview")}</span>
+                  </div>
+                ) : null;
+              })()}
+
+              {/* URL input */}
+              <label className="block text-xs text-gray-400 mb-1.5 flex items-center gap-1.5">
+                <Link2 className="h-3.5 w-3.5" />
+                {T("رابط الصورة (URL)", "Image URL")}
+              </label>
+              <input
+                type="url"
+                value={imgEditUrl}
+                onChange={(e) => setImgEditUrl(e.target.value)}
+                placeholder="https://images.unsplash.com/..."
+                className="w-full bg-[#1e2533] border border-white/15 rounded-xl px-4 py-2.5 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-violet-500 mb-4"
+              />
+
+              <p className="text-xs text-gray-500 mb-4 flex items-start gap-1.5">
+                <Info className="h-3.5 w-3.5 flex-shrink-0 mt-0.5 text-amber-400" />
+                {T(
+                  "الصورة محفوظة في المتصفح فقط. الصور تُعرض تلقائياً بناءً على اسم المنتج — أدخل رابطاً مخصصاً لتغييرها.",
+                  "Image is saved locally in your browser. Images are auto-assigned by product name — enter a custom URL to override."
+                )}
+              </p>
+
+              {/* Buttons */}
+              <div className="flex gap-3">
+                <button
+                  onClick={() => { if (imgEditId) clearImg(imgEditId); }}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400 hover:bg-red-500/25 text-sm font-medium transition-colors"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  {T("حذف الصورة المخصصة", "Reset to Auto")}
+                </button>
+                <button
+                  onClick={applyImgEdit}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-violet-600 hover:bg-violet-500 text-white text-sm font-semibold transition-colors"
+                >
+                  <Save className="h-4 w-4" />
+                  {T("حفظ", "Save")}
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
       {panelOpen && (
         <>
           {/* Backdrop */}
@@ -652,6 +812,51 @@ export default function ProductsPage() {
                   </div>
                 ) : detail ? (
                   <div id="product-detail-print" className="space-y-5">
+
+                    {/* ── Product Hero Image ── */}
+                    {(() => {
+                      const img = getProductImage({ id: detail.id, name: detail.name });
+                      return (
+                        <div className="relative w-full rounded-xl overflow-hidden" style={{ height: 180 }}>
+                          {/* Background */}
+                          {img.url ? (
+                            <img
+                              src={img.url}
+                              alt={detail.name}
+                              className="absolute inset-0 w-full h-full object-cover"
+                              onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                            />
+                          ) : null}
+                          <div className={`absolute inset-0 bg-gradient-to-br ${img.gradient} ${img.url ? "opacity-40" : "opacity-100"}`} />
+                          {/* Dark scrim bottom */}
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+
+                          {/* Emoji badge */}
+                          <div className="absolute top-3 end-3 flex h-10 w-10 items-center justify-center rounded-2xl bg-black/40 text-2xl backdrop-blur-sm">
+                            {img.emoji}
+                          </div>
+
+                          {/* Product name on image */}
+                          <div className="absolute bottom-3 start-4 end-16">
+                            <p className="text-white font-bold text-base leading-tight drop-shadow-lg line-clamp-2">
+                              {detail.name}
+                            </p>
+                            {detail.sku && (
+                              <p className="text-white/60 text-xs font-mono mt-0.5">#{detail.sku}</p>
+                            )}
+                          </div>
+
+                          {/* Edit image button */}
+                          <button
+                            onClick={() => openImgEdit(detail.id)}
+                            className="absolute bottom-3 end-3 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-black/50 backdrop-blur-sm text-white/80 hover:text-white hover:bg-black/70 transition-colors text-xs border border-white/20"
+                            title={T("تغيير الصورة", "Change image")}
+                          >
+                            <Camera className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      );
+                    })()}
 
                     {/* Info cards */}
                     <div className="grid grid-cols-2 gap-3">
