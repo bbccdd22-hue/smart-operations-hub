@@ -74,6 +74,9 @@ import TaxReportPage from "./pages/accounting/TaxReportPage";
 import BudgetPage from "./pages/accounting/BudgetPage";
 import WastePage from "./pages/WastePage";
 import POSPage from "./pages/POSPage";
+import ProcurementPlaceholderPage from "./pages/procurement/ProcurementPlaceholderPage";
+import SalesPlaceholderPage from "./pages/sales/SalesPlaceholderPage";
+import InventoryPlaceholderPage from "./pages/inventory/InventoryPlaceholderPage";
 import KitchenDisplayPage from "./pages/KitchenDisplayPage";
 import EmployeeSelfServicePage from "./pages/EmployeeSelfServicePage";
 import CafeHeartbeatDashboard from "./pages/CafeHeartbeatDashboard";
@@ -106,11 +109,11 @@ export default function App() {
     !isSAIF && !isOwner && (/^A\d+$/.test(eid) || /^B\d+$/.test(eid));
 
   useEffect(() => {
-    fetchSystemHealth().then((r) => setHealth(r.last_uploads));
-  }, []);
+    if (user) fetchSystemHealth().then((r) => setHealth(r.last_uploads));
+  }, [user]);
   useEffect(() => {
-    if (healthOpen && health === null) fetchSystemHealth().then((r) => setHealth(r.last_uploads));
-  }, [healthOpen, health]);
+    if (user && healthOpen && health === null) fetchSystemHealth().then((r) => setHealth(r.last_uploads));
+  }, [user, healthOpen, health]);
 
   const canUseDateComparison = isSAIF || user?.role === "general_manager";
   /** صلاحية رؤية سعر التكلفة – تُحدد من صلاحيات الدور. إن غابت من الاستجابة نرجع للسلوك القديم */
@@ -201,6 +204,7 @@ export default function App() {
           <Route path="ingredients" element={<IngredientsPage />} />
           <Route path="inventory/manage-ingredients" element={<ManageIngredientsPage />} />
           <Route path="inventory/item-file" element={<ItemFilePage />} />
+          <Route path="inventory/*" element={<InventoryPlaceholderPage />} />
           <Route path="stock-transfers" element={<StockTransfersPage />} />
           <Route path="central-kitchen" element={<CentralKitchenPage />} />
           <Route path="smart-purchase" element={<SmartPurchasePage />} />
@@ -210,6 +214,8 @@ export default function App() {
           <Route path="suppliers/balances" element={<SupplierBalancesPage />} />
           <Route path="suppliers/statement/:supplierId" element={<SupplierStatementPage />} />
           <Route path="suppliers/debt-aging" element={<SupplierDebtAgingPage />} />
+          <Route path="procurement/*" element={<ProcurementPlaceholderPage />} />
+          <Route path="sales/*" element={<SalesPlaceholderPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       ) : (
@@ -258,6 +264,7 @@ export default function App() {
         <Route path="ingredients" element={<IngredientsPage />} />
           <Route path="inventory/manage-ingredients" element={<ManageIngredientsPage />} />
           <Route path="inventory/item-file" element={<ItemFilePage />} />
+          <Route path="inventory/*" element={<InventoryPlaceholderPage />} />
           <Route path="stock-transfers" element={<StockTransfersPage />} />
           <Route path="central-kitchen" element={<CentralKitchenPage />} />
           <Route path="smart-purchase" element={<SmartPurchasePage />} />
@@ -267,6 +274,8 @@ export default function App() {
         <Route path="suppliers/balances" element={<SupplierBalancesPage />} />
         <Route path="suppliers/statement/:supplierId" element={<SupplierStatementPage />} />
         <Route path="suppliers/debt-aging" element={<SupplierDebtAgingPage />} />
+        <Route path="procurement/*" element={<ProcurementPlaceholderPage />} />
+        <Route path="sales/*" element={<SalesPlaceholderPage />} />
         <Route path="finance" element={<FinanceHubPage />} />
         <Route path="finance/reports" element={<FinancialReportsPage />} />
         <Route path="finance/daily-revenue" element={<DailyRevenueReport />} />
