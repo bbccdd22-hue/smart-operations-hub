@@ -118,7 +118,7 @@ async function fetchWithRetry(
   throw lastErr;
 }
 
-function fetchWithCsrf(url: string, opts: RequestInit = {}) {
+export function fetchWithCsrf(url: string, opts: RequestInit = {}) {
   const headers = apiHeaders(opts);
   const method = (opts.method || "GET").toUpperCase();
   if (method !== "GET" && method !== "HEAD") {

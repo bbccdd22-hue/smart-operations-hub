@@ -731,3 +731,377 @@ class ConsolidatedBalanceSheetView(views.APIView):
             ],
             "income_statement": income,
         })
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# NEW ACCOUNTING MODULES — ميزان المراجعة / كشف حساب / قيد اليومية
+# ═══════════════════════════════════════════════════════════════════════════
+
+class TrialBalanceView(views.APIView):
+    """
+    ميزان المراجعة — Trial Balance
+    يعرض جميع الحسابات مع مجموع المدين والدائن والرصيد.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from django.db.models import Sum
+        from accounting.models import JournalEntryLine
+
+        from_date = request.query_params.get("from_date")
+        to_date   = request.query_params.get("to_date")
+        level_max = request.query_params.get("level", "5")
+        stmt      = request.query_params.get("statement")  # optional: "المركز المالي" | "قائمة الدخل"
+
+        try:
+            level_max = int(level_max)
+        except (ValueError, TypeError):
+            level_max = 5
+
+        qs = ChartAccount.objects.filter(is_active=True, level__lte=level_max).order_by("code")
+        if stmt:
+            qs = qs.filter(statement=stmt)
+
+        # Build account-level movement aggregations (only analytical accounts have lines)
+        lines_qs = JournalEntryLine.objects.all()
+        if from_date:
+            try:
+                lines_qs = lines_qs.filter(journal_entry__entry_date__gte=from_date)
+            except Exception:
+                pass
+        if to_date:
+            try:
+                lines_qs = lines_qs.filter(journal_entry__entry_date__lte=to_date)
+            except Exception:
+                pass
+
+        # Aggregate by account code
+        aggregated = lines_qs.values("account_code").annotate(
+            total_debit=Sum("debit_amount"),
+            total_credit=Sum("credit_amount"),
+        )
+        agg_map = {r["account_code"]: r for r in aggregated}
+
+        rows = []
+        grand_debit = Decimal("0.00")
+        grand_credit = Decimal("0.00")
+
+        for acc in qs:
+            agg = agg_map.get(acc.code, {})
+            if from_date or to_date:
+                # Use journal aggregation
+                debit  = Decimal(str(agg.get("total_debit")  or "0.00"))
+                credit = Decimal(str(agg.get("total_credit") or "0.00"))
+                balance = debit - credit
+            else:
+                # Use stored balance + any journal movements
+                debit  = Decimal(str(agg.get("total_debit")  or "0.00"))
+                credit = Decimal(str(agg.get("total_credit") or "0.00"))
+                if debit == 0 and credit == 0:
+                    # Fall back to stored balance
+                    stored = acc.balance
+                    if stored >= 0:
+                        debit = stored
+                    else:
+                        credit = abs(stored)
+                balance = debit - credit
+
+            if acc.account_type == "تحليلي":
+                grand_debit  += debit
+                grand_credit += credit
+
+            rows.append({
+                "id":           acc.id,
+                "code":         acc.code,
+                "name_ar":      acc.name_ar,
+                "name_en":      acc.name_en,
+                "level":        acc.level,
+                "account_type": acc.account_type,
+                "statement":    acc.statement,
+                "debit":        str(debit),
+                "credit":       str(credit),
+                "balance":      str(balance),
+                "is_parent":    acc.account_type == "رئيسي",
+            })
+
+        return response.Response({
+            "rows":          rows,
+            "grand_debit":   str(grand_debit),
+            "grand_credit":  str(grand_credit),
+            "difference":    str(abs(grand_debit - grand_credit)),
+            "is_balanced":   abs(grand_debit - grand_credit) < Decimal("0.01"),
+            "from_date":     from_date,
+            "to_date":       to_date,
+        })
+
+
+class AccountStatementView(views.APIView):
+    """
+    كشف حساب — Account Statement
+    يعرض حركات حساب معين مع رصيد تراكمي.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from django.db.models import Sum
+        from accounting.models import JournalEntry, JournalEntryLine
+
+        account_code = request.query_params.get("account_code", "").strip()
+        from_date    = request.query_params.get("from_date")
+        to_date      = request.query_params.get("to_date")
+        branch_id    = request.query_params.get("branch_id")
+
+        if not account_code:
+            return response.Response({"detail": "account_code مطلوب"}, status=400)
+
+        # Get account info
+        try:
+            acc = ChartAccount.objects.get(code=account_code)
+        except ChartAccount.DoesNotExist:
+            acc = None
+
+        # Build lines queryset
+        lines_qs = JournalEntryLine.objects.filter(
+            account_code=account_code
+        ).select_related("journal_entry", "journal_entry__branch").order_by(
+            "journal_entry__entry_date", "id"
+        )
+        if from_date:
+            lines_qs = lines_qs.filter(journal_entry__entry_date__gte=from_date)
+        if to_date:
+            lines_qs = lines_qs.filter(journal_entry__entry_date__lte=to_date)
+        if branch_id:
+            lines_qs = lines_qs.filter(journal_entry__branch_id=branch_id)
+
+        running_balance = Decimal("0.00")
+        transactions = []
+
+        for line in lines_qs:
+            entry = line.journal_entry
+            running_balance += line.debit_amount - line.credit_amount
+            transactions.append({
+                "id":          line.id,
+                "entry_id":    entry.id,
+                "date":        str(entry.entry_date),
+                "description": entry.description,
+                "source_type": entry.source_type,
+                "branch":      entry.branch.name if entry.branch else "",
+                "debit":       str(line.debit_amount),
+                "credit":      str(line.credit_amount),
+                "balance":     str(running_balance),
+            })
+
+        total_debit  = sum(Decimal(r["debit"])  for r in transactions)
+        total_credit = sum(Decimal(r["credit"]) for r in transactions)
+
+        return response.Response({
+            "account_code":  account_code,
+            "account_name":  acc.name_ar if acc else account_code,
+            "account_type":  acc.account_type if acc else "",
+            "statement":     acc.statement if acc else "",
+            "from_date":     from_date,
+            "to_date":       to_date,
+            "transactions":  transactions,
+            "total_debit":   str(total_debit),
+            "total_credit":  str(total_credit),
+            "closing_balance": str(total_debit - total_credit),
+        })
+
+
+class JournalEntryListCreateView(views.APIView):
+    """
+    قيد اليومية — List & Create Journal Entries
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from accounting.models import JournalEntry, JournalEntryLine
+
+        from_date   = request.query_params.get("from_date")
+        to_date     = request.query_params.get("to_date")
+        source_type = request.query_params.get("source_type")
+        branch_id   = request.query_params.get("branch_id")
+        page        = int(request.query_params.get("page", 1))
+        page_size   = int(request.query_params.get("page_size", 20))
+
+        qs = JournalEntry.objects.select_related("branch", "created_by").prefetch_related("lines__account").order_by("-entry_date", "-id")
+        if from_date:
+            qs = qs.filter(entry_date__gte=from_date)
+        if to_date:
+            qs = qs.filter(entry_date__lte=to_date)
+        if source_type:
+            qs = qs.filter(source_type=source_type)
+        if branch_id:
+            qs = qs.filter(branch_id=branch_id)
+
+        total = qs.count()
+        start = (page - 1) * page_size
+        entries = qs[start: start + page_size]
+
+        rows = []
+        for entry in entries:
+            lines = []
+            total_debit = Decimal("0.00")
+            total_credit = Decimal("0.00")
+            for line in entry.lines.all():
+                total_debit  += line.debit_amount
+                total_credit += line.credit_amount
+                lines.append({
+                    "id":           line.id,
+                    "account_code": line.account_code,
+                    "account_name": line.account_name_ar or (line.account.name_ar if line.account else ""),
+                    "debit":        str(line.debit_amount),
+                    "credit":       str(line.credit_amount),
+                })
+            rows.append({
+                "id":          entry.id,
+                "entry_date":  str(entry.entry_date),
+                "description": entry.description,
+                "source_type": entry.source_type,
+                "branch":      entry.branch.name if entry.branch else "",
+                "created_by":  str(entry.created_by) if entry.created_by else "",
+                "total_debit": str(total_debit),
+                "is_balanced": abs(total_debit - total_credit) < Decimal("0.01"),
+                "lines":       lines,
+            })
+
+        return response.Response({
+            "count":    total,
+            "page":     page,
+            "pages":    (total + page_size - 1) // page_size,
+            "entries":  rows,
+        })
+
+    def post(self, request):
+        """إنشاء قيد يومية يدوي."""
+        from accounting.models import JournalEntry, JournalEntryLine
+        import json
+        from django.db import transaction as db_transaction
+
+        if not can_upload_or_modify_data(request.user):
+            return response.Response({"detail": "ليس لديك صلاحية إنشاء قيود"}, status=403)
+
+        data = request.data
+        entry_date  = data.get("entry_date")
+        description = data.get("description", "").strip()
+        branch_id   = data.get("branch_id")
+        lines_data  = data.get("lines", [])
+
+        if not entry_date or not description:
+            return response.Response({"detail": "entry_date و description مطلوبان"}, status=400)
+        if len(lines_data) < 2:
+            return response.Response({"detail": "القيد يحتاج سطرين على الأقل"}, status=400)
+
+        # Validate balance
+        total_debit  = sum(Decimal(str(l.get("debit", 0))) for l in lines_data)
+        total_credit = sum(Decimal(str(l.get("credit", 0))) for l in lines_data)
+        if abs(total_debit - total_credit) >= Decimal("0.01"):
+            return response.Response(
+                {"detail": f"القيد غير متوازن: مدين {total_debit} ≠ دائن {total_credit}"},
+                status=400
+            )
+
+        with db_transaction.atomic():
+            entry = JournalEntry.objects.create(
+                entry_date=entry_date,
+                description=description,
+                source_type="manual",
+                branch_id=branch_id or None,
+                created_by=request.user,
+            )
+            for line_data in lines_data:
+                account_code = str(line_data.get("account_code", "")).strip()
+                debit        = Decimal(str(line_data.get("debit", 0)))
+                credit       = Decimal(str(line_data.get("credit", 0)))
+                account_name = str(line_data.get("account_name", "")).strip()
+
+                # Try to find account
+                acc = None
+                try:
+                    acc = ChartAccount.objects.get(code=account_code)
+                    if not account_name:
+                        account_name = acc.name_ar
+                    # Update account balance
+                    acc.balance = acc.balance + debit - credit
+                    acc.save(update_fields=["balance"])
+                except ChartAccount.DoesNotExist:
+                    pass
+
+                JournalEntryLine.objects.create(
+                    journal_entry=entry,
+                    account=acc,
+                    account_code=account_code,
+                    account_name_ar=account_name,
+                    debit_amount=debit,
+                    credit_amount=credit,
+                )
+
+        return response.Response({"detail": "تم إنشاء القيد", "id": entry.id}, status=201)
+
+
+class JournalEntryDetailView(views.APIView):
+    """تفاصيل قيد واحد / حذفه."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        from accounting.models import JournalEntry
+        try:
+            entry = JournalEntry.objects.prefetch_related("lines__account").select_related("branch", "created_by").get(pk=pk)
+        except JournalEntry.DoesNotExist:
+            return response.Response({"detail": "Not found"}, status=404)
+
+        lines = []
+        for line in entry.lines.all():
+            lines.append({
+                "id":           line.id,
+                "account_code": line.account_code,
+                "account_name": line.account_name_ar or (line.account.name_ar if line.account else ""),
+                "debit":        str(line.debit_amount),
+                "credit":       str(line.credit_amount),
+            })
+        return response.Response({
+            "id":          entry.id,
+            "entry_date":  str(entry.entry_date),
+            "description": entry.description,
+            "source_type": entry.source_type,
+            "branch":      entry.branch.name if entry.branch else "",
+            "created_by":  str(entry.created_by) if entry.created_by else "",
+            "lines":       lines,
+        })
+
+    def delete(self, request, pk):
+        from accounting.models import JournalEntry
+        if not can_delete_chart_or_users(request.user):
+            return response.Response({"detail": "سيف فقط – حذف القيود"}, status=403)
+        try:
+            entry = JournalEntry.objects.get(pk=pk, source_type="manual")
+        except JournalEntry.DoesNotExist:
+            return response.Response({"detail": "لم يُعثر على القيد أو هو قيد تلقائي"}, status=404)
+        entry.delete()
+        return response.Response(status=204)
+
+
+class CostCenterListView(views.APIView):
+    """
+    مراكز التكلفة — قائمة الحسابات التحليلية من نوع 'المركز المالي'
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        accounts = ChartAccount.objects.filter(
+            is_active=True,
+            account_type="تحليلي",
+        ).order_by("code")
+
+        rows = []
+        for acc in accounts:
+            rows.append({
+                "id":       acc.id,
+                "code":     acc.code,
+                "name_ar":  acc.name_ar,
+                "name_en":  acc.name_en,
+                "level":    acc.level,
+                "statement":acc.statement,
+                "balance":  str(acc.balance),
+            })
+        return response.Response({"cost_centers": rows})

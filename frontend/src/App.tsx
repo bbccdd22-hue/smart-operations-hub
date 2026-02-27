@@ -61,6 +61,13 @@ import ExecutiveDashboardPage from "./pages/ExecutiveDashboardPage";
 import FinancialChartsDashboard from "./pages/reports/FinancialChartsDashboard";
 import ChartOfAccountsPage from "./pages/ChartOfAccountsPage";
 import BalanceUploadPage from "./pages/BalanceUploadPage";
+import TrialBalancePage from "./pages/accounting/TrialBalancePage";
+import AccountStatementPage from "./pages/accounting/AccountStatementPage";
+import JournalEntryPage from "./pages/accounting/JournalEntryPage";
+import CostCentersPage from "./pages/accounting/CostCentersPage";
+import BanksCashPage from "./pages/accounting/BanksCashPage";
+import TaxReportPage from "./pages/accounting/TaxReportPage";
+import BudgetPage from "./pages/accounting/BudgetPage";
 import WastePage from "./pages/WastePage";
 import POSPage from "./pages/POSPage";
 import KitchenDisplayPage from "./pages/KitchenDisplayPage";
@@ -263,6 +270,17 @@ export default function App() {
         <Route path="finance/charts-dashboard" element={<FinancialChartsDashboard />} />
         <Route path="finance/chart-of-accounts" element={<ChartOfAccountsPage />} />
         <Route path="finance/balance-upload" element={<BalanceUploadPage />} />
+        {/* ── NEW Accounting Pages ── */}
+        <Route path="finance/trial-balance"     element={<TrialBalancePage />} />
+        <Route path="finance/account-statement" element={<AccountStatementPage />} />
+        <Route path="finance/journal-entry"     element={<JournalEntryPage />} />
+        <Route path="finance/cost-centers"      element={<CostCentersPage />} />
+        <Route path="finance/banks"             element={<BanksCashPage />} />
+        <Route path="finance/tax-report"        element={<TaxReportPage />} />
+        <Route path="finance/budget"            element={<BudgetPage />} />
+        <Route path="finance/receipts"          element={<JournalEntryPage />} />
+        <Route path="finance/payments"          element={<JournalEntryPage />} />
+        <Route path="finance/consolidated"      element={<FinancialReportsPage />} />
         <Route path="profit-dashboard" element={<ProfitPage />} />
         <Route path="waste-tracker" element={<WastePage />} />
         <Route path="settings" element={<Navigate to="/admin-hub" replace />} />

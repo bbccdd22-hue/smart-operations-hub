@@ -95,6 +95,13 @@ const Ic = {
   card:        svg(["M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"]),
   income:      svg("M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"),
   netProfit:   svg("M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"),
+  /* ── NEW Accounting icons ─────────────────────────────────────── */
+  scale:       svg(["M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"]),
+  bank:        svg(["M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"]),
+  layers:      svg(["M12 2l10 6.5v7L12 22 2 15.5v-7L12 2z", "M12 22V9", "M22 8.5L12 15 2 8.5"]),
+  target:      svg(["M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"]),
+  pencil:      svg("M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"),
+  bookOpen:    svg(["M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"]),
 
   /* ── HR ────────────────────────────────────────────────────────── */
   employee:    svg("M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z"),
@@ -155,6 +162,16 @@ const ROUTE_PERM: Record<string, string> = {
   "/finance/opex":                       "perm_financial_reports",
   "/finance/charts-dashboard":           "perm_financial_reports",
   "/finance/chart-of-accounts":          "perm_financial_reports",
+  "/finance/trial-balance":              "perm_financial_reports",
+  "/finance/account-statement":          "perm_financial_reports",
+  "/finance/journal-entry":             "perm_financial_reports",
+  "/finance/cost-centers":              "perm_financial_reports",
+  "/finance/banks":                     "perm_financial_reports",
+  "/finance/budget":                    "perm_financial_reports",
+  "/finance/tax-report":               "perm_financial_reports",
+  "/finance/receipts":                  "perm_financial_reports",
+  "/finance/payments":                  "perm_financial_reports",
+  "/finance/consolidated":              "perm_financial_reports",
   "/finance/auditor":                    "perm_financial_auditor",
   "/finance/manual-adjustments":         "perm_full_system_access",
   "/finance/balance-upload":             "perm_financial_reports",
@@ -337,53 +354,71 @@ export function buildNestedNavConfig(
   ], permissions, isSAIF);
 
   /* ═════════════════════════════════════════════════════════════════
-     SYSTEM 5 — نظام الحسابات
-     Full double-entry accounting: statements, analysis, audit, tax, uploads
+     SYSTEM 5 — نظام الحسابات (Professional Accounting ERP)
+     Structured like real accounting software:
+     A. الملفات الرئيسية  B. إدخال الحركات  C. التقارير
+     D. المطابقة والتدقيق  E. رفع البيانات
   ═════════════════════════════════════════════════════════════════ */
 
-  /* 5a — القوائم المالية */
-  const finStatements = filterByPermission([
-    { to: "/finance",                   label: t("financialHub"),        icon: Ic.wallet },
-    { to: "/finance/profit-loss",       label: t("profitLoss"),          icon: Ic.trendUp },
-    { to: "/finance/income-statement",  label: t("incomeStatement"),     icon: Ic.book },
-    { to: "/finance/cash-flow",         label: t("cashFlowStatement"),   icon: Ic.cashFlow },
-    { to: "/finance/net-profit-margin", label: t("netProfitMargin"),     icon: Ic.netProfit },
+  /* 5A — الملفات الرئيسية (Master Files) */
+  const finMasterFiles = filterByPermission([
+    { to: "/finance/chart-of-accounts", label: t("chartOfAccounts"),      icon: Ic.book },
+    { to: "/finance/cost-centers",      label: t("costCenters"),           icon: Ic.layers },
+    { to: "/finance/banks",             label: t("banksCash"),             icon: Ic.bank },
+    { to: "/finance/budget",            label: t("budgetPlanning"),        icon: Ic.target },
+    { to: "/finance/balance-upload",    label: t("openingBalances"),       icon: Ic.upload },
   ], permissions, isSAIF);
 
-  /* 5b — التحليل والربحية */
-  const finAnalysis = filterByPermission([
-    { to: "/profit-dashboard",          label: t("profitDashboard"),          icon: Ic.profit },
-    { to: "/finance/cogs",              label: t("costOfGoodsSold"),          icon: Ic.audit },
-    { to: "/finance/opex",              label: t("operationalExpenses"),      icon: Ic.adjustments },
-    { to: "/finance/charts-dashboard",  label: t("financialChartsDashboard"), icon: Ic.chart },
-    { to: "/finance/cost-audit",        label: t("costAuditCenter"),          icon: Ic.salesReport },
-  ], permissions, isSAIF);
-
-  /* 5c — التدقيق والمطابقة */
-  const finAudit = filterByPermission([
-    { to: "/finance/chart-of-accounts", label: t("chartOfAccounts"),    icon: Ic.book },
-    { to: "/reconciliation",            label: t("reconciliation"),      icon: Ic.check },
-    { to: "/finance/auditor",           label: t("financialAuditor"),    icon: Ic.auditor },
-    { to: "/finance/manual-adjustments",label: t("manualAdjustments"),  icon: Ic.adjustments },
+  /* 5B — إدخال الحركات (Transactions Entry) */
+  const finTransactions = filterByPermission([
+    { to: "/finance/journal-entry",     label: t("journalEntry"),          icon: Ic.pencil },
+    { to: "/finance/receipts",          label: t("cashReceipts"),          icon: Ic.receipt },
+    { to: "/finance/payments",          label: t("cashPayments"),          icon: Ic.card },
+    { to: "/reconciliation",            label: t("bankReconciliation"),    icon: Ic.check },
+    { to: "/finance/manual-adjustments",label: t("closingEntries"),        icon: Ic.adjustments },
   ], permissions, isSAIF).filter((i) =>
-    !(i.to === "/finance/manual-adjustments" && !isSAIF && isExternalAccountant) &&
     !(i.to === "/finance/manual-adjustments" && !isSAIF)
   );
 
-  /* 5d — الضرائب والمدفوعات (cross-link with admin-hub) */
-  const finTaxes = filterByPermission([
-    { to: "/admin-hub/taxes",           label: t("taxSettings"),    icon: Ic.receipt },
-    { to: "/admin-hub/payment-methods", label: t("paymentMethods"), icon: Ic.card },
-  ], permissions, isSAIF).filter(() => showAdminHub);
+  /* 5C — التقارير (Reports) */
+  const finReports = filterByPermission([
+    { to: "/finance/trial-balance",     label: t("trialBalance"),          icon: Ic.scale },
+    { to: "/finance/account-statement", label: t("accountStatement"),      icon: Ic.bookOpen },
+    { to: "/finance/income-statement",  label: t("incomeStatement"),       icon: Ic.book },
+    { to: "/finance/profit-loss",       label: t("profitLoss"),            icon: Ic.trendUp },
+    { to: "/finance/cash-flow",         label: t("cashFlowStatement"),     icon: Ic.cashFlow },
+    { to: "/finance/net-profit-margin", label: t("netProfitMargin"),       icon: Ic.netProfit },
+    { to: "/finance/charts-dashboard",  label: t("financialChartsDashboard"), icon: Ic.chart },
+    { to: "/finance/daily-revenue",     label: t("dailyRevenue"),          icon: Ic.calendar },
+    { to: "/finance/tax-report",        label: t("taxReport"),             icon: Ic.receipt },
+  ], permissions, isSAIF);
 
-  /* 5e — رفع البيانات المالية */
+  /* 5D — التحليل والتدقيق (Analysis & Audit) */
+  const finAuditAnalysis = filterByPermission([
+    { to: "/profit-dashboard",          label: t("profitDashboard"),       icon: Ic.profit },
+    { to: "/finance/cogs",              label: t("costOfGoodsSold"),       icon: Ic.audit },
+    { to: "/finance/opex",              label: t("operationalExpenses"),   icon: Ic.adjustments },
+    { to: "/finance/cost-audit",        label: t("costAuditCenter"),       icon: Ic.salesReport },
+    { to: "/finance/auditor",           label: t("financialAuditor"),      icon: Ic.auditor },
+    { to: "/finance/consolidated",      label: t("consolidatedStatements"),icon: Ic.wallet },
+  ], permissions, isSAIF);
+
+  /* 5E — رفع البيانات (Data Uploads) */
   const finUploads = filterByPermission([
-    { to: "/finance/balance-upload", label: t("balanceUpload"),    icon: Ic.upload },
-    { to: "/upload-center",          label: t("uploadCenter"),     icon: Ic.upload },
-    { to: "/admin-hub/smart-upload", label: t("smartDataUpload"),  icon: Ic.trendUp },
+    { to: "/upload-center",          label: t("uploadCenter"),          icon: Ic.upload },
+    { to: "/admin-hub/smart-upload", label: t("smartDataUpload"),       icon: Ic.trendUp },
+    { to: "/admin-hub/taxes",        label: t("taxSettings"),           icon: Ic.receipt },
+    { to: "/admin-hub/payment-methods",label: t("paymentMethods"),      icon: Ic.card },
   ], permissions, isSAIF).filter((i) =>
-    !(isExternalAccountant && i.to === "/admin-hub/smart-upload")
+    !(isExternalAccountant && i.to === "/admin-hub/smart-upload") &&
+    !(["admin-hub/taxes", "/admin-hub/payment-methods"].some((s) => i.to.includes(s)) && !showAdminHub)
   );
+
+  /* backward compatibility aliases */
+  const finStatements  = finReports;
+  const finAnalysis    = finAuditAnalysis;
+  const finAudit       = finMasterFiles;
+  const finTaxes: typeof finUploads = [];
 
   /* ═════════════════════════════════════════════════════════════════
      SYSTEM 6 — نظام شؤون الموظفين
@@ -461,11 +496,11 @@ export function buildNestedNavConfig(
 
   /* 5 — نظام الحسابات */
   const finSubGroups = [
-    { subLabelKey: "navSubFinStatements", items: finStatements },
-    { subLabelKey: "navSubFinAnalysis",   items: finAnalysis },
-    { subLabelKey: "navSubAudit",         items: finAudit },
-    { subLabelKey: "navSubFinTaxes",      items: finTaxes },
-    { subLabelKey: "navSubAccUploads",    items: finUploads },
+    { subLabelKey: "navSubAccMasterFiles",   items: finMasterFiles },
+    { subLabelKey: "navSubAccTransactions",  items: finTransactions },
+    { subLabelKey: "navSubAccReports",       items: finReports },
+    { subLabelKey: "navSubAccAudit",         items: finAuditAnalysis },
+    { subLabelKey: "navSubAccUploads",       items: finUploads },
   ].filter((sg) => sg.items.length > 0);
   if (finSubGroups.length > 0) {
     groups.push({ groupLabelKey: "navSystemAccounting", groupIcon: Wallet, subGroups: finSubGroups, show: true });
