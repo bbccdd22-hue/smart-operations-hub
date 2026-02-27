@@ -1,14 +1,22 @@
 """
-Procurement API – طلبات الشراء، التنبؤ الذكي، بوابة الموردين.
+Procurement API – طلبات الشراء، التنبؤ الذكي، بوابة الموردين، إدارة الموردين.
 """
 from datetime import datetime
 from decimal import Decimal
 
+from django.db.models import Q
 from rest_framework import permissions, response, status, views
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.generics import ListCreateAPIView, RetrieveUpdateDestroyAPIView
 
 from core.permissions import get_user_scope
 
+from procurement.serializers import SupplierSerializer
+from procurement.supplier_report_services import (
+    get_supplier_balances,
+    get_supplier_statement,
+    get_supplier_debt_aging,
+)
 from procurement.purchase_suggestion_services import (
     get_purchase_suggestions,
     _get_default_package,
@@ -327,3 +335,100 @@ class ManualPurchaseForecastView(views.APIView):
         out.sort(key=lambda x: (-float(x["suggested_purchase_qty"]), x["ingredient_name"]))
 
         return response.Response({"ingredients": out})
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# نظام الموردين — Supplier Management & Reports
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class SupplierListView(ListCreateAPIView):
+    """قائمة الموردين + إضافة مورد جديد."""
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = SupplierSerializer
+    queryset = Supplier.objects.all().select_related("brand").order_by("name")
+
+    def get_queryset(self):
+        qs = super().get_queryset()
+        brand_id = self.request.query_params.get("brand_id")
+        if brand_id:
+            try:
+                qs = qs.filter(brand_id=int(brand_id))
+            except (TypeError, ValueError):
+                pass
+        search = (self.request.query_params.get("search") or "").strip()
+        if search:
+            qs = qs.filter(
+                Q(name__icontains=search)
+                | Q(name_ar__icontains=search)
+                | Q(contact_phone__icontains=search)
+            )
+        return qs
+
+    def perform_create(self, serializer):
+        serializer.save()
+
+
+class SupplierDetailView(RetrieveUpdateDestroyAPIView):
+    """تفاصيل مورد، تعديل، حذف."""
+    permission_classes = [permissions.IsAuthenticated]
+    serializer_class = SupplierSerializer
+    queryset = Supplier.objects.all().select_related("brand")
+
+
+class SupplierBalancesView(views.APIView):
+    """أرصدة الموردين."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        brand_id = request.query_params.get("brand_id")
+        branch_id = request.query_params.get("branch_id")
+        try:
+            brand_id = int(brand_id) if brand_id else None
+        except (TypeError, ValueError):
+            brand_id = None
+        try:
+            branch_id = int(branch_id) if branch_id else None
+        except (TypeError, ValueError):
+            branch_id = None
+        rows = get_supplier_balances(brand_id=brand_id, branch_id=branch_id)
+        return response.Response({"suppliers": rows})
+
+
+class SupplierStatementView(views.APIView):
+    """كشف حساب مورد."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, supplier_id):
+        from_date = request.query_params.get("from_date")
+        to_date = request.query_params.get("to_date")
+        data = get_supplier_statement(
+            supplier_id=int(supplier_id),
+            from_date=from_date,
+            to_date=to_date,
+        )
+        if not data:
+            return response.Response({"detail": "المورد غير موجود"}, status=404)
+        return response.Response(data)
+
+
+class SupplierDebtAgingView(views.APIView):
+    """أعمار الديون للموردين."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        brand_id = request.query_params.get("brand_id")
+        as_of = request.query_params.get("as_of_date")
+        try:
+            brand_id = int(brand_id) if brand_id else None
+        except (TypeError, ValueError):
+            brand_id = None
+        from datetime import datetime
+        as_of_date = None
+        if as_of:
+            try:
+                as_of_date = datetime.strptime(as_of, "%Y-%m-%d").date()
+            except ValueError:
+                pass
+        data = get_supplier_debt_aging(brand_id=brand_id, as_of_date=as_of_date)
+        return response.Response(data)

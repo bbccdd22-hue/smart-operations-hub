@@ -28,6 +28,10 @@ import StockTransfersPage from "./pages/StockTransfersPage";
 import CentralKitchenPage from "./pages/CentralKitchenPage";
 import SmartPurchasePage from "./pages/SmartPurchasePage";
 import ManualPurchaseForecastPage from "./pages/ManualPurchaseForecastPage";
+import SuppliersPage from "./pages/suppliers/SuppliersPage";
+import SupplierBalancesPage from "./pages/suppliers/SupplierBalancesPage";
+import SupplierStatementPage from "./pages/suppliers/SupplierStatementPage";
+import SupplierDebtAgingPage from "./pages/suppliers/SupplierDebtAgingPage";
 import ProductsPage from "./pages/ProductsPage";
 import UsersPage from "./pages/UsersPage";
 import UserProfilePage from "./pages/UserProfilePage";
@@ -202,6 +206,10 @@ export default function App() {
           <Route path="smart-purchase" element={<SmartPurchasePage />} />
           <Route path="manual-purchase-forecast" element={<ManualPurchaseForecastPage />} />
           <Route path="products" element={<ProductsPage />} />
+          <Route path="suppliers" element={<SuppliersPage />} />
+          <Route path="suppliers/balances" element={<SupplierBalancesPage />} />
+          <Route path="suppliers/statement/:supplierId" element={<SupplierStatementPage />} />
+          <Route path="suppliers/debt-aging" element={<SupplierDebtAgingPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       ) : (
@@ -253,9 +261,13 @@ export default function App() {
           <Route path="stock-transfers" element={<StockTransfersPage />} />
           <Route path="central-kitchen" element={<CentralKitchenPage />} />
           <Route path="smart-purchase" element={<SmartPurchasePage />} />
-          <Route path="manual-purchase-forecast" element={<ManualPurchaseForecastPage />} />
-          <Route path="products" element={<ProductsPage />} />
-          <Route path="finance" element={<FinanceHubPage />} />
+        <Route path="manual-purchase-forecast" element={<ManualPurchaseForecastPage />} />
+        <Route path="products" element={<ProductsPage />} />
+        <Route path="suppliers" element={<SuppliersPage />} />
+        <Route path="suppliers/balances" element={<SupplierBalancesPage />} />
+        <Route path="suppliers/statement/:supplierId" element={<SupplierStatementPage />} />
+        <Route path="suppliers/debt-aging" element={<SupplierDebtAgingPage />} />
+        <Route path="finance" element={<FinanceHubPage />} />
         <Route path="finance/reports" element={<FinancialReportsPage />} />
         <Route path="finance/daily-revenue" element={<DailyRevenueReport />} />
         <Route path="finance/opex" element={<OperationalExpensesReport />} />

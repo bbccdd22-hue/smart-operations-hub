@@ -19,6 +19,7 @@ import {
   BarChart3,
   Briefcase,
   TrendingUp,
+  Building2,
   type LucideIcon,
 } from "lucide-react";
 import type { NavConfig, NavItem } from "../layouts/AppShellLayout";
@@ -152,6 +153,9 @@ const ROUTE_PERM: Record<string, string> = {
   /* ── Procurement ────────────────────────────────────────────────── */
   "/smart-purchase":                     "perm_management_reports",
   "/manual-purchase-forecast":           "perm_management_reports",
+  "/suppliers":                          "perm_management_reports",
+  "/suppliers/balances":                 "perm_management_reports",
+  "/suppliers/debt-aging":               "perm_management_reports",
   "/upload-center":                      "perm_management_reports",
   /* ── Accounting ─────────────────────────────────────────────────── */
   "/finance":                            "perm_financial_reports",
@@ -354,6 +358,20 @@ export function buildNestedNavConfig(
   ], permissions, isSAIF);
 
   /* ═════════════════════════════════════════════════════════════════
+     SYSTEM 4c — نظام الموردين (Suppliers System)
+     الملفات الرئيسية + التقارير
+  ═════════════════════════════════════════════════════════════════ */
+
+  const suppMasterFiles = filterByPermission([
+    { to: "/suppliers",         label: t("suppliersEntry"),    icon: Ic.supplier },
+  ], permissions, isSAIF);
+
+  const suppReports = filterByPermission([
+    { to: "/suppliers/balances",   label: t("supplierBalances"),   icon: Ic.wallet },
+    { to: "/suppliers/debt-aging", label: t("supplierDebtAging"), icon: Ic.clock },
+  ], permissions, isSAIF);
+
+  /* ═════════════════════════════════════════════════════════════════
      SYSTEM 5 — نظام الحسابات (Professional Accounting ERP)
      Structured like real accounting software:
      A. الملفات الرئيسية  B. إدخال الحركات  C. التقارير
@@ -492,6 +510,15 @@ export function buildNestedNavConfig(
   ].filter((sg) => sg.items.length > 0);
   if (procSubGroups.length > 0) {
     groups.push({ groupLabelKey: "navSystemProcurement", groupIcon: ShoppingCart, subGroups: procSubGroups, show: true });
+  }
+
+  /* 4s — نظام الموردين */
+  const suppSubGroups = [
+    { subLabelKey: "navSubSuppMaster",  items: suppMasterFiles },
+    { subLabelKey: "navSubSuppReports", items: suppReports },
+  ].filter((sg) => sg.items.length > 0);
+  if (suppSubGroups.length > 0) {
+    groups.push({ groupLabelKey: "navSystemSuppliers", groupIcon: Building2, subGroups: suppSubGroups, show: true });
   }
 
   /* 5 — نظام الحسابات */
