@@ -70,22 +70,54 @@ export default function PrepListPage() {
   }, [branchId]);
 
   useEffect(() => {
-    fetchBranches(user?.brand_slug ?? undefined).then(setBranches);
+    let cancelled = false;
+    fetchBranches(user?.brand_slug ?? undefined)
+      .then((r) => {
+        if (!cancelled) setBranches(Array.isArray(r) ? r : []);
+      })
+      .catch(() => {
+        if (!cancelled) setBranches([]);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [user?.brand_slug]);
 
   useEffect(() => {
-    loadProducts();
-  }, [loadProducts]);
+    let cancelled = false;
+    setProductsLoading(true);
+    (async () => {
+      try {
+        const list = await fetchProductsWithRecipes(branchId ?? undefined);
+        if (!cancelled) setProducts(Array.isArray(list) ? list : []);
+      } catch {
+        if (!cancelled) setProducts([]);
+      } finally {
+        if (!cancelled) setProductsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [branchId]);
 
   useEffect(() => {
+    let cancelled = false;
     if (branchId) {
       const from = dateFrom <= dateTo ? dateFrom : dateTo;
       fetchPredictForDate({ branchId, date: from })
-        .then((r) => setForecastSales(r?.predicted_sales ?? null))
-        .catch(() => setForecastSales(null));
+        .then((r) => {
+          if (!cancelled) setForecastSales(r?.predicted_sales ?? null);
+        })
+        .catch(() => {
+          if (!cancelled) setForecastSales(null);
+        });
     } else {
-      setForecastSales(null);
+      if (!cancelled) setForecastSales(null);
     }
+    return () => {
+      cancelled = true;
+    };
   }, [branchId, dateFrom, dateTo]);
 
   const [salesDataLoading, setSalesDataLoading] = useState(false);
@@ -372,7 +404,7 @@ export default function PrepListPage() {
                 className="glass-input min-h-[44px] w-full rounded-xl px-4 py-3 text-white"
               >
                 <option value="">{t("selectBranch")}</option>
-                {branches.map((b) => (
+                {(Array.isArray(branches) ? branches : []).map((b) => (
                   <option key={b.id} value={b.id}>
                     {b.name}
                   </option>

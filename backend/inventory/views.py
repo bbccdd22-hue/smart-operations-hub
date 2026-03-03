@@ -4,6 +4,7 @@ from decimal import Decimal
 from rest_framework import permissions, response, status, views
 from rest_framework.exceptions import PermissionDenied
 
+from core.pagination import paginate_queryset
 from core.permissions import can_view_cost_price, get_user_scope
 from analytics.views import _apply_branch_scope
 from org.models import Branch
@@ -117,7 +118,12 @@ class IngredientListView(views.APIView):
 
     def get(self, request):
         system_group = request.query_params.get("system_group", "").strip()
-        qs = Ingredient.objects.filter(is_active=True).select_related("base_unit").order_by("name_en")
+        qs = (
+            Ingredient.objects.filter(is_active=True)
+            .select_related("base_unit")
+            .prefetch_related("packages")
+            .order_by("name_en")
+        )
         if system_group and system_group in ("raw_materials", "packaging", "other"):
             qs = qs.filter(system_group=system_group)
         ing_ids_with_movements = set(
@@ -130,7 +136,7 @@ class IngredientListView(views.APIView):
         out = []
         for ing in qs:
             bu = ing.base_unit
-            pkgs = IngredientPackage.objects.filter(ingredient=ing).order_by("sort_order", "id")
+            pkgs = list(ing.packages.all())
             packages_data = [{
                 "id": p.id,
                 "name_en": p.name_en,
@@ -1234,6 +1240,196 @@ class ProductRecipeLineDetailView(views.APIView):
         return response.Response(status=204)
 
 
+class StockBalanceReportView(views.APIView):
+    """
+    تقرير أرصدة المخزون الحالية — Stock Balance Report
+    GET /inventory/stock-balance/
+    يعرض كمية كل صنف في كل فرع مع قيمة المخزون وحالة الإنذار المبكر.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        scope = get_user_scope(request.user)
+        qs = BranchStock.objects.select_related(
+            "branch", "branch__brand", "ingredient", "ingredient__base_unit"
+        ).order_by("branch__name", "ingredient__name_en")
+
+        branch_id = request.query_params.get("branch_id")
+        brand_id = request.query_params.get("brand_id")
+        search = (request.query_params.get("search") or "").strip()
+        low_stock_only = request.query_params.get("low_stock_only") == "1"
+
+        if scope.get("brand_ids"):
+            qs = qs.filter(branch__brand_id__in=scope["brand_ids"])
+        elif brand_id:
+            try:
+                qs = qs.filter(branch__brand_id=int(brand_id))
+            except (TypeError, ValueError):
+                pass
+
+        if scope.get("branch_ids"):
+            qs = qs.filter(branch_id__in=scope["branch_ids"])
+        elif branch_id:
+            try:
+                qs = qs.filter(branch_id=int(branch_id))
+            except (TypeError, ValueError):
+                pass
+
+        if search:
+            qs = qs.filter(
+                Q(ingredient__name_en__icontains=search)
+                | Q(ingredient__name_ar__icontains=search)
+            )
+
+        if low_stock_only:
+            from django.db.models import F
+            qs = qs.filter(on_hand__lte=F("reorder_level"))
+
+        page_items, pagination = paginate_queryset(qs, request, page_size=50, max_page_size=100)
+        rows = []
+        total_value = Decimal("0")
+        for bs in page_items:
+            unit_cost = bs.ingredient.unit_cost if hasattr(bs.ingredient, "unit_cost") else None
+            value = (bs.on_hand * unit_cost) if unit_cost else None
+            if value:
+                total_value += value
+            is_low = bs.reorder_level > 0 and bs.on_hand <= bs.reorder_level
+            rows.append({
+                "id": bs.id,
+                "branch_id": bs.branch_id,
+                "branch_name": bs.branch.name,
+                "brand_name": bs.branch.brand.name if bs.branch.brand else "",
+                "ingredient_id": bs.ingredient_id,
+                "ingredient_name_en": bs.ingredient.name_en,
+                "ingredient_name_ar": bs.ingredient.name_ar or "",
+                "unit_code": bs.ingredient.base_unit.code if bs.ingredient.base_unit else "",
+                "on_hand": str(bs.on_hand),
+                "reorder_level": str(bs.reorder_level),
+                "unit_cost": str(unit_cost) if unit_cost is not None else None,
+                "value": str(value) if value is not None else None,
+                "is_low_stock": is_low,
+            })
+
+        return response.Response({
+            "rows": rows,
+            "total_count": pagination["count"],
+            "total_value": str(total_value),
+            "pagination": pagination,
+        })
+
+
+class StockMovementsReportView(views.APIView):
+    """
+    تقرير حركات المخزون — Stock Movements Report
+    GET /inventory/stock-movements/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        scope = get_user_scope(request.user)
+        from datetime import date, datetime as _dt
+
+        branch_id = request.query_params.get("branch_id")
+        brand_id = request.query_params.get("brand_id")
+        ingredient_id = request.query_params.get("ingredient_id")
+        movement_type = request.query_params.get("movement_type")
+        date_from_str = request.query_params.get("date_from")
+        date_to_str = request.query_params.get("date_to")
+        search = (request.query_params.get("search") or "").strip()
+
+        today = date.today()
+        try:
+            date_from = _dt.strptime(date_from_str, "%Y-%m-%d").date() if date_from_str else today
+        except ValueError:
+            date_from = today
+        try:
+            date_to = _dt.strptime(date_to_str, "%Y-%m-%d").date() if date_to_str else today
+        except ValueError:
+            date_to = today
+
+        qs = StockMovement.objects.select_related(
+            "branch", "branch__brand", "ingredient", "ingredient__base_unit"
+        ).filter(
+            created_at__date__gte=date_from,
+            created_at__date__lte=date_to,
+        ).order_by("-created_at")
+
+        if scope.get("brand_ids"):
+            qs = qs.filter(branch__brand_id__in=scope["brand_ids"])
+        elif brand_id:
+            try:
+                qs = qs.filter(branch__brand_id=int(brand_id))
+            except (TypeError, ValueError):
+                pass
+
+        if scope.get("branch_ids"):
+            qs = qs.filter(branch_id__in=scope["branch_ids"])
+        elif branch_id:
+            try:
+                qs = qs.filter(branch_id=int(branch_id))
+            except (TypeError, ValueError):
+                pass
+
+        if ingredient_id:
+            try:
+                qs = qs.filter(ingredient_id=int(ingredient_id))
+            except (TypeError, ValueError):
+                pass
+
+        if movement_type:
+            qs = qs.filter(movement_type=movement_type)
+
+        if search:
+            qs = qs.filter(
+                Q(ingredient__name_en__icontains=search)
+                | Q(ingredient__name_ar__icontains=search)
+                | Q(reference__icontains=search)
+            )
+
+        from inventory.models import StockMovementType
+        type_labels_ar = {
+            "purchase": "شراء",
+            "adjustment": "تسوية",
+            "depletion": "استهلاك",
+            "transfer_out": "تحويل صادر",
+            "transfer_in": "تحويل وارد",
+        }
+
+        rows = []
+        for mv in qs[:2000]:
+            rows.append({
+                "id": mv.id,
+                "branch_id": mv.branch_id,
+                "branch_name": mv.branch.name,
+                "brand_name": mv.branch.brand.name if mv.branch.brand else "",
+                "ingredient_id": mv.ingredient_id,
+                "ingredient_name_en": mv.ingredient.name_en,
+                "ingredient_name_ar": mv.ingredient.name_ar or "",
+                "unit_code": mv.ingredient.base_unit.code if mv.ingredient.base_unit else "",
+                "movement_type": mv.movement_type,
+                "movement_type_ar": type_labels_ar.get(mv.movement_type, mv.movement_type),
+                "qty_delta": str(mv.qty_delta),
+                "reference": mv.reference or "",
+                "created_at": mv.created_at.isoformat() if mv.created_at else None,
+            })
+
+        total_in = sum(
+            Decimal(r["qty_delta"]) for r in rows if Decimal(r["qty_delta"]) > 0
+        )
+        total_out = sum(
+            Decimal(r["qty_delta"]) for r in rows if Decimal(r["qty_delta"]) < 0
+        )
+
+        return response.Response({
+            "rows": rows,
+            "total_count": len(rows),
+            "total_in": str(total_in),
+            "total_out": str(total_out),
+            "date_from": str(date_from),
+            "date_to": str(date_to),
+        })
+
+
 class IngredientCostUpdateView(views.APIView):
     """PATCH /ingredients/<pk>/cost/ – update only the unit_cost of an ingredient."""
 
@@ -1260,4 +1456,87 @@ class IngredientCostUpdateView(views.APIView):
             "name_ar": ing.name_ar or "",
             "name_en": ing.name_en or "",
             "unit_cost": str(ing.unit_cost) if ing.unit_cost is not None else None,
+        })
+
+
+# ─── Recipe Costing API ────────────────────────────────────────────────────────
+
+class RecipeCostView(views.APIView):
+    """
+    GET /api/inventory/recipes/<product_pk>/cost/
+
+    Returns detailed cost breakdown for a product's recipe:
+      - cost_per_serving: total ingredient cost (SAR)
+      - ingredients_cost: same (raw without waste)
+      - waste_cost: extra cost due to waste %
+      - lines: per-ingredient breakdown
+      - has_missing_costs: True if any ingredient lacks unit_cost
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, product_pk):
+        try:
+            recipe = Recipe.objects.prefetch_related(
+                "lines__ingredient", "lines__unit"
+            ).get(product_id=product_pk)
+        except Recipe.DoesNotExist:
+            return response.Response(
+                {"detail": "Recipe not found for this product."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        lines_data = []
+        total_raw_cost = Decimal("0.0000")
+        total_waste_cost = Decimal("0.0000")
+        has_missing_costs = False
+
+        for line in recipe.lines.all():
+            ing = line.ingredient
+            unit_cost = ing.unit_cost or Decimal("0")
+            if ing.unit_cost is None:
+                has_missing_costs = True
+
+            raw_cost = (line.qty * unit_cost).quantize(Decimal("0.0001"))
+            effective_cost = line.actual_cost_per_serving
+            waste_cost_line = (effective_cost - raw_cost).quantize(Decimal("0.0001"))
+
+            total_raw_cost += effective_cost
+            total_waste_cost += waste_cost_line
+
+            lines_data.append({
+                "ingredient_id": ing.pk,
+                "ingredient_name": ing.name_en,
+                "ingredient_name_ar": ing.name_ar,
+                "qty": str(line.qty),
+                "unit": line.unit.code,
+                "waste_percentage": str(line.waste_percentage),
+                "effective_qty": str(line.effective_qty.quantize(Decimal("0.0001"))),
+                "unit_cost": str(unit_cost),
+                "raw_cost": str(raw_cost),
+                "waste_cost": str(waste_cost_line),
+                "total_cost": str(effective_cost),
+            })
+
+        ingredients_cost = (total_raw_cost - total_waste_cost).quantize(Decimal("0.01"))
+        cost_per_serving = total_raw_cost.quantize(Decimal("0.01"))
+        waste_total = total_waste_cost.quantize(Decimal("0.01"))
+
+        # Food cost % vs selling price
+        product = recipe.product
+        food_cost_pct = None
+        if product.price_excl_tax and product.price_excl_tax > 0 and cost_per_serving > 0:
+            food_cost_pct = float(
+                (cost_per_serving / product.price_excl_tax * 100).quantize(Decimal("0.1"))
+            )
+
+        return response.Response({
+            "product_id": product.pk,
+            "product_name": product.name,
+            "selling_price": str(product.price_excl_tax) if product.price_excl_tax else None,
+            "cost_per_serving": str(cost_per_serving),
+            "ingredients_cost": str(ingredients_cost),
+            "waste": str(waste_total),
+            "food_cost_pct": food_cost_pct,
+            "has_missing_costs": has_missing_costs,
+            "lines": lines_data,
         })

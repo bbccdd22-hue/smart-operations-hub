@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "./contexts/AuthContext";
@@ -23,7 +23,6 @@ import PredictiveDashboardPage from "./pages/PredictiveDashboardPage";
 import ReconciliationPage from "./pages/ReconciliationPage";
 import SystemSettingsPage from "./pages/SystemSettingsPage";
 import ManageIngredientsPage from "./pages/ManageIngredientsPage";
-import ItemFilePage from "./pages/ItemFilePage";
 import StockTransfersPage from "./pages/StockTransfersPage";
 import CentralKitchenPage from "./pages/CentralKitchenPage";
 import SmartPurchasePage from "./pages/SmartPurchasePage";
@@ -42,6 +41,7 @@ import SmartUploadPage from "./pages/SmartUploadPage";
 import ActivityLogPage from "./pages/ActivityLogPage";
 import SystemErrorLogsPage from "./pages/SystemErrorLogsPage";
 import SystemHeartbeatPage from "./pages/SystemHeartbeatPage";
+import TestDashboardPage from "./pages/TestDashboardPage";
 import LoginPage from "./pages/LoginPage";
 import HubPage from "./pages/HubPage";
 import OperationsLayout from "./layouts/OperationsLayout";
@@ -57,12 +57,10 @@ import NetProfitMarginReport from "./pages/reports/NetProfitMarginReport";
 import CashFlowStatementReport from "./pages/reports/CashFlowStatementReport";
 import ProfitLossReport from "./pages/reports/ProfitLossReport";
 import IncomeStatementPage from "./pages/reports/IncomeStatementPage";
-import CostAuditCenterPage from "./pages/reports/CostAuditCenterPage";
 import FinancialAuditorPage from "./pages/FinancialAuditorPage";
 import ManualAdjustmentsPage from "./pages/reports/ManualAdjustmentsPage";
 import OwnerCommandCenterPage from "./pages/OwnerCommandCenterPage";
 import ExecutiveDashboardPage from "./pages/ExecutiveDashboardPage";
-import FinancialChartsDashboard from "./pages/reports/FinancialChartsDashboard";
 import ChartOfAccountsPage from "./pages/ChartOfAccountsPage";
 import BalanceUploadPage from "./pages/BalanceUploadPage";
 import TrialBalancePage from "./pages/accounting/TrialBalancePage";
@@ -75,8 +73,17 @@ import BudgetPage from "./pages/accounting/BudgetPage";
 import WastePage from "./pages/WastePage";
 import POSPage from "./pages/POSPage";
 import ProcurementPlaceholderPage from "./pages/procurement/ProcurementPlaceholderPage";
+import PurchaseInvoicesPage from "./pages/procurement/PurchaseInvoicesPage";
+import PurchaseOrdersPage from "./pages/procurement/PurchaseOrdersPage";
+import PurchaseRequestsPage from "./pages/procurement/PurchaseRequestsPage";
+import ProcurementDailyMovementsPage from "./pages/procurement/ProcurementDailyMovementsPage";
+import ProcurementReviewMovementsPage from "./pages/procurement/ProcurementReviewMovementsPage";
 import SalesPlaceholderPage from "./pages/sales/SalesPlaceholderPage";
+import SalesDailyReportPage from "./pages/sales/SalesDailyReportPage";
+import SalesCashNetworkPage from "./pages/sales/SalesCashNetworkPage";
 import InventoryPlaceholderPage from "./pages/inventory/InventoryPlaceholderPage";
+import StockBalancePage from "./pages/inventory/StockBalancePage";
+import StockMovementsPage from "./pages/inventory/StockMovementsPage";
 import KitchenDisplayPage from "./pages/KitchenDisplayPage";
 import EmployeeSelfServicePage from "./pages/EmployeeSelfServicePage";
 import CafeHeartbeatDashboard from "./pages/CafeHeartbeatDashboard";
@@ -86,8 +93,29 @@ import { ProfitVisibilityProvider } from "./contexts/ProfitVisibilityContext";
 import ToastContainer from "./components/ToastContainer";
 import ActivityLogger from "./components/ActivityLogger";
 import ErrorBoundary from "./components/ErrorBoundary";
+import SignupPage from "./pages/SignupPage";
+import FoodCostDashboard from "./pages/FoodCostDashboard";
+import PosTablesPage from "./pages/PosTablesPage";
+import KdsPage from "./pages/KdsPage";
+import SupplierPortalLoginPage from "./pages/SupplierPortalLoginPage";
+import SupplierPortalDashboardPage from "./pages/SupplierPortalDashboardPage";
+import CategoryAnalyticsPage from "./pages/CategoryAnalyticsPage";
+import OwnerDashboardVipPage from "./pages/OwnerDashboardVipPage";
 import NotificationsDropdown from "./components/NotificationsDropdown";
 import OwnerSignatureFooter from "./components/OwnerSignatureFooter";
+
+const ItemFilePage = lazy(() => import("./pages/ItemFilePage"));
+const CostAuditCenterPage = lazy(() => import("./pages/reports/CostAuditCenterPage"));
+const FinancialChartsDashboard = lazy(() => import("./pages/reports/FinancialChartsDashboard"));
+
+function PageFallback() {
+  return (
+    <div className="flex min-h-[200px] items-center justify-center">
+      <span className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+      <span className="ml-3 text-white/70">Loading…</span>
+    </div>
+  );
+}
 
 export default function App() {
   const { t, i18n } = useTranslation();
@@ -136,6 +164,11 @@ export default function App() {
     >
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/signup" element={<SignupPage />} />
+      {/* Public — no auth required */}
+      <Route path="/kds" element={<KdsPage />} />
+      <Route path="/supplier-portal/login" element={<SupplierPortalLoginPage />} />
+      <Route path="/supplier-portal/dashboard" element={<SupplierPortalDashboardPage />} />
       <Route path="/hub" element={<ProtectedRoute><Navigate to="/" replace /></ProtectedRoute>} />
       <Route
         path="/admin-hub"
@@ -153,6 +186,7 @@ export default function App() {
         <Route path="activity-log" element={<ActivityLogPage />} />
         <Route path="error-logs" element={<SystemErrorLogsPage />} />
         <Route path="system-heartbeat" element={<SystemHeartbeatPage />} />
+        <Route path="test-dashboard" element={<TestDashboardPage />} />
         <Route path="users" element={<UsersPage />} />
         <Route path="users/:id" element={<UserProfilePage />} />
         <Route path="notification-settings" element={<NotificationSettingsPage />} />
@@ -177,6 +211,10 @@ export default function App() {
         >
           <Route index element={<OperationsDashboardPage />} />
           <Route path="pos" element={<POSPage />} />
+          <Route path="pos/tables" element={<PosTablesPage />} />
+          <Route path="analytics/food-cost" element={<FoodCostDashboard />} />
+          <Route path="analytics/categories" element={<CategoryAnalyticsPage />} />
+          <Route path="owner-dashboard" element={<OwnerDashboardVipPage />} />
           <Route path="employee-self" element={<EmployeeSelfServicePage />} />
           <Route path="kitchen" element={<KitchenDisplayPage />} />
           <Route path="shift-closing" element={<ShiftClosingPage />} />
@@ -192,10 +230,10 @@ export default function App() {
           <Route path="finance/cash-flow" element={<CashFlowStatementReport />} />
           <Route path="finance/profit-loss" element={<ProfitLossReport />} />
           <Route path="finance/income-statement" element={<IncomeStatementPage />} />
-          <Route path="finance/cost-audit" element={<CostAuditCenterPage />} />
+          <Route path="finance/cost-audit" element={<Suspense fallback={<PageFallback />}><CostAuditCenterPage /></Suspense>} />
           <Route path="finance/auditor" element={<FinancialAuditorPage />} />
           <Route path="finance/manual-adjustments" element={<ManualAdjustmentsPage />} />
-          <Route path="finance/charts-dashboard" element={<FinancialChartsDashboard />} />
+          <Route path="finance/charts-dashboard" element={<Suspense fallback={<PageFallback />}><FinancialChartsDashboard /></Suspense>} />
           <Route path="finance/chart-of-accounts" element={<ChartOfAccountsPage />} />
           <Route path="finance/balance-upload" element={<BalanceUploadPage />} />
           <Route path="profit-dashboard" element={<ProfitPage />} />
@@ -203,7 +241,11 @@ export default function App() {
           <Route path="upload-center" element={<UploadCenterPage />} />
           <Route path="ingredients" element={<IngredientsPage />} />
           <Route path="inventory/manage-ingredients" element={<ManageIngredientsPage />} />
-          <Route path="inventory/item-file" element={<ItemFilePage />} />
+          <Route path="inventory/item-file" element={<Suspense fallback={<PageFallback />}><ItemFilePage /></Suspense>} />
+          <Route path="inventory/stock-balance" element={<StockBalancePage />} />
+          <Route path="inventory/stock-movements" element={<StockMovementsPage />} />
+          <Route path="inventory/reports/item-balances" element={<StockBalancePage />} />
+          <Route path="inventory/reports/daily-movements" element={<StockMovementsPage />} />
           <Route path="inventory/*" element={<InventoryPlaceholderPage />} />
           <Route path="stock-transfers" element={<StockTransfersPage />} />
           <Route path="central-kitchen" element={<CentralKitchenPage />} />
@@ -214,7 +256,14 @@ export default function App() {
           <Route path="suppliers/balances" element={<SupplierBalancesPage />} />
           <Route path="suppliers/statement/:supplierId" element={<SupplierStatementPage />} />
           <Route path="suppliers/debt-aging" element={<SupplierDebtAgingPage />} />
+          <Route path="procurement/invoices" element={<PurchaseInvoicesPage />} />
+          <Route path="procurement/orders" element={<PurchaseOrdersPage />} />
+          <Route path="procurement/requests" element={<PurchaseRequestsPage />} />
+          <Route path="procurement/reports/daily-movements" element={<ProcurementDailyMovementsPage />} />
+          <Route path="procurement/reports/review-movements" element={<ProcurementReviewMovementsPage />} />
           <Route path="procurement/*" element={<ProcurementPlaceholderPage />} />
+          <Route path="sales/reports/daily-movement" element={<SalesDailyReportPage />} />
+          <Route path="sales/reports/review-movements" element={<SalesCashNetworkPage />} />
           <Route path="sales/*" element={<SalesPlaceholderPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
@@ -256,6 +305,10 @@ export default function App() {
         <Route path="forecast" element={<PredictiveDashboardPage />} />
         <Route path="prep-list" element={<PrepListPage />} />
         <Route path="pos" element={<POSPage />} />
+        <Route path="pos/tables" element={<PosTablesPage />} />
+        <Route path="analytics/food-cost" element={<FoodCostDashboard />} />
+        <Route path="analytics/categories" element={<CategoryAnalyticsPage />} />
+        <Route path="owner-dashboard" element={<OwnerDashboardVipPage />} />
         <Route path="employee-self" element={<EmployeeSelfServicePage />} />
         <Route path="kitchen" element={<KitchenDisplayPage />} />
         <Route path="shift-closing" element={<ShiftClosingPage />} />
@@ -263,7 +316,11 @@ export default function App() {
         <Route path="upload-center" element={<UploadCenterPage />} />
         <Route path="ingredients" element={<IngredientsPage />} />
           <Route path="inventory/manage-ingredients" element={<ManageIngredientsPage />} />
-          <Route path="inventory/item-file" element={<ItemFilePage />} />
+          <Route path="inventory/item-file" element={<Suspense fallback={<PageFallback />}><ItemFilePage /></Suspense>} />
+          <Route path="inventory/stock-balance" element={<StockBalancePage />} />
+          <Route path="inventory/stock-movements" element={<StockMovementsPage />} />
+          <Route path="inventory/reports/item-balances" element={<StockBalancePage />} />
+          <Route path="inventory/reports/daily-movements" element={<StockMovementsPage />} />
           <Route path="inventory/*" element={<InventoryPlaceholderPage />} />
           <Route path="stock-transfers" element={<StockTransfersPage />} />
           <Route path="central-kitchen" element={<CentralKitchenPage />} />
@@ -274,7 +331,14 @@ export default function App() {
         <Route path="suppliers/balances" element={<SupplierBalancesPage />} />
         <Route path="suppliers/statement/:supplierId" element={<SupplierStatementPage />} />
         <Route path="suppliers/debt-aging" element={<SupplierDebtAgingPage />} />
+        <Route path="procurement/invoices" element={<PurchaseInvoicesPage />} />
+        <Route path="procurement/orders" element={<PurchaseOrdersPage />} />
+        <Route path="procurement/requests" element={<PurchaseRequestsPage />} />
+        <Route path="procurement/reports/daily-movements" element={<ProcurementDailyMovementsPage />} />
+        <Route path="procurement/reports/review-movements" element={<ProcurementReviewMovementsPage />} />
         <Route path="procurement/*" element={<ProcurementPlaceholderPage />} />
+        <Route path="sales/reports/daily-movement" element={<SalesDailyReportPage />} />
+        <Route path="sales/reports/review-movements" element={<SalesCashNetworkPage />} />
         <Route path="sales/*" element={<SalesPlaceholderPage />} />
         <Route path="finance" element={<FinanceHubPage />} />
         <Route path="finance/reports" element={<FinancialReportsPage />} />
@@ -285,10 +349,10 @@ export default function App() {
         <Route path="finance/cash-flow" element={<CashFlowStatementReport />} />
         <Route path="finance/profit-loss" element={<ProfitLossReport />} />
         <Route path="finance/income-statement" element={<IncomeStatementPage />} />
-        <Route path="finance/cost-audit" element={<CostAuditCenterPage />} />
+        <Route path="finance/cost-audit" element={<Suspense fallback={<PageFallback />}><CostAuditCenterPage /></Suspense>} />
         <Route path="finance/auditor" element={<FinancialAuditorPage />} />
         <Route path="finance/manual-adjustments" element={<ManualAdjustmentsPage />} />
-        <Route path="finance/charts-dashboard" element={<FinancialChartsDashboard />} />
+        <Route path="finance/charts-dashboard" element={<Suspense fallback={<PageFallback />}><FinancialChartsDashboard /></Suspense>} />
         <Route path="finance/chart-of-accounts" element={<ChartOfAccountsPage />} />
         <Route path="finance/balance-upload" element={<BalanceUploadPage />} />
         {/* ── NEW Accounting Pages ── */}

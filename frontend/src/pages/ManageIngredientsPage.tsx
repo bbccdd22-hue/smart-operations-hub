@@ -58,11 +58,6 @@ export default function ManageIngredientsPage() {
   const [error, setError] = useState<string | null>(null);
   const [showPrimaryUnitWarning, setShowPrimaryUnitWarning] = useState(false);
 
-  const loadUnits = useCallback(async () => {
-    const list = await fetchInventoryUnits();
-    setUnits(list);
-  }, []);
-
   const loadIngredients = useCallback(async () => {
     setLoading(true);
     try {
@@ -78,12 +73,36 @@ export default function ManageIngredientsPage() {
   }, [urlSystemGroup]);
 
   useEffect(() => {
-    loadUnits();
-  }, [loadUnits]);
+    let cancelled = false;
+    fetchInventoryUnits()
+      .then((list) => {
+        if (!cancelled) setUnits(list);
+      })
+      .catch(() => {
+        if (!cancelled) setUnits([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
-    loadIngredients();
-  }, [loadIngredients]);
+    let cancelled = false;
+    setLoading(true);
+    fetchIngredients(systemGroupFilter || undefined)
+      .then((list) => {
+        if (!cancelled) setIngredients(list);
+      })
+      .catch(() => {
+        if (!cancelled) setIngredients([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [systemGroupFilter]);
 
   const resetForm = () => {
     setForm({
