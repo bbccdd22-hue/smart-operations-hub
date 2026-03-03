@@ -65,7 +65,7 @@ export default function SmartPurchasePage() {
 
   /* branches */
   useEffect(() => {
-    fetchBranches().then(setBranches).catch(() => setBranches([]));
+    fetchBranches().then((r) => setBranches(Array.isArray(r) ? r : [])).catch(() => setBranches([]));
   }, []);
 
   /* load */
@@ -354,25 +354,25 @@ export default function SmartPurchasePage() {
             <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
               <Building2 className="h-3.5 w-3.5" />
               {T("الفرع", "Branch")}
-            </label>
-            <select
-              value={branchId}
+          </label>
+          <select
+            value={branchId}
               onChange={e => setBranchId(e.target.value ? Number(e.target.value) : "")}
               className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-400/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
             >
               <option value="">-- {T("اختر الفرع", "Select branch")} --</option>
-              {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-            </select>
-          </div>
+              {(Array.isArray(branches) ? branches : []).map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+          </select>
+        </div>
 
           {/* Horizon */}
-          <div>
+        <div>
             <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400">
               <Clock className="h-3.5 w-3.5" />
               {T("أفق التنبؤ", "Forecast Horizon")}
-            </label>
-            <select
-              value={horizonDays}
+          </label>
+          <select
+            value={horizonDays}
               onChange={e => setHorizonDays(Number(e.target.value))}
               className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm text-slate-800 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-400/20 dark:border-slate-600 dark:bg-slate-800 dark:text-white"
             >
@@ -402,22 +402,22 @@ export default function SmartPurchasePage() {
                 { v: 90,  ar: "آخر 90 يوم",  en: "Last 90 days" },
                 { v: 180, ar: "آخر 6 أشهر",  en: "Last 6 months" },
               ].map(o => <option key={o.v} value={o.v}>{T(o.ar, o.en)}</option>)}
-            </select>
-          </div>
+          </select>
+        </div>
 
           {/* Fetch button */}
-          <div className="flex items-end">
-            <button
-              type="button"
-              onClick={load}
-              disabled={!branchId || loading}
+        <div className="flex items-end">
+          <button
+            type="button"
+            onClick={load}
+            disabled={!branchId || loading}
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50"
-            >
+          >
               {loading
                 ? <RefreshCw className="h-4 w-4 animate-spin" />
                 : <ShoppingCart className="h-4 w-4" />}
               {loading ? T("جاري التحليل…", "Analyzing…") : T("تحليل واقتراح", "Analyze & Suggest")}
-            </button>
+          </button>
           </div>
         </div>
       </div>
@@ -565,7 +565,7 @@ export default function SmartPurchasePage() {
               <div className="overflow-x-auto">
                 <table className="w-full min-w-[900px] border-collapse text-sm">
 
-                  <thead>
+            <thead>
                     <tr className="border-b-2 border-slate-200 bg-gradient-to-r from-slate-50 to-slate-100 dark:border-slate-700 dark:from-slate-800 dark:to-slate-800/50">
                       <th className="w-10 px-4 py-3 text-center text-xs font-semibold text-slate-500 dark:text-slate-400">#</th>
 
@@ -604,10 +604,10 @@ export default function SmartPurchasePage() {
                       <th className="px-4 py-3 text-center text-xs font-semibold text-slate-600 dark:text-slate-300">
                         {T("الوحدة", "Unit")}
                       </th>
-                    </tr>
-                  </thead>
+              </tr>
+            </thead>
 
-                  <tbody>
+            <tbody>
                     {processed.map((s, idx) => {
                       const urgency = s._urgency;
                       const effSugg = s._effSugg;
@@ -631,18 +631,18 @@ export default function SmartPurchasePage() {
                           </td>
 
                           {/* Item name */}
-                          <td className="px-4 py-3">
+                  <td className="px-4 py-3">
                             <p className="font-medium text-slate-800 dark:text-white">
-                              {isRTL && s.ingredient_name_ar ? s.ingredient_name_ar : s.ingredient_name}
+                    {isRTL && s.ingredient_name_ar ? s.ingredient_name_ar : s.ingredient_name}
                             </p>
                             {isRTL && s.ingredient_name && (
                               <p className="text-xs text-slate-400">{s.ingredient_name}</p>
                             )}
-                            {s.serial_code && (
+                    {s.serial_code && (
                               <span className="mt-0.5 inline-block rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-500 dark:bg-slate-700 dark:text-slate-400">
-                                {s.serial_code}
-                              </span>
-                            )}
+                        {s.serial_code}
+                      </span>
+                    )}
                           </td>
 
                           {/* Status badge */}
@@ -654,13 +654,13 @@ export default function SmartPurchasePage() {
                           <td className="px-4 py-3 text-center">
                             <div className="font-mono font-medium text-slate-700 dark:text-slate-200">
                               {s.required_qty} <span className="text-xs font-normal text-slate-400">{s.unit_code}</span>
-                            </div>
-                            {s.display_unit_source === "package" && s.required_base_qty && s.base_unit_code && (
+                    </div>
+                    {s.display_unit_source === "package" && s.required_base_qty && s.base_unit_code && (
                               <div className="text-xs text-slate-400">
                                 {s.required_base_qty} <span className="text-slate-300">{s.base_unit_code}</span>
-                              </div>
-                            )}
-                          </td>
+                      </div>
+                    )}
+                  </td>
 
                           {/* On hand (system) */}
                           <td className="px-4 py-3 text-center">
@@ -673,7 +673,7 @@ export default function SmartPurchasePage() {
                             }`}>
                               {s.on_hand} <span className="text-xs font-normal text-slate-400">{s.unit_code}</span>
                             </div>
-                            {s.display_unit_source === "package" && s.on_hand_base_qty && s.base_unit_code && (
+                    {s.display_unit_source === "package" && s.on_hand_base_qty && s.base_unit_code && (
                               <div className="text-xs text-slate-400">
                                 {s.on_hand_base_qty} <span className="text-slate-300">{s.base_unit_code}</span>
                               </div>
@@ -706,9 +706,9 @@ export default function SmartPurchasePage() {
                             {hasReal && (
                               <div className="mt-1 text-[10px] font-medium text-blue-500 dark:text-blue-400">
                                 {T("وضع حقيقي ✓", "actual ✓")}
-                              </div>
-                            )}
-                          </td>
+                      </div>
+                    )}
+                  </td>
 
                           {/* Suggested (effective) */}
                           <td className="px-4 py-3 text-center">
@@ -728,9 +728,9 @@ export default function SmartPurchasePage() {
                                 )}
                                 {!hasReal && s.display_unit_source === "package" && s.suggested_purchase_base_qty && s.base_unit_code && (
                                   <div className="mt-0.5 text-xs text-slate-400">
-                                    {s.suggested_purchase_base_qty} {s.base_unit_code}
-                                  </div>
-                                )}
+                        {s.suggested_purchase_base_qty} {s.base_unit_code}
+                      </div>
+                    )}
                               </div>
                             ) : (
                               <span className={`text-xs ${hasReal ? "font-semibold text-emerald-600 dark:text-emerald-400" : "text-slate-400"}`}>
@@ -745,11 +745,11 @@ export default function SmartPurchasePage() {
                               <CircleDot className="h-3 w-3 text-slate-400" />
                               {s.unit_code}
                             </div>
-                          </td>
-                        </tr>
+                  </td>
+                </tr>
                       );
                     })}
-                  </tbody>
+            </tbody>
 
                   {/* Footer row */}
                   <tfoot>
@@ -771,7 +771,7 @@ export default function SmartPurchasePage() {
                       <td />
                     </tr>
                   </tfoot>
-                </table>
+          </table>
               </div>
             </div>
 

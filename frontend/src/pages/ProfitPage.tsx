@@ -28,8 +28,12 @@ export default function ProfitPage() {
   const [costEdits, setCostEdits] = useState<Record<number, string>>({});
 
   const loadBranches = useCallback(async () => {
-    const list = await fetchBranches();
-    setBranches(list);
+    try {
+      const list = await fetchBranches();
+      setBranches(Array.isArray(list) ? list : []);
+    } catch {
+      setBranches([]);
+    }
   }, []);
 
   const loadSummary = useCallback(async () => {
@@ -112,7 +116,7 @@ export default function ProfitPage() {
             className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800 dark:text-white"
           >
             <option value="">{t("all")} {t("branch")}</option>
-            {branches.map((b) => (
+            {(Array.isArray(branches) ? branches : []).map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name_ar || b.name}
               </option>

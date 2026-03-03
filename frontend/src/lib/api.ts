@@ -128,6 +128,34 @@ export function fetchWithCsrf(url: string, opts: RequestInit = {}) {
   return fetchWithRetry(url, { ...opts, credentials: "include", headers });
 }
 
+/** Axios-like API client for pages using api.get / api.post */
+async function apiRequest(
+  method: "GET" | "POST",
+  path: string,
+  body?: unknown,
+  opts?: RequestInit & { headers?: Record<string, string> }
+): Promise<{ data: unknown; status: number }> {
+  const url = path.startsWith("http") ? path : `${API_BASE}${path.startsWith("/") ? path : `/${path}`}`;
+  const headers: Record<string, string> = { ...(opts?.headers || {}) };
+  if (method !== "GET" && body !== undefined) {
+    headers["Content-Type"] = headers["Content-Type"] || "application/json";
+  }
+  const fetchOpts: RequestInit = { ...opts, method, headers };
+  if (method === "POST" && body !== undefined) {
+    fetchOpts.body = typeof body === "string" ? body : JSON.stringify(body);
+  }
+  const res = await fetchWithCsrf(url, fetchOpts);
+  const data = await res.json().catch(() => ({}));
+  return { data, status: res.status };
+}
+
+const api = {
+  get: (path: string, opts?: RequestInit) => apiRequest("GET", path, undefined, opts),
+  post: (path: string, body?: unknown, opts?: RequestInit) => apiRequest("POST", path, body, opts),
+};
+
+export default api;
+
 export async function fetchDashboardSummary(params?: {
   city?: string;
   brand?: string;
@@ -349,6 +377,13 @@ export function brandDisplayName(brand: Brand, lang: string): string {
   return b.name_ar && lang === "ar" ? b.name_ar : brand.name;
 }
 
+/** DRF pagination returns { count, next, previous, results } – extract results for list endpoints */
+function unwrapPaginated<T>(data: unknown): T[] {
+  if (Array.isArray(data)) return data as T[];
+  const o = data as { results?: unknown[] };
+  return Array.isArray(o?.results) ? (o.results as T[]) : [];
+}
+
 export async function fetchBrands(): Promise<Brand[]> {
   try {
     const res = await fetch(`${API_BASE}/org/brands/`, {
@@ -356,7 +391,8 @@ export async function fetchBrands(): Promise<Brand[]> {
       headers: apiHeaders(),
     });
     if (!res.ok) throw new Error();
-    return (await res.json()) as Brand[];
+    const data = await res.json();
+    return unwrapPaginated<Brand>(data);
   } catch {
     return [];
   }
@@ -366,7 +402,8 @@ export async function fetchCities(): Promise<City[]> {
   try {
     const res = await fetch(`${API_BASE}/org/cities/`, { credentials: "include" });
     if (!res.ok) throw new Error();
-    return (await res.json()) as City[];
+    const data = await res.json();
+    return unwrapPaginated<City>(data);
   } catch {
     return [];
   }
@@ -377,7 +414,8 @@ export async function fetchDistricts(cityId?: number): Promise<District[]> {
     const qs = cityId != null ? `?city_id=${cityId}` : "";
     const res = await fetch(`${API_BASE}/org/districts/${qs}`, { credentials: "include" });
     if (!res.ok) throw new Error();
-    return (await res.json()) as District[];
+    const data = await res.json();
+    return unwrapPaginated<District>(data);
   } catch {
     return [];
   }
@@ -387,7 +425,8 @@ export async function fetchBranchTypes(): Promise<BranchType[]> {
   try {
     const res = await fetch(`${API_BASE}/org/branch-types/`, { credentials: "include" });
     if (!res.ok) throw new Error();
-    return (await res.json()) as BranchType[];
+    const data = await res.json();
+    return unwrapPaginated<BranchType>(data);
   } catch {
     return [];
   }
@@ -1475,7 +1514,65 @@ export async function fetchBranches(brandSlug?: string, brandSlugs?: string[]): 
       credentials: "include"
     });
     if (!res.ok) throw new Error();
-    return (await res.json()) as Branch[];
+    const data = await res.json();
+    return unwrapPaginated<Branch>(data);
+  } catch {
+    return [];
+  }
+}
+
+// ─── HR dimension options (for journal entry lines) — single block, do not duplicate ───
+
+export interface CostCenterOption {
+  id: number;
+  code: string;
+  name: string;
+  name_ar: string;
+  branch_id: number;
+  branch_name: string;
+  brand_id: number;
+  brand_name: string;
+}
+
+export interface EmployeeOption {
+  id: number;
+  employee_id: string;
+  first_name: string;
+  last_name: string;
+  first_name_ar: string;
+  last_name_ar: string;
+  branch_id: number;
+  branch_name: string | null;
+  brand_id: number;
+  brand_name: string | null;
+}
+
+export async function fetchCostCenters(params?: { brand_id?: string; branch_id?: string; search?: string }): Promise<CostCenterOption[]> {
+  const qs = new URLSearchParams();
+  if (params?.brand_id) qs.set("brand_id", params.brand_id);
+  if (params?.branch_id) qs.set("branch_id", params.branch_id);
+  if (params?.search) qs.set("search", params.search);
+  try {
+    const res = await fetchWithCsrf(`${API_BASE}/hr/cost-centers/${qs.toString() ? `?${qs}` : ""}`);
+    if (!res.ok) return [];
+    const d = (await res.json()) as { cost_centers: CostCenterOption[] };
+    return d.cost_centers ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchEmployees(params?: { brand_id?: string; branch_id?: string; search?: string }): Promise<EmployeeOption[]> {
+  const qs = new URLSearchParams();
+  if (params?.brand_id) qs.set("brand_id", params.brand_id);
+  if (params?.branch_id) qs.set("branch_id", params.branch_id);
+  if (params?.search) qs.set("search", params.search);
+  const url = qs.toString() ? `${API_BASE}/hr/employees/?${qs}` : `${API_BASE}/hr/employees/`;
+  try {
+    const res = await fetchWithCsrf(url);
+    if (!res.ok) return [];
+    const d = (await res.json()) as { employees: EmployeeOption[] };
+    return d.employees ?? [];
   } catch {
     return [];
   }
@@ -2727,6 +2824,330 @@ export async function fetchManualPurchaseForecast(params: {
     throw new Error(err.detail || "Failed to compute manual forecast");
   }
   return (await res.json()) as { ingredients: ManualForecastIngredient[] };
+}
+
+// ─── Purchase Invoices (Procurement) ─────────────────────────────────────────
+
+export interface PurchaseInvoiceLinePayload {
+  ingredient_id?: number | null;
+  description?: string;
+  quantity: number;
+  unit_id?: number | null;
+  unit_price_excl_vat: number;
+  vat_rate?: number;
+}
+
+export interface PurchaseInvoiceCreatePayload {
+  supplier_id: number;
+  branch_id: number;
+  invoice_number: string;
+  invoice_date: string;
+  notes?: string;
+  goods_receipt_id?: number | null;
+  lines: PurchaseInvoiceLinePayload[];
+}
+
+export interface PurchaseInvoiceLineResponse {
+  id: number;
+  ingredient: number | null;
+  description: string;
+  quantity: string;
+  unit: number | null;
+  unit_price_excl_vat: string;
+  vat_rate: string;
+  line_total_excl_vat: string;
+  line_vat_amount: string;
+  line_total_incl_vat: string;
+}
+
+export interface PurchaseInvoiceDetail {
+  id: number;
+  supplier: number;
+  supplier_name: string;
+  branch: number;
+  branch_name: string;
+  goods_receipt: number | null;
+  invoice_number: string;
+  invoice_date: string;
+  total_amount: string;
+  subtotal_excl_vat: string | null;
+  total_vat_amount: string | null;
+  total_amount_incl_vat: string | null;
+  status: "draft" | "posted";
+  journal_entry: number | null;
+  notes: string;
+  lines: PurchaseInvoiceLineResponse[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface PurchaseInvoiceListItem {
+  id: number;
+  invoice_number: string;
+  invoice_date: string;
+  supplier: number;
+  supplier_name: string;
+  supplier_name_ar?: string;
+  branch: number;
+  branch_name: string;
+  total_amount: string;
+  subtotal_excl_vat?: string | null;
+  total_vat_amount?: string | null;
+  total_amount_incl_vat?: string | null;
+  status: "draft" | "posted";
+  status_display?: string;
+  goods_receipt_id: number | null;
+  journal_entry?: number | null;
+  notes: string;
+}
+
+export async function fetchSuppliers(params?: { brand_id?: string }): Promise<Array<{ id: number; name: string; name_ar?: string; brand: number }>> {
+  const qs = params?.brand_id ? `?brand_id=${params.brand_id}` : "";
+  const res = await fetch(`${API_BASE}/procurement/suppliers/${qs}`, { credentials: "include" });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return Array.isArray(data) ? data : data.results || data.suppliers || [];
+}
+
+export async function listPurchaseInvoices(params?: {
+  brand_id?: string;
+  branch_id?: string;
+  supplier_id?: string;
+  status?: string;
+  date_from?: string;
+  date_to?: string;
+  search?: string;
+  page?: number;
+  page_size?: number;
+}): Promise<{ invoices: PurchaseInvoiceListItem[]; pagination?: { page: number; page_size: number; total: number } }> {
+  const qs = new URLSearchParams();
+  if (params?.brand_id) qs.set("brand_id", params.brand_id);
+  if (params?.branch_id) qs.set("branch_id", params.branch_id);
+  if (params?.supplier_id) qs.set("supplier_id", params.supplier_id);
+  if (params?.status) qs.set("status", params.status);
+  if (params?.date_from) qs.set("date_from", params.date_from);
+  if (params?.date_to) qs.set("date_to", params.date_to);
+  if (params?.search) qs.set("search", params.search);
+  if (params?.page != null) qs.set("page", String(params.page));
+  if (params?.page_size != null) qs.set("page_size", String(params.page_size));
+  const res = await fetchWithCsrf(`${API_BASE}/procurement/invoices/${qs.toString() ? `?${qs}` : ""}`);
+  if (!res.ok) throw new Error("Failed to fetch invoices");
+  const d = (await res.json()) as { invoices: PurchaseInvoiceListItem[]; pagination?: { page: number; page_size: number; total: number } };
+  return d;
+}
+
+export async function createPurchaseInvoice(payload: PurchaseInvoiceCreatePayload): Promise<PurchaseInvoiceDetail> {
+  const res = await fetchWithCsrf(`${API_BASE}/procurement/invoices/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { detail?: string };
+    throw new Error(j.detail || "Failed to create invoice");
+  }
+  return (await res.json()) as PurchaseInvoiceDetail;
+}
+
+export async function getPurchaseInvoice(id: number): Promise<PurchaseInvoiceDetail> {
+  const res = await fetchWithCsrf(`${API_BASE}/procurement/invoices/${id}/`, { credentials: "include" });
+  if (!res.ok) throw new Error("Failed to fetch invoice");
+  return (await res.json()) as PurchaseInvoiceDetail;
+}
+
+export async function updatePurchaseInvoice(
+  id: number,
+  data: Partial<{ invoice_number: string; invoice_date: string; notes: string }>
+): Promise<PurchaseInvoiceDetail> {
+  const res = await fetchWithCsrf(`${API_BASE}/procurement/invoices/${id}/`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { detail?: string };
+    throw new Error(j.detail || "Failed to update invoice");
+  }
+  return (await res.json()) as PurchaseInvoiceDetail;
+}
+
+export async function postPurchaseInvoice(id: number): Promise<{ journal_entry_id: number; status: string }> {
+  const res = await fetchWithCsrf(`${API_BASE}/procurement/invoices/${id}/post/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { detail?: string };
+    throw new Error(j.detail || "Failed to post invoice");
+  }
+  return (await res.json()) as { journal_entry_id: number; status: string };
+}
+
+// ─── Goods Receipts (GRN) ─────────────────────────────────────────────────────
+
+export interface GoodsReceiptLineResponse {
+  id: number;
+  order_line_id: number;
+  order_line: number;
+  ingredient_id: number;
+  ingredient_name: string;
+  ingredient_name_ar: string;
+  unit_code: string;
+  order_quantity: string;
+  quantity_received: string;
+  unit_price: string;
+}
+
+export interface GoodsReceiptResponse {
+  id: number;
+  purchase_order: number;
+  purchase_order_number: string;
+  supplier_id: number;
+  supplier_name: string;
+  supplier_name_ar: string;
+  branch_id: number;
+  branch_name: string;
+  receipt_number: string;
+  receipt_date: string;
+  status: "draft" | "confirmed";
+  journal_entry: number | null;
+  notes: string;
+  lines: GoodsReceiptLineResponse[];
+  invoice_ids: number[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface PurchaseOrderLineDetail {
+  id: number;
+  ingredient_id: number;
+  ingredient_name: string;
+  ingredient_name_ar: string;
+  quantity: string;
+  unit_id: number;
+  unit_code: string;
+  unit_name: string;
+  unit_price: string;
+}
+
+export interface PurchaseOrderDetail {
+  id: number;
+  order_number: string;
+  order_date: string;
+  supplier_id: number;
+  supplier_name: string;
+  supplier_name_ar: string;
+  branch_id: number;
+  branch_name: string;
+  status: string;
+  lines: PurchaseOrderLineDetail[];
+}
+
+export async function listGoodsReceipts(params?: {
+  brand_id?: string;
+  branch_id?: string;
+  status?: string;
+  date_from?: string;
+  date_to?: string;
+  page?: number;
+  page_size?: number;
+}): Promise<{ receipts: GoodsReceiptResponse[]; pagination?: { page: number; page_size: number; total: number } }> {
+  const qs = new URLSearchParams();
+  if (params?.brand_id) qs.set("brand_id", params.brand_id);
+  if (params?.branch_id) qs.set("branch_id", params.branch_id);
+  if (params?.status) qs.set("status", params.status);
+  if (params?.date_from) qs.set("date_from", params.date_from);
+  if (params?.date_to) qs.set("date_to", params.date_to);
+  if (params?.page != null) qs.set("page", String(params.page));
+  if (params?.page_size != null) qs.set("page_size", String(params.page_size));
+  const url = qs.toString() ? `${API_BASE}/procurement/goods-receipts/?${qs}` : `${API_BASE}/procurement/goods-receipts/`;
+  const res = await fetchWithCsrf(url);
+  if (!res.ok) throw new Error("Failed to fetch goods receipts");
+  return (await res.json()) as { receipts: GoodsReceiptResponse[]; pagination?: { page: number; page_size: number; total: number } };
+}
+
+export interface PurchaseOrderListItem {
+  id: number;
+  order_number: string;
+  order_date: string;
+  supplier_id: number;
+  supplier_name: string;
+  supplier_name_ar?: string;
+  branch_id: number;
+  branch_name: string;
+  status: string;
+  lines_count?: number;
+}
+
+export async function listPurchaseOrders(params?: {
+  brand_id?: string;
+  branch_id?: string;
+  status?: string;
+  date_from?: string;
+  date_to?: string;
+  search?: string;
+  page?: number;
+  page_size?: number;
+}): Promise<{ orders: PurchaseOrderListItem[]; pagination?: { page: number; page_size: number; total: number } }> {
+  const qs = new URLSearchParams();
+  if (params?.brand_id) qs.set("brand_id", params.brand_id);
+  if (params?.branch_id) qs.set("branch_id", params.branch_id);
+  if (params?.status) qs.set("status", params.status || "");
+  if (params?.date_from) qs.set("date_from", params.date_from || "");
+  if (params?.date_to) qs.set("date_to", params.date_to || "");
+  if (params?.search) qs.set("search", params.search || "");
+  if (params?.page != null) qs.set("page", String(params.page));
+  if (params?.page_size != null) qs.set("page_size", String(params.page_size));
+  const res = await fetchWithCsrf(`${API_BASE}/procurement/orders/${qs.toString() ? `?${qs}` : ""}`);
+  if (!res.ok) throw new Error("Failed to fetch purchase orders");
+  return (await res.json()) as { orders: PurchaseOrderListItem[]; pagination?: { page: number; page_size: number; total: number } };
+}
+
+export async function getPurchaseOrderDetail(id: number): Promise<PurchaseOrderDetail> {
+  const res = await fetchWithCsrf(`${API_BASE}/procurement/orders/${id}/`);
+  if (!res.ok) throw new Error("Failed to fetch purchase order");
+  return (await res.json()) as PurchaseOrderDetail;
+}
+
+export async function createGoodsReceipt(payload: {
+  purchase_order_id: number;
+  receipt_date: string;
+  notes?: string;
+  lines: Array<{ order_line_id: number; quantity_received: number }>;
+}): Promise<GoodsReceiptResponse> {
+  const res = await fetchWithCsrf(`${API_BASE}/procurement/goods-receipts/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { detail?: string; lines?: string[] };
+    throw new Error(j.detail || (Array.isArray(j.lines) ? j.lines.join(" ") : "Failed to create goods receipt"));
+  }
+  return (await res.json()) as GoodsReceiptResponse;
+}
+
+export async function getGoodsReceipt(id: number): Promise<GoodsReceiptResponse> {
+  const res = await fetchWithCsrf(`${API_BASE}/procurement/goods-receipts/${id}/`);
+  if (!res.ok) throw new Error("Failed to fetch goods receipt");
+  return (await res.json()) as GoodsReceiptResponse;
+}
+
+export async function confirmGoodsReceipt(id: number): Promise<{ receipt: GoodsReceiptResponse; journal_entry_id: number }> {
+  const res = await fetchWithCsrf(`${API_BASE}/procurement/goods-receipts/${id}/confirm/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+  });
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { detail?: string };
+    throw new Error(j.detail || "Failed to confirm receipt");
+  }
+  return (await res.json()) as { receipt: GoodsReceiptResponse; journal_entry_id: number };
 }
 
 // ─── Products (FoodicsProduct) ───────────────────────────────────────────────

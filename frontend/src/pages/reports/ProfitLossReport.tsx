@@ -28,7 +28,9 @@ function formatAmount(n: number, isRTL: boolean): string {
 
 export default function ProfitLossReport() {
   const { i18n } = useTranslation();
-  const { brands: orgBrands, branches: orgBranches, branchesByBrandId } = useOrgs();
+  const { brands, branches, branchesByBrandId } = useOrgs();
+  const orgBrands = Array.isArray(brands) ? brands : [];
+  const orgBranches = Array.isArray(branches) ? branches : [];
   const isRTL = i18n.language === "ar";
   const lang = i18n.language;
   const [accounts, setAccounts] = useState<ChartAccount[]>([]);
@@ -40,7 +42,7 @@ export default function ProfitLossReport() {
 
   useEffect(() => {
     fetchChartAccounts()
-      .then(setAccounts)
+      .then((r) => setAccounts(Array.isArray(r) ? r : []))
       .catch(() => setAccounts([]))
       .finally(() => setLoading(false));
   }, []);
@@ -56,7 +58,7 @@ export default function ProfitLossReport() {
   const branchesForBrand = useMemo(
     () =>
       filterBrand && selectedBrand
-        ? (branchesByBrandId[selectedBrand.id] ?? [])
+        ? (Array.isArray(branchesByBrandId[selectedBrand.id]) ? branchesByBrandId[selectedBrand.id] : [])
         : orgBranches,
     [filterBrand, selectedBrand, branchesByBrandId, orgBranches]
   );

@@ -47,8 +47,8 @@ export function OrgsProvider({ children }: { children: ReactNode }) {
         fetchBrands(),
         fetchBranches(),
       ]);
-      setBrands(brandsData);
-      setBranches(branchesData);
+      setBrands(Array.isArray(brandsData) ? brandsData : []);
+      setBranches(Array.isArray(branchesData) ? branchesData : []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load");
       setBrands([]);
@@ -76,9 +76,11 @@ export function OrgsProvider({ children }: { children: ReactNode }) {
 
   const branchesByBrand: Record<string, Branch[]> = {};
   const branchesByBrandId: Record<number, Branch[]> = {};
-  for (const b of brands) {
+  const brandsList = Array.isArray(brands) ? brands : [];
+  const branchesList = Array.isArray(branches) ? branches : [];
+  for (const b of brandsList) {
     const key = (b.brand_code ?? b.slug ?? b.name).trim() || String(b.id);
-    const list = branches.filter((br) => br.brand?.id === b.id || br.brand?.name === b.name);
+    const list = branchesList.filter((br) => br.brand?.id === b.id || br.brand?.name === b.name);
     branchesByBrand[key] = list;
     branchesByBrandId[b.id] = list;
   }

@@ -924,7 +924,9 @@ class JournalEntryListCreateView(views.APIView):
         page        = int(request.query_params.get("page", 1))
         page_size   = int(request.query_params.get("page_size", 20))
 
-        qs = JournalEntry.objects.select_related("branch", "created_by").prefetch_related("lines__account").order_by("-entry_date", "-id")
+        qs = JournalEntry.objects.select_related("branch", "created_by").prefetch_related(
+            "lines__account", "lines__branch", "lines__brand", "lines__cost_center", "lines__employee"
+        ).order_by("-entry_date", "-id")
         if from_date:
             qs = qs.filter(entry_date__gte=from_date)
         if to_date:
@@ -947,16 +949,27 @@ class JournalEntryListCreateView(views.APIView):
                 total_debit  += line.debit_amount
                 total_credit += line.credit_amount
                 lines.append({
-                    "id":           line.id,
-                    "account_code": line.account_code,
-                    "account_name": line.account_name_ar or (line.account.name_ar if line.account else ""),
-                    "debit":        str(line.debit_amount),
-                    "credit":       str(line.credit_amount),
+                    "id":             line.id,
+                    "account_code":  line.account_code,
+                    "account_name":  line.account_name_ar or (line.account.name_ar if line.account else ""),
+                    "debit":          str(line.debit_amount),
+                    "credit":         str(line.credit_amount),
+                    "branch_id":      line.branch_id,
+                    "branch_name":    line.branch.name if line.branch else None,
+                    "brand_id":       line.brand_id,
+                    "brand_name":     line.brand.name if line.brand else None,
+                    "cost_center_id": line.cost_center_id,
+                    "cost_center_name": line.cost_center.name if line.cost_center else None,
+                    "employee_id":    line.employee_id,
+                    "employee_name":  f"{line.employee.first_name} {line.employee.last_name}" if line.employee else None,
+                    "reference_type": line.reference_type or "",
+                    "reference_id":   line.reference_id or "",
                 })
             rows.append({
                 "id":          entry.id,
                 "entry_date":  str(entry.entry_date),
                 "description": entry.description,
+                "reference":   getattr(entry, "reference", None) or "",
                 "source_type": entry.source_type,
                 "branch":      entry.branch.name if entry.branch else "",
                 "created_by":  str(entry.created_by) if entry.created_by else "",
@@ -984,6 +997,7 @@ class JournalEntryListCreateView(views.APIView):
         data = request.data
         entry_date  = data.get("entry_date")
         description = data.get("description", "").strip()
+        reference   = (data.get("reference") or "").strip()[:64]
         branch_id   = data.get("branch_id")
         lines_data  = data.get("lines", [])
 
@@ -1001,10 +1015,19 @@ class JournalEntryListCreateView(views.APIView):
                 status=400
             )
 
+        # مركز التكلفة إجباري لكل سطر
+        for i, l in enumerate(lines_data):
+            if not l.get("cost_center_id"):
+                return response.Response(
+                    {"detail": "مركز التكلفة مطلوب لكل سطر (السطر {})".format(i + 1)},
+                    status=400
+                )
+
         with db_transaction.atomic():
             entry = JournalEntry.objects.create(
                 entry_date=entry_date,
                 description=description,
+                reference=reference,
                 source_type="manual",
                 branch_id=branch_id or None,
                 created_by=request.user,
@@ -1014,6 +1037,12 @@ class JournalEntryListCreateView(views.APIView):
                 debit        = Decimal(str(line_data.get("debit", 0)))
                 credit       = Decimal(str(line_data.get("credit", 0)))
                 account_name = str(line_data.get("account_name", "")).strip()
+                branch_id    = line_data.get("branch_id")
+                brand_id     = line_data.get("brand_id")
+                cost_center_id = line_data.get("cost_center_id")
+                employee_id  = line_data.get("employee_id")
+                ref_type     = str(line_data.get("reference_type", "")).strip()[:32]
+                ref_id       = str(line_data.get("reference_id", "")).strip()[:64]
 
                 # Try to find account
                 acc = None
@@ -1034,6 +1063,12 @@ class JournalEntryListCreateView(views.APIView):
                     account_name_ar=account_name,
                     debit_amount=debit,
                     credit_amount=credit,
+                    branch_id=branch_id or None,
+                    brand_id=brand_id or None,
+                    cost_center_id=cost_center_id or None,
+                    employee_id=employee_id or None,
+                    reference_type=ref_type or "",
+                    reference_id=ref_id or "",
                 )
 
         return response.Response({"detail": "تم إنشاء القيد", "id": entry.id}, status=201)
@@ -1046,7 +1081,9 @@ class JournalEntryDetailView(views.APIView):
     def get(self, request, pk):
         from accounting.models import JournalEntry
         try:
-            entry = JournalEntry.objects.prefetch_related("lines__account").select_related("branch", "created_by").get(pk=pk)
+            entry = JournalEntry.objects.prefetch_related(
+            "lines__account", "lines__branch", "lines__brand", "lines__cost_center", "lines__employee"
+        ).select_related("branch", "created_by").get(pk=pk)
         except JournalEntry.DoesNotExist:
             return response.Response({"detail": "Not found"}, status=404)
 
@@ -1058,6 +1095,14 @@ class JournalEntryDetailView(views.APIView):
                 "account_name": line.account_name_ar or (line.account.name_ar if line.account else ""),
                 "debit":        str(line.debit_amount),
                 "credit":       str(line.credit_amount),
+                "branch_id":    line.branch_id,
+                "branch_name":  line.branch.name if line.branch else None,
+                "brand_id":     line.brand_id,
+                "brand_name":   line.brand.name if line.brand else None,
+                "cost_center_id": line.cost_center_id,
+                "cost_center_name": line.cost_center.name if line.cost_center else None,
+                "employee_id":  line.employee_id,
+                "employee_name": f"{line.employee.first_name} {line.employee.last_name}" if line.employee else None,
             })
         return response.Response({
             "id":          entry.id,

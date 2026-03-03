@@ -2,6 +2,7 @@ import uuid
 
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 from django.utils.text import slugify
 
 from config.constants import (
@@ -131,6 +132,106 @@ class Organization(TimestampedModel):
         verbose_name_plural = "Organizations"
 
 
+# ─── SaaS Tenant Layer ────────────────────────────────────────────────────────
+
+class TenantPlan(models.TextChoices):
+    TRIAL   = "trial",      "تجريبي (14 يوم)"
+    STARTER = "starter",    "Starter – فرع واحد"
+    GROWTH  = "growth",     "Growth – حتى 5 فروع"
+    PRO     = "pro",        "Pro – حتى 20 فرع"
+    ENTERPRISE = "enterprise", "Enterprise – غير محدود"
+
+
+class Tenant(TimestampedModel):
+    """
+    SaaS Tenant — كل عميل مدفوع = Tenant مستقل.
+
+    التسلسل الهرمي الكامل:
+        Tenant → Organization → Brand → Branch
+
+    Subdomain routing: {slug}.smartops.com → يحدد هذا الـ Tenant.
+    كل طلب يحمل request.tenant (أو None إذا كان من الـ main domain).
+
+    يمكن للـ Tenant الواحد إدارة أكثر من براند وأكثر من فرع
+    حسب خطة الاشتراك.
+    """
+    uuid = models.UUIDField(default=uuid.uuid4, editable=False, unique=True, db_index=True)
+
+    # ── Identity ──────────────────────────────────────────────────────────────
+    name = models.CharField(max_length=200, help_text="اسم الشركة العميلة")
+    name_ar = models.CharField(max_length=200, blank=True, default="")
+    slug = models.SlugField(
+        max_length=63, unique=True, db_index=True,
+        help_text="يُستخدم كـ subdomain: {slug}.smartops.com",
+    )
+
+    # ── Org linkage ───────────────────────────────────────────────────────────
+    organization = models.OneToOneField(
+        Organization,
+        on_delete=models.PROTECT,
+        related_name="tenant",
+        help_text="المؤسسة الرئيسية (Enterprise) التابعة لهذا الـ Tenant",
+    )
+
+    # ── Subscription ──────────────────────────────────────────────────────────
+    plan = models.CharField(
+        max_length=20, choices=TenantPlan.choices, default=TenantPlan.TRIAL, db_index=True,
+    )
+    trial_ends_at = models.DateTimeField(null=True, blank=True)
+    subscription_ends_at = models.DateTimeField(null=True, blank=True)
+    max_branches = models.PositiveSmallIntegerField(
+        default=1,
+        help_text="الحد الأقصى لعدد الفروع حسب الخطة",
+    )
+
+    # ── Admin user ────────────────────────────────────────────────────────────
+    admin_user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="owned_tenants",
+        null=True, blank=True,
+        help_text="المستخدم المالك الأول للـ Tenant",
+    )
+
+    # ── Status ────────────────────────────────────────────────────────────────
+    is_active = models.BooleanField(default=True, db_index=True)
+    onboarding_complete = models.BooleanField(
+        default=False,
+        help_text="True بعد إتمام Onboarding Wizard",
+    )
+
+    class Meta:
+        ordering = ["name"]
+        verbose_name = "Tenant (عميل SaaS)"
+        verbose_name_plural = "Tenants (عملاء SaaS)"
+
+    def __str__(self) -> str:
+        return f"{self.name} ({self.slug})"
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            base = slugify(self.name)[:63] or "tenant"
+            self.slug = base
+            n = 1
+            while Tenant.objects.filter(slug=self.slug).exclude(pk=self.pk).exists():
+                self.slug = f"{base}-{n}"
+                n += 1
+        if self.plan == TenantPlan.TRIAL and not self.trial_ends_at:
+            from datetime import timedelta
+            self.trial_ends_at = timezone.now() + timedelta(days=14)
+        super().save(*args, **kwargs)
+
+    @property
+    def is_trial_active(self) -> bool:
+        if self.plan != TenantPlan.TRIAL:
+            return False
+        return self.trial_ends_at is not None and timezone.now() < self.trial_ends_at
+
+    @classmethod
+    def get_plan_limits(cls, plan: str) -> int:
+        return {"trial": 1, "starter": 1, "growth": 5, "pro": 20, "enterprise": 999}.get(plan, 1)
+
+
 class BranchType(TimestampedModel):
     """Branch type: Branch, Kiosk, etc. Option code: TYPE-01."""
     system_code = models.CharField(
@@ -246,6 +347,19 @@ class Branch(TimestampedModel):
     is_central_kitchen = models.BooleanField(
         default=False, db_index=True,
         help_text="المطبخ المركزي – يستقبل طلبات التحويل من الفروع",
+    )
+
+    # ─── POS Real-time Depletion ───────────────────────────────────────────
+    # When True AND settings.POS_REALTIME_DEPLETION_ENABLED is True,
+    # each SaleTransaction saved for this branch triggers inventory depletion
+    # immediately via deplete_from_pos_sale(). Excel-based depletion is
+    # automatically skipped for the same branch to avoid double-counting.
+    pos_depletion_enabled = models.BooleanField(
+        default=False,
+        help_text=(
+            "إذا كان True، كل SaleTransaction جديد يُطلق خصم المخزون فوراً. "
+            "لا تُفعّل إلا عند إيقاف الرفع عبر Excel لهذا الفرع."
+        ),
     )
 
     is_active = models.BooleanField(default=True)

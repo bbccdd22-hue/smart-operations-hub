@@ -56,8 +56,8 @@ export default function SupplierBalancesPage() {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    fetchBrands().then(setBrands).catch(() => {});
-    fetchBranches().then(setBranches).catch(() => {});
+    fetchBrands().then((r) => setBrands(Array.isArray(r) ? r : [])).catch(() => setBrands([]));
+    fetchBranches().then((r) => setBranches(Array.isArray(r) ? r : [])).catch(() => setBranches([]));
   }, []);
 
   const filtered = search
@@ -116,14 +116,14 @@ export default function SupplierBalancesPage() {
           <select value={brandFilter} onChange={(e) => setBrandFilter(e.target.value)}
             className="bg-[#161b27] border border-white/10 rounded-lg px-3 py-2 text-sm text-white">
             <option value="">{T("كل العلامات", "All Brands")}</option>
-            {brands.map((b) => (
+            {(Array.isArray(brands) ? brands : []).map((b) => (
               <option key={b.id} value={b.id}>{b.name}</option>
             ))}
           </select>
           <select value={branchFilter} onChange={(e) => setBranchFilter(e.target.value)}
             className="bg-[#161b27] border border-white/10 rounded-lg px-3 py-2 text-sm text-white">
             <option value="">{T("كل الفروع", "All Branches")}</option>
-            {branches.map((b) => (
+            {(Array.isArray(branches) ? branches : []).map((b) => (
               <option key={b.id} value={b.id}>{b.name}</option>
             ))}
           </select>

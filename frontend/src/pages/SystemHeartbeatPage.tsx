@@ -78,12 +78,12 @@ export default function SystemHeartbeatPage() {
       )}
 
       <div className="space-y-4">
-        {data?.tasks.length === 0 ? (
+        {(Array.isArray(data?.tasks) ? data.tasks : []).length === 0 ? (
           <div className="rounded-2xl border border-white/10 bg-white/5 p-8 text-center text-white/60">
             لم تُشغّل أي مهمة بعد. شغّل المطابقة: <code>python manage.py run_daily_reconciliation</code>
           </div>
         ) : (
-          data?.tasks.map((t) => (
+          (Array.isArray(data?.tasks) ? data.tasks : []).map((t) => (
             <div
               key={t.task_name}
               className={`rounded-2xl border p-6 ${

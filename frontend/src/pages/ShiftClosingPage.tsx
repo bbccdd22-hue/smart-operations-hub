@@ -121,7 +121,7 @@ export default function ShiftClosingPage() {
   const [isUploading, setIsUploading] = useState(false);
 
   useEffect(() => {
-    fetchBrands().then(setBrands);
+    fetchBrands().then((r) => setBrands(Array.isArray(r) ? r : [])).catch(() => setBrands([]));
   }, []);
 
   useEffect(() => {
@@ -131,7 +131,7 @@ export default function ShiftClosingPage() {
       return;
     }
     fetchBranches(slug).then((b) => {
-      setBranches(b);
+      setBranches(Array.isArray(b) ? b : []);
       if (lockedBranchId) {
         const branch = b.find((br) => br.id === lockedBranchId);
         if (branch) {
@@ -208,7 +208,7 @@ export default function ShiftClosingPage() {
       setAttachments([]);
       return;
     }
-    fetchShiftClosingAttachments(closingId).then(setAttachments);
+    fetchShiftClosingAttachments(closingId).then((r) => setAttachments(Array.isArray(r) ? r : [])).catch(() => setAttachments([]));
   }, [closingId, isSubmitted]);
 
   const cashTotal = useMemo(() => denomTotal(counts), [counts]);
@@ -404,7 +404,7 @@ export default function ShiftClosingPage() {
               disabled={isBranchSupervisor || isSubmitted}
             >
               <option value="">Select brand</option>
-              {brands.map((b) => (
+              {(Array.isArray(brands) ? brands : []).map((b) => (
                 <option key={b.id} value={b.slug}>
                   {b.name}
                 </option>
@@ -427,7 +427,7 @@ export default function ShiftClosingPage() {
               disabled={isBranchSupervisor || isSubmitted}
             >
               <option value="">Select branch</option>
-              {branches.map((br) => (
+              {(Array.isArray(branches) ? branches : []).map((br) => (
                 <option key={br.id} value={br.id}>
                   {br.name}
                 </option>

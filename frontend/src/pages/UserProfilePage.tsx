@@ -38,8 +38,8 @@ export default function UserProfilePage() {
 
   useEffect(() => {
     loadUser();
-    fetchBrands().then(setBrands);
-    fetchBranches().then(setBranches);
+    fetchBrands().then((r) => setBrands(Array.isArray(r) ? r : [])).catch(() => setBrands([]));
+    fetchBranches().then((r) => setBranches(Array.isArray(r) ? r : [])).catch(() => setBranches([]));
   }, [id]);
 
   const handleToggleActive = async () => {

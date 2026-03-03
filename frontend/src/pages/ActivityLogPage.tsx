@@ -40,7 +40,7 @@ export default function ActivityLogPage() {
       return;
     }
     fetchActivityLog(500, { date_from: dateFrom, date_to: dateTo })
-      .then(setLogs)
+      .then((r) => setLogs(Array.isArray(r) ? r : []))
       .catch(() => setLogs([]))
       .finally(() => setLoading(false));
   }, [user, canViewActivityLog, dateFrom, dateTo]);

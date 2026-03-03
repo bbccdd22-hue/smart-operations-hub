@@ -79,7 +79,7 @@ export default function SupplierDebtAgingPage() {
   useEffect(() => { load(); }, [load]);
 
   useEffect(() => {
-    fetchBrands().then(setBrands).catch(() => {});
+    fetchBrands().then((r) => setBrands(Array.isArray(r) ? r : [])).catch(() => setBrands([]));
   }, []);
 
   const exportCSV = () => {
@@ -131,7 +131,7 @@ export default function SupplierDebtAgingPage() {
           <select value={brandFilter} onChange={(e) => setBrandFilter(e.target.value)}
             className="bg-[#161b27] border border-white/10 rounded-lg px-3 py-2 text-sm text-white self-end">
             <option value="">{T("كل العلامات", "All Brands")}</option>
-            {brands.map((b) => (
+            {(Array.isArray(brands) ? brands : []).map((b) => (
               <option key={b.id} value={b.id}>{b.name}</option>
             ))}
           </select>
@@ -154,7 +154,7 @@ export default function SupplierDebtAgingPage() {
             <RefreshCw className="h-6 w-6 animate-spin text-rose-400" />
           </div>
         ) : data ? (
-          data.buckets.map((b) => (
+          (data.buckets ?? []).map((b) => (
             <div key={b.key} className={`bg-[#161b27] border rounded-xl overflow-hidden ${BUCKET_COLORS[b.key] ? `border-current/20` : "border-white/10"}`}>
               <button
                 className="w-full px-5 py-4 flex items-center justify-between text-start hover:bg-white/3 transition-colors"
@@ -181,7 +181,7 @@ export default function SupplierDebtAgingPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {b.items.map((it) => (
+                      {(Array.isArray(b.items) ? b.items : []).map((it) => (
                         <tr key={`${it.supplier_id}-${it.invoice_number}`} className="border-t border-white/5 hover:bg-white/5">
                           <td className="px-4 py-2">{it.supplier_name}</td>
                           <td className="px-4 py-2 font-mono text-xs">{it.invoice_number}</td>

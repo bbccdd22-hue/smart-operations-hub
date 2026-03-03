@@ -58,7 +58,7 @@ export default function FinancialAuditorPage() {
   const [finalizing, setFinalizing] = useState(false);
 
   useEffect(() => {
-    fetchBrands().then(setBrands);
+    fetchBrands().then((r) => setBrands(Array.isArray(r) ? r : [])).catch(() => setBrands([]));
   }, []);
 
   useEffect(() => {
@@ -68,7 +68,7 @@ export default function FinancialAuditorPage() {
       date_from: dateFrom,
       date_to: dateTo,
     })
-      .then((r) => setClosings(r.closings))
+      .then((r) => setClosings(Array.isArray(r?.closings) ? r.closings : []))
       .catch(() => setClosings([]))
       .finally(() => setLoading(false));
   }, [selectedBrand, dateFrom, dateTo]);
@@ -96,7 +96,7 @@ export default function FinancialAuditorPage() {
     setExpandedId(id);
     setLoadingAttachments(true);
     fetchShiftClosingAttachments(id)
-      .then(setAttachments)
+      .then((r) => setAttachments(Array.isArray(r) ? r : []))
       .catch(() => setAttachments([]))
       .finally(() => setLoadingAttachments(false));
   };

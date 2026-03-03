@@ -115,10 +115,15 @@ def _get_role_permissions(profile):
 
 
 class CurrentUserView(APIView):
-    """Returns current authenticated user and role."""
-    permission_classes = [IsAuthenticated]
+    """Returns current authenticated user and role. Returns 401 (not 403) when not authenticated so devtools show 'Unauthorized'."""
+    permission_classes = [AllowAny]
 
     def get(self, request):
+        if not request.user.is_authenticated:
+            return Response(
+                {"detail": "Authentication credentials were not provided."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
         from core.permissions import is_super_admin
         user = request.user
         profile = get_user_profile(user)

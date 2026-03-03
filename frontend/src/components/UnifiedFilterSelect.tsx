@@ -111,7 +111,7 @@ export default function UnifiedFilterSelect(props: Props) {
 
   const isBrand = props.mode === "brand";
   const isSingle = props.selectionMode === "single";
-  const items = props.items;
+  const items = Array.isArray(props.items) ? props.items : [];
   const getLabel = (item: Brand | Branch): string =>
     isBrand ? brandDisplayName(item as Brand, lang) : branchDisplayName(item as Branch, lang);
   const selectedCount = isSingle

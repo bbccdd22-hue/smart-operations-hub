@@ -34,7 +34,7 @@ export default function SystemErrorLogsPage() {
   const loadLogs = useCallback(() => {
     if (!user || !isSAIF) return;
     fetchSystemErrorLogs(200, filterResolved !== null ? { resolved: filterResolved } : undefined)
-      .then(setLogs)
+      .then((r) => setLogs(Array.isArray(r) ? r : []))
       .catch(() => setLogs([]))
       .finally(() => setLoading(false));
   }, [user, isSAIF, filterResolved]);

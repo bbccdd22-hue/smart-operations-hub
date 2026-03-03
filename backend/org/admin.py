@@ -1,5 +1,40 @@
 from django.contrib import admin
-from .models import EnterpriseAuditLog, ModuleConfig, Organization
+from .models import Branch, EnterpriseAuditLog, ModuleConfig, Organization, Tenant
+
+
+@admin.register(Tenant)
+class TenantAdmin(admin.ModelAdmin):
+    list_display = ("name", "slug", "plan", "is_active", "onboarding_complete", "admin_user", "created_at")
+    list_filter = ("plan", "is_active", "onboarding_complete")
+    search_fields = ("name", "slug", "admin_user__username")
+    readonly_fields = ("uuid", "created_at", "updated_at", "trial_ends_at")
+    fieldsets = (
+        ("Identity", {"fields": ("uuid", "name", "name_ar", "slug")}),
+        ("Organization", {"fields": ("organization", "admin_user")}),
+        ("Subscription", {"fields": ("plan", "max_branches", "trial_ends_at", "subscription_ends_at")}),
+        ("Status", {"fields": ("is_active", "onboarding_complete")}),
+        ("Timestamps", {"fields": ("created_at", "updated_at")}),
+    )
+
+
+@admin.register(Branch)
+class BranchAdmin(admin.ModelAdmin):
+    list_display = ("name", "brand", "city", "pos_depletion_enabled", "is_active")
+    list_filter = ("brand", "pos_depletion_enabled", "is_active")
+    list_editable = ("pos_depletion_enabled",)
+    search_fields = ("name", "branch_code")
+    fieldsets = (
+        (None, {
+            "fields": ("brand", "city", "name", "name_ar", "branch_code", "is_active")
+        }),
+        ("POS / Inventory", {
+            "fields": ("pos_depletion_enabled",),
+            "description": (
+                "تفعيل هذا الخيار يطلق خصم المخزون فوراً عند كل عملية بيع POS. "
+                "يوقف الخصم عبر Excel تلقائياً لهذا الفرع لتجنب الازدواجية."
+            ),
+        }),
+    )
 
 
 @admin.register(Organization)

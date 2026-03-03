@@ -33,12 +33,13 @@ export default function UploadCenterPage() {
   const [selectedBranchId, setSelectedBranchId] = useState<number | null>(null);
 
   useEffect(() => {
-    fetchBrands().then(setBrands);
+    fetchBrands().then((r) => setBrands(Array.isArray(r) ? r : [])).catch(() => setBrands([]));
   }, []);
 
   useEffect(() => {
-    const slug = brands.find((b) => b.id === selectedBrandId)?.slug;
-    fetchBranches(slug).then(setBranches);
+    const brandList = Array.isArray(brands) ? brands : [];
+    const slug = brandList.find((b) => b.id === selectedBrandId)?.slug;
+    fetchBranches(slug).then((r) => setBranches(Array.isArray(r) ? r : [])).catch(() => setBranches([]));
   }, [selectedBrandId, brands]);
 
   const onSubmit = async (e: FormEvent) => {
@@ -146,7 +147,7 @@ export default function UploadCenterPage() {
               }}
             >
               <option value="">Select brand</option>
-              {brands.map((b) => (
+              {(Array.isArray(brands) ? brands : []).map((b) => (
                 <option key={b.id} value={b.id}>
                   {getBrandDisplayName(b, lang)}
                 </option>
@@ -162,7 +163,7 @@ export default function UploadCenterPage() {
               onChange={(e) => setSelectedBranchId(e.target.value ? Number(e.target.value) : null)}
             >
               <option value="">All branches</option>
-              {branches.map((b) => (
+              {(Array.isArray(branches) ? branches : []).map((b) => (
                 <option key={b.id} value={b.id}>
                   {getBranchDisplayName(b, lang)}
                 </option>

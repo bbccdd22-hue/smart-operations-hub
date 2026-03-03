@@ -22,7 +22,7 @@ export default function CentralKitchenPage() {
     setLoading(true);
     try {
       const res = await fetchCentralKitchenTransfers();
-      setTransfers(res.transfers);
+      setTransfers(Array.isArray(res?.transfers) ? res.transfers : []);
     } catch {
       setTransfers([]);
     } finally {
@@ -78,7 +78,7 @@ export default function CentralKitchenPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {transfers.map((tr) => (
+          {(Array.isArray(transfers) ? transfers : []).map((tr) => (
             <div
               key={tr.uuid}
               className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800"
@@ -110,7 +110,7 @@ export default function CentralKitchenPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {tr.lines.map((l, i) => (
+                    {(Array.isArray(tr?.lines) ? tr.lines : []).map((l, i) => (
                       <tr key={i} className="border-b border-slate-100 dark:border-slate-700/50">
                         <td className="px-3 py-2">{l.ingredient_name}</td>
                         <td className="px-3 py-2 text-right">{l.qty}</td>

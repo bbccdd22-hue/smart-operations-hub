@@ -1,6 +1,7 @@
 from django.urls import path
 
 from inventory import views
+from inventory.views import RecipeCostView
 
 urlpatterns = [
     path("central-kitchen/transfers/", views.CentralKitchenTransfersView.as_view()),
@@ -24,4 +25,9 @@ urlpatterns = [
     path("products/<int:pk>/recipe/lines/", views.ProductRecipeLinesView.as_view(), name="product-recipe-lines"),
     path("products/<int:pk>/recipe/lines/<int:line_id>/", views.ProductRecipeLineDetailView.as_view(), name="product-recipe-line-detail"),
     path("ingredients/<int:pk>/cost/", views.IngredientCostUpdateView.as_view(), name="ingredient-cost-update"),
+    # تقارير المخزون
+    path("stock-balance/", views.StockBalanceReportView.as_view(), name="stock-balance"),
+    path("stock-movements/", views.StockMovementsReportView.as_view(), name="stock-movements"),
+    # Recipe Costing
+    path("recipes/<int:product_pk>/cost/", RecipeCostView.as_view(), name="recipe-cost"),
 ]

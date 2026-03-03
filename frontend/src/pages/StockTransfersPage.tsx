@@ -40,9 +40,10 @@ export default function StockTransfersPage() {
         fetchBranches(),
         fetchIngredients(),
       ]);
-      setTransfers(tr.transfers);
-      setBranches(br.filter((b) => (b as { branch_code?: string }).branch_code !== "IN_TRANSIT"));
-      setIngredients(ing);
+      setTransfers(Array.isArray(tr?.transfers) ? tr.transfers : []);
+      const brList = Array.isArray(br) ? br : [];
+      setBranches(brList.filter((b) => (b as { branch_code?: string }).branch_code !== "IN_TRANSIT"));
+      setIngredients(Array.isArray(ing) ? ing : []);
     } catch {
       setTransfers([]);
     } finally {
@@ -151,7 +152,7 @@ export default function StockTransfersPage() {
               className="rounded-lg border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
             >
               <option value="">--</option>
-              {branches.map((b) => (
+              {(Array.isArray(branches) ? branches : []).map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.name}
                 </option>
@@ -168,7 +169,7 @@ export default function StockTransfersPage() {
               className="rounded-lg border border-slate-300 px-3 py-2 dark:border-slate-600 dark:bg-slate-700 dark:text-white"
             >
               <option value="">--</option>
-              {branches.map((b) => (
+              {(Array.isArray(branches) ? branches : []).map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.name}
                 </option>
@@ -287,7 +288,7 @@ export default function StockTransfersPage() {
                   </td>
                 </tr>
               ) : (
-                transfers.map((tr) => (
+                (Array.isArray(transfers) ? transfers : []).map((tr) => (
                   <tr
                     key={tr.id}
                     className="border-b border-slate-100 dark:border-slate-700"

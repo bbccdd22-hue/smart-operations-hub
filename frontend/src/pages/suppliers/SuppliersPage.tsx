@@ -81,7 +81,7 @@ export default function SuppliersPage() {
   }, [load]);
 
   useEffect(() => {
-    fetchBrands().then(setBrands).catch(() => {});
+    fetchBrands().then((r) => setBrands(Array.isArray(r) ? r : [])).catch(() => setBrands([]));
   }, []);
 
   const openAdd = () => {
@@ -205,7 +205,7 @@ export default function SuppliersPage() {
           <select value={brandFilter} onChange={(e) => setBrandFilter(e.target.value)}
             className="bg-[#161b27] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
             <option value="">{T("جميع العلامات", "All Brands")}</option>
-            {brands.map((b) => (
+            {(Array.isArray(brands) ? brands : []).map((b) => (
               <option key={b.id} value={b.id}>{isRTL ? (b.name_ar || b.name) : b.name}</option>
             ))}
           </select>
@@ -243,7 +243,7 @@ export default function SuppliersPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {suppliers.map((s) => (
+                  {(Array.isArray(suppliers) ? suppliers : []).map((s) => (
                     <tr key={s.id} className="border-t border-white/5 hover:bg-white/5 transition-colors">
                       <td className="px-4 py-3">
                         <div>
@@ -298,7 +298,7 @@ export default function SuppliersPage() {
                   <label className="block text-xs text-gray-400 mb-1">{T("العلامة", "Brand")}</label>
                   <select value={form.brand || ""} onChange={(e) => setForm((p) => ({ ...p, brand: parseInt(e.target.value, 10) }))}
                     className="w-full bg-[#0e1117] border border-white/15 rounded-xl px-3 py-2 text-sm text-white">
-                    {brands.map((b) => (
+                    {(Array.isArray(brands) ? brands : []).map((b) => (
                       <option key={b.id} value={b.id}>{b.name}</option>
                     ))}
                   </select>

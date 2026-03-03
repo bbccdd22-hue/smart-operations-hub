@@ -90,7 +90,7 @@ export default function ExecutiveDashboardPage() {
   }, [user, canAccess, navigate]);
 
   useEffect(() => {
-    fetchBrands().then(setBrands);
+    fetchBrands().then((r) => setBrands(Array.isArray(r) ? r : [])).catch(() => setBrands([]));
   }, []);
 
   /** الفروع تُجلب حسب البراند المحدد فقط (تتابع براند → فرع) */
@@ -101,7 +101,7 @@ export default function ExecutiveDashboardPage() {
       return;
     }
     fetchBranches(filterBrand)
-      .then(setBranches)
+      .then((b) => setBranches((Array.isArray(b) ? b : []).filter((x) => (x as { branch_code?: string }).branch_code !== "IN_TRANSIT")))
       .catch(() => setBranches([]));
     setFilterBranch("");
   }, [filterBrand]);

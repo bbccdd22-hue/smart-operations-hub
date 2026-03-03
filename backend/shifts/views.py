@@ -12,6 +12,7 @@ from shifts.serializers import (
     ShiftClosingCreatePayloadSerializer,
     ShiftClosingSerializer,
 )
+from core.pagination import paginate_queryset
 from core.permissions import get_user_scope, has_financial_auditor_access
 from org.models import Branch
 
@@ -48,8 +49,9 @@ class ShiftClosingListForAuditorView(APIView):
                 pass
         from django.db.models import Count
         qs = qs.annotate(attachments_count=Count("attachments")).order_by("-submitted_at", "shift__branch__name")
+        page_items, pagination = paginate_queryset(qs, request)
         closings = []
-        for c in qs[:200]:  # limit for performance
+        for c in page_items:
             closings.append({
                 "id": c.id,
                 "date": str(c.shift.opened_at.date()),
@@ -64,7 +66,7 @@ class ShiftClosingListForAuditorView(APIView):
                 "variance_cash": float(c.variance_cash or 0),
                 "attachments_count": c.attachments_count,
             })
-        return Response({"closings": closings})
+        return Response({"closings": closings, "pagination": pagination})
 
 
 class ShiftClosingByBranchDateView(APIView):

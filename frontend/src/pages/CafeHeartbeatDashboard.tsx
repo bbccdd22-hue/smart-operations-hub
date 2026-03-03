@@ -31,8 +31,12 @@ export default function CafeHeartbeatDashboard() {
   const { dateFrom } = useDateRange();
 
   const loadBranches = useCallback(async () => {
-    const list = await fetchBranches();
-    setBranches(list);
+    try {
+      const list = await fetchBranches();
+      setBranches(Array.isArray(list) ? list : []);
+    } catch {
+      setBranches([]);
+    }
   }, []);
 
   const loadHeartbeat = useCallback(async () => {
@@ -89,7 +93,7 @@ export default function CafeHeartbeatDashboard() {
             className="rounded-lg border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white"
           >
             <option value="">{t("all")} {t("branch")}</option>
-            {branches.map((b) => (
+            {(Array.isArray(branches) ? branches : []).map((b) => (
               <option key={b.id} value={b.id}>
                 {b.name_ar || b.name}
               </option>

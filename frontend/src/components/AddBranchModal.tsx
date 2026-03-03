@@ -73,13 +73,13 @@ export default function AddBranchModal({
 
   useEffect(() => {
     if (open) {
-      fetchBranchTypes().then(setBranchTypes);
+      fetchBranchTypes().then((r) => setBranchTypes(Array.isArray(r) ? r : [])).catch(() => setBranchTypes([]));
     }
   }, [open]);
 
   useEffect(() => {
     if (cityId) {
-      fetchDistricts(Number(cityId)).then(setDistricts);
+      fetchDistricts(Number(cityId)).then((r) => setDistricts(Array.isArray(r) ? r : [])).catch(() => setDistricts([]));
     } else {
       setDistricts([]);
       setDistrictId("");
@@ -185,7 +185,7 @@ export default function AddBranchModal({
               label={t("brand")}
               labelAr="العلامة التجارية"
               value={brandId}
-              options={brands.map((b) => ({
+              options={(Array.isArray(brands) ? brands : []).map((b) => ({
                 id: b.id,
                 label: b.name ?? "",
                 labelAr: (b as { name_ar?: string }).name_ar ?? "",
@@ -200,7 +200,7 @@ export default function AddBranchModal({
               label={t("city")}
               labelAr="المدينة"
               value={cityId}
-              options={cities.map((c) => ({
+              options={(Array.isArray(cities) ? cities : []).map((c) => ({
                 id: c.id,
                 label: c.name_en,
                 labelAr: c.name_ar,

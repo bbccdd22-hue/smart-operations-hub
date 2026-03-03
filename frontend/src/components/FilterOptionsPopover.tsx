@@ -33,7 +33,8 @@ export default function FilterOptionsPopover({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  const selectedOption = options.find((o) => o.value === value);
+  const optionsSafe = Array.isArray(options) ? options : [];
+  const selectedOption = optionsSafe.find((o) => o.value === value);
   const displayLabel = selectedOption
     ? (selectedOption.label ?? (selectedOption.labelKey ? t(selectedOption.labelKey) : selectedOption.value))
     : (placeholder ?? t("all"));
@@ -92,7 +93,7 @@ export default function FilterOptionsPopover({
       }}
     >
       <div className="dropdown-scrollable max-h-[250px] overflow-y-auto overflow-x-hidden py-1">
-        {options.map((opt) => {
+        {optionsSafe.map((opt) => {
           const optLabel = opt.label ?? (opt.labelKey ? t(opt.labelKey) : opt.value);
           const isActive = value === opt.value;
           return (

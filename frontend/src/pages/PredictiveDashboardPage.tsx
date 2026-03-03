@@ -74,7 +74,7 @@ export default function PredictiveDashboardPage() {
   const [purchaseLoading, setPurchaseLoading] = useState(false);
 
   useEffect(() => {
-    fetchBrands().then(setBrands);
+    fetchBrands().then((r) => setBrands(Array.isArray(r) ? r : [])).catch(() => setBrands([]));
   }, []);
 
   useEffect(() => {
@@ -84,7 +84,7 @@ export default function PredictiveDashboardPage() {
       return;
     }
     fetchBranches(selectedBrand).then((b) => {
-      setBranches(b);
+      setBranches(Array.isArray(b) ? b : []);
       setBranchId("");
     });
   }, [selectedBrand]);

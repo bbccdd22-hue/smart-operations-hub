@@ -89,7 +89,7 @@ export default function AccountStatementPage() {
 
   /* load chart accounts for autocomplete */
   useEffect(() => {
-    fetchAccounts().then(setAccounts).catch(() => {});
+    fetchAccounts().then((r) => setAccounts(Array.isArray(r) ? r : [])).catch(() => setAccounts([]));
   }, []);
 
   const filtered = accountSearch
@@ -122,7 +122,7 @@ export default function AccountStatementPage() {
     if (!data) return;
     const rows = [
       ["التاريخ", "البيان", "المصدر", "الفرع", "مدين", "دائن", "الرصيد"],
-      ...data.transactions.map((t) => [
+      ...(Array.isArray(data?.transactions) ? data.transactions : []).map((t) => [
         t.date, t.description, SOURCE_LABELS[t.source_type] || t.source_type,
         t.branch, t.debit, t.credit, t.balance,
       ]),
@@ -274,7 +274,7 @@ export default function AccountStatementPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {data.transactions.map((tx) => (
+                    {(Array.isArray(data?.transactions) ? data.transactions : []).map((tx) => (
                       <tr key={tx.id} className="border-t border-white/5 hover:bg-white/5 transition-colors">
                         <td className="px-4 py-2.5 font-mono text-xs text-gray-400">{tx.date}</td>
                         <td className="px-4 py-2.5 text-white text-sm">{tx.description}</td>

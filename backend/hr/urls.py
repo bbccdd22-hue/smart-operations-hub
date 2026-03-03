@@ -3,6 +3,8 @@ from . import views
 
 urlpatterns = [
     path("self/", views.EmployeeSelfServiceView.as_view()),
+    path("cost-centers/", views.CostCenterListAPIView.as_view()),
+    path("employees/", views.EmployeeListAPIView.as_view()),
     path("leaves/", views.LeaveRequestListCreateView.as_view()),
     path("advances/", views.SalaryAdvanceListCreateView.as_view()),
     path("clock-in/", views.ClockInView.as_view()),

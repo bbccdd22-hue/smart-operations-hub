@@ -82,8 +82,8 @@ export default function ManualPurchaseForecastPage() {
   /* ── load branches ── */
   useEffect(() => {
     fetchBranches()
-      .then((bs) => setBranches(bs))
-      .catch(() => {});
+      .then((bs) => setBranches(Array.isArray(bs) ? bs : []))
+      .catch(() => setBranches([]));
   }, []);
 
   /* ── product search debounce ── */
@@ -311,7 +311,7 @@ export default function ManualPurchaseForecastPage() {
             className="w-full bg-[#1e2533] border border-white/10 rounded-lg px-3 py-2.5 text-sm text-white focus:outline-none focus:border-indigo-500"
           >
             <option value="">{T("-- اختر الفرع --", "-- Select Branch --")}</option>
-            {branches.map((b) => (
+            {(Array.isArray(branches) ? branches : []).map((b) => (
               <option key={b.id} value={b.id}>
                 {isRTL ? (b.name_ar || b.name) : (b.name || b.name_ar)}
               </option>

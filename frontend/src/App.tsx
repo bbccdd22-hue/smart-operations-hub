@@ -74,7 +74,9 @@ import WastePage from "./pages/WastePage";
 import POSPage from "./pages/POSPage";
 import ProcurementPlaceholderPage from "./pages/procurement/ProcurementPlaceholderPage";
 import PurchaseInvoicesPage from "./pages/procurement/PurchaseInvoicesPage";
+import PurchaseInvoiceForm from "./pages/procurement/PurchaseInvoiceForm";
 import PurchaseOrdersPage from "./pages/procurement/PurchaseOrdersPage";
+import GoodsReceiptPage from "./pages/procurement/GoodsReceiptPage";
 import PurchaseRequestsPage from "./pages/procurement/PurchaseRequestsPage";
 import ProcurementDailyMovementsPage from "./pages/procurement/ProcurementDailyMovementsPage";
 import ProcurementReviewMovementsPage from "./pages/procurement/ProcurementReviewMovementsPage";
@@ -257,7 +259,10 @@ export default function App() {
           <Route path="suppliers/statement/:supplierId" element={<SupplierStatementPage />} />
           <Route path="suppliers/debt-aging" element={<SupplierDebtAgingPage />} />
           <Route path="procurement/invoices" element={<PurchaseInvoicesPage />} />
+          <Route path="procurement/invoices/new" element={<PurchaseInvoiceForm />} />
+          <Route path="procurement/invoices/:id/edit" element={<PurchaseInvoiceForm />} />
           <Route path="procurement/orders" element={<PurchaseOrdersPage />} />
+          <Route path="procurement/goods-receipts" element={<GoodsReceiptPage />} />
           <Route path="procurement/requests" element={<PurchaseRequestsPage />} />
           <Route path="procurement/reports/daily-movements" element={<ProcurementDailyMovementsPage />} />
           <Route path="procurement/reports/review-movements" element={<ProcurementReviewMovementsPage />} />
@@ -332,7 +337,10 @@ export default function App() {
         <Route path="suppliers/statement/:supplierId" element={<SupplierStatementPage />} />
         <Route path="suppliers/debt-aging" element={<SupplierDebtAgingPage />} />
         <Route path="procurement/invoices" element={<PurchaseInvoicesPage />} />
+        <Route path="procurement/invoices/new" element={<PurchaseInvoiceForm />} />
+        <Route path="procurement/invoices/:id/edit" element={<PurchaseInvoiceForm />} />
         <Route path="procurement/orders" element={<PurchaseOrdersPage />} />
+        <Route path="procurement/goods-receipts" element={<GoodsReceiptPage />} />
         <Route path="procurement/requests" element={<PurchaseRequestsPage />} />
         <Route path="procurement/reports/daily-movements" element={<ProcurementDailyMovementsPage />} />
         <Route path="procurement/reports/review-movements" element={<ProcurementReviewMovementsPage />} />

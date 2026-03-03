@@ -149,7 +149,9 @@ function calculateStatement(
 export default function IncomeStatementPage() {
   const { i18n } = useTranslation();
   const { addToast } = useNotifications() ?? { addToast: () => {} };
-  const { brands: orgBrands, branches: orgBranches, branchesByBrand, branchesByBrandId } = useOrgs();
+  const { brands, branches, branchesByBrand, branchesByBrandId } = useOrgs();
+  const orgBrands = Array.isArray(brands) ? brands : [];
+  const orgBranches = Array.isArray(branches) ? branches : [];
   const isRTL = i18n.language === "ar";
   const [accounts, setAccounts] = useState<ChartAccount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -291,7 +293,7 @@ export default function IncomeStatementPage() {
   const branchesForBrand = useMemo(
     () =>
       filterBrand && selectedBrand
-        ? (branchesByBrandId[selectedBrand.id] ?? [])
+        ? (Array.isArray(branchesByBrandId[selectedBrand.id]) ? branchesByBrandId[selectedBrand.id] : [])
         : orgBranches,
     [filterBrand, selectedBrand, branchesByBrandId, orgBranches]
   );

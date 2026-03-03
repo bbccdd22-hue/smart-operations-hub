@@ -78,7 +78,8 @@ const JUNK_BRANCH_NAMES_AR = ["الرئيسي", "الفرع", "رئيسي", "ف�
 const JUNK_BRANCH_CODES = ["main", "branch"];
 
 function filterJunkBranches<T extends { name?: string; name_ar?: string; code?: string }>(items: T[]): T[] {
-  return items.filter((b) => {
+  const list = Array.isArray(items) ? items : [];
+  return list.filter((b) => {
     const name = (b.name || "").toLowerCase().trim();
     const nameAr = (b.name_ar || "").trim();
     const code = (b.code || "").toLowerCase().trim();
@@ -92,7 +93,8 @@ function filterJunkBranches<T extends { name?: string; name_ar?: string; code?: 
 
 /** Merge API brands with FIXED_BRANDS - all fixed brands always visible. Use API data when exists. */
 function mergeBrandsWithFixed(apiBrands: Brand[]): Brand[] {
-  const bySlug = new Map(apiBrands.map((b) => [b.slug.toLowerCase(), b]));
+  const list = Array.isArray(apiBrands) ? apiBrands : [];
+  const bySlug = new Map(list.map((b) => [b.slug.toLowerCase(), b]));
   return FIXED_BRANDS.map((fb) => {
     const api = bySlug.get(fb.slug.toLowerCase());
     return api ?? { id: -1, name: fb.name, slug: fb.slug };
@@ -155,7 +157,7 @@ export default function DashboardPage() {
   const [dataRequested, setDataRequested] = useState(false);
 
   useEffect(() => {
-    fetchBrands().then(setBrandsRaw);
+    fetchBrands().then((r) => setBrandsRaw(Array.isArray(r) ? r : [])).catch(() => setBrandsRaw([]));
   }, []);
 
   /** تحميل آخر الفلاتر من localStorage (الذاكرة الذكية) */
@@ -198,10 +200,11 @@ export default function DashboardPage() {
       selectedBrands[0],
       selectedBrands.length > 0 ? selectedBrands : undefined
     ).then((brs) => {
-      setBranchesRaw(brs);
+      const brsSafe = Array.isArray(brs) ? brs : [];
+      setBranchesRaw(brsSafe);
       if (pendingBranchIdsRef.current) {
         const ids = pendingBranchIdsRef.current;
-        setSelectedBranches(ids.filter((id) => brs.some((b) => b.id === id)));
+        setSelectedBranches(ids.filter((id) => brsSafe.some((b) => b.id === id)));
         pendingBranchIdsRef.current = null;
       } else {
         setSelectedBranches([]);

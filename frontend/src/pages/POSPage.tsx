@@ -212,11 +212,11 @@ export default function POSPage() {
   useEffect(() => {
     if (!branchId) return;
     fetchPOSProducts(branchId, category === "all" ? undefined : category)
-      .then(setProducts).catch(() => setProducts([]));
+      .then((r) => setProducts(Array.isArray(r) ? r : [])).catch(() => setProducts([]));
   }, [branchId, category]);
 
-  useEffect(() => { fetchPOSCategories().then(setCategories).catch(() => setCategories([])); }, []);
-  useEffect(() => { fetchPOSModifiers().then(setModifiers).catch(() => setModifiers([])); }, []);
+  useEffect(() => { fetchPOSCategories().then((r) => setCategories(Array.isArray(r) ? r : [])).catch(() => setCategories([])); }, []);
+  useEffect(() => { fetchPOSModifiers().then((r) => setModifiers(Array.isArray(r) ? r : [])).catch(() => setModifiers([])); }, []);
 
   /* sync custom images when localStorage changes (e.g. from ProductsPage) */
   useEffect(() => {

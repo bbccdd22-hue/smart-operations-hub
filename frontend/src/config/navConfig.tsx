@@ -30,7 +30,7 @@ const svg = (d: string | string[], extra?: string) => (
     {(Array.isArray(d) ? d : [d]).map((path, i) => (
       <path key={i} strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={path} />
     ))}
-  </svg>
+    </svg>
 );
 
 const Ic = {
@@ -76,8 +76,9 @@ const Ic = {
   stockValue:  svg(["M3 6l3 1m0 0l-3 9a5.002 5.002 0 006.001 0M6 7l3 9M6 7l6-2m6 2l3-1m-3 1l-3 9a5.002 5.002 0 006.001 0M18 7l3 9m-3-9l-6-2m0-2v2m0 16V5m0 16H9m3 0h3"]),
 
   /* ── Procurement ───────────────────────────────────────────────── */
-  smartPurchase: <ShoppingCart className="h-4 w-4" />,
+  smartPurchase:  <ShoppingCart className="h-4 w-4" />,
   manualForecast: <ClipboardList className="h-4 w-4" />,
+  clipboardList:  <ClipboardList className="h-4 w-4" />,
   supplier:    svg(["M8 14v3m4-3v3m4-3v3M3 21h18M3 10h18M3 7l9-4 9 4M4 10h16v11H4V10z"]),
   purchaseOrder: svg(["M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"]),
 
@@ -128,6 +129,7 @@ const ROUTE_PERM: Record<string, string> = {
   "/admin-hub/notification-settings":    "perm_full_system_access",
   "/admin-hub/error-logs":               "perm_full_system_access",
   "/admin-hub/system-heartbeat":         "perm_full_system_access",
+  "/admin-hub/test-dashboard":          "perm_full_system_access",
   "/admin-hub/system-options":           "perm_full_system_access",
   "/admin-hub/system-codes":             "perm_full_system_access",
   /* ── Sales ──────────────────────────────────────────────────────── */
@@ -144,6 +146,10 @@ const ROUTE_PERM: Record<string, string> = {
   "/ingredients":                        "perm_management_reports",
   "/inventory/manage-ingredients":       "perm_management_reports",
   "/inventory/item-file":                "perm_management_reports",
+  "/inventory/stock-balance":            "perm_management_reports",
+  "/inventory/stock-movements":          "perm_management_reports",
+  "/inventory/reports/item-balances":    "perm_management_reports",
+  "/inventory/reports/daily-movements":  "perm_management_reports",
   "/products":                           "perm_management_reports",
   "/stock-transfers":                    "perm_management_reports",
   "/central-kitchen":                    "perm_management_reports",
@@ -216,13 +222,13 @@ export type NavGroupConfig = {
 export function buildNestedNavConfig(
   t: (k: string) => string,
   opts: {
-    isBranchSupervisor: boolean;
-    showAdminHub: boolean;
-    isOwner: boolean;
-    isSuperAdmin?: boolean;
-    isExternalAccountant?: boolean;
-    isGeneralManager?: boolean;
-    permissions?: Record<string, boolean>;
+  isBranchSupervisor: boolean;
+  showAdminHub: boolean;
+  isOwner: boolean;
+  isSuperAdmin?: boolean;
+  isExternalAccountant?: boolean;
+  isGeneralManager?: boolean;
+  permissions?: Record<string, boolean>;
   },
 ): NavGroupConfig[] {
   const {
@@ -278,6 +284,7 @@ export function buildNestedNavConfig(
     { to: "/admin-hub/notification-settings",label: t("notificationSettings"),  icon: Ic.bellSettings },
     { to: "/admin-hub/error-logs",           label: t("systemErrorLogs"),       icon: Ic.error },
     { to: "/admin-hub/system-heartbeat",     label: t("systemHeartbeat"),       icon: Ic.system },
+    { to: "/admin-hub/test-dashboard",       label: "Test Dashboard",           icon: Ic.analytics },
   ], permissions, isSAIF).filter(() => showAdminHub);
 
   /* 1c — إعدادات وتنظيم المنشأة */
@@ -291,31 +298,11 @@ export function buildNestedNavConfig(
      الملفات الرئيسية | الحركات | التقارير | الأدوات المساعدة
   ═════════════════════════════════════════════════════════════════ */
 
-  /* 2a — الملفات الرئيسية */
-  const salesMasterFiles = filterByPermission([
-    { to: "/sales/centers",     label: t("salesCentersFile"),   icon: Ic.building },
-    { to: "/sales/exitors",     label: t("salesExitorsFile"),   icon: Ic.users },
-    { to: "/sales/sellers",     label: t("salesSellersFile"),   icon: Ic.userGroup },
-    { to: "/sales/plan",        label: t("salesPlan"),         icon: Ic.target },
-    { to: "/sales/networks",    label: t("salesNetworksFile"), icon: Ic.layers },
-    { to: "/sales/distributors-plan", label: t("distributorsPlan"), icon: Ic.supplier },
-    { to: "/sales/groups",      label: t("salesGroups"),        icon: Ic.tag },
-  ], permissions, isSAIF);
+  /* 2a — الملفات الرئيسية (قريباً) */
+  const salesMasterFiles = filterByPermission([], permissions, isSAIF);
 
-  /* 2b — الحركات */
-  const salesTransactions = filterByPermission([
-    { to: "/sales/invoice",       label: t("salesInvoice"),          icon: Ic.receipt },
-    { to: "/sales/quote",         label: t("salesQuote"),            icon: Ic.receipt },
-    { to: "/sales/commissions",   label: t("salesCommissionsPay"),   icon: Ic.wallet },
-    { to: "/sales/orders",        label: t("salesOrders"),           icon: Ic.purchaseOrder },
-    { to: "/sales/zakat-approval", label: t("zakatApprovalMulti"),    icon: Ic.check },
-    { to: "/sales/commissions-settle", label: t("salesCommissionsSettle"), icon: Ic.adjustments },
-    { to: "/sales/pending-payment", label: t("pendingInvoicesPayment"), icon: Ic.card },
-    { to: "/sales/invoice-from-disbursement", label: t("salesInvoiceFromDisbursement"), icon: Ic.receipt },
-    { to: "/sales/auto-manufacturing", label: t("autoManufacturingOrderMulti"), icon: Ic.ingredients },
-    { to: "/sales/post-transactions", label: t("postTransactions"), icon: Ic.check },
-    { to: "/sales/pending-payment-years", label: t("pendingInvoicesPaymentYears"), icon: Ic.clock },
-  ], permissions, isSAIF);
+  /* 2b — الحركات (قريباً) */
+  const salesTransactions = filterByPermission([], permissions, isSAIF);
 
   /* 2c — التنبؤ والتخطيط */
   const salesForecasting = filterByPermission([
@@ -323,31 +310,17 @@ export function buildNestedNavConfig(
     { to: "/dashboard/heartbeat", label: t("cafeHeartbeat"),       icon: Ic.heartbeat },
   ], permissions, isSAIF);
 
-  /* 2d — التقارير */
+  /* 2d — التقارير (خيارات مفعّلة فقط) */
   const salesReports = filterByPermission([
     { to: "/sales/reports/daily-movement",    label: t("salesDailyMovement"),    icon: Ic.calendar },
     { to: "/sales/reports/review-movements",   label: t("salesReviewMovements"),  icon: Ic.audit },
-    { to: "/sales/reports/with-profit",       label: t("salesWithProfit"),        icon: Ic.profit },
-    { to: "/sales/reports/customers-summary", label: t("salesCustomersSummary"), icon: Ic.wallet },
-    { to: "/sales/reports/by-invoices",       label: t("salesSummaryByInvoices"), icon: Ic.receipt },
-    { to: "/sales/reports/by-type",           label: t("salesSummaryByType"),    icon: Ic.chart },
-    { to: "/sales/reports/by-category",       label: t("salesSummaryByCategory"), icon: Ic.layers },
-    { to: "/sales/reports/by-month",          label: t("salesByMonths"),          icon: Ic.calendar },
-    { to: "/sales/reports/by-type-monthly",   label: t("salesByTypeMonthly"),    icon: Ic.chart },
-    { to: "/sales/reports/invoices-due",      label: t("invoicesDueForPayment"), icon: Ic.clock },
-    { to: "/sales/reports/detailed-profits",  label: t("detailedSalesProfits"),  icon: Ic.netProfit },
-    { to: "/sales/reports/pending-payment",   label: t("pendingInvoicesPayment"), icon: Ic.card },
-    { to: "/sales/reports/pending-details",   label: t("pendingInvoicesDetails"), icon: Ic.bookOpen },
     { to: "/dashboard/reports",   label: t("managementReports"),   icon: Ic.salesReport },
     { to: "/profit-dashboard",   label: t("profitDashboard"),     icon: Ic.profit },
     { to: "/finance/daily-revenue", label: t("dailyRevenue"),     icon: Ic.barChart },
   ], permissions, isSAIF);
 
-  /* 2e — الأدوات المساعدة */
-  const salesHelperTools = filterByPermission([
-    { to: "/sales/tools/cancel-irregular", label: t("cancelIrregularTransaction"), icon: Ic.adjustments },
-    { to: "/sales/tools/view-irregular",   label: t("viewIrregularTransactions"), icon: Ic.bookOpen },
-  ], permissions, isSAIF);
+  /* 2e — الأدوات المساعدة (قريباً) */
+  const salesHelperTools = filterByPermission([], permissions, isSAIF);
 
   /* legacy — الكاشير */
   const salesCashier = filterByPermission([
@@ -362,104 +335,36 @@ export function buildNestedNavConfig(
      الملفات الرئيسية | الحركات | التقارير | الجرد | الأدوات المساعدة
   ═════════════════════════════════════════════════════════════════ */
 
-  /* 3a — الملفات الرئيسية */
+  /* 3a — الملفات الرئيسية (خيارات مفعّلة فقط) */
   const invMasterFiles = filterByPermission([
-    { to: "/inventory/items",            label: t("invItemsFile"),           icon: Ic.itemFile },
-    { to: "/inventory/classification",  label: t("invClassificationFile"),  icon: Ic.layers },
-    { to: "/inventory/warehouses",      label: t("invWarehousesFile"),       icon: Ic.building },
-    { to: "/inventory/dispensing-types", label: t("invDispensingTypes"),     icon: Ic.tag },
-    { to: "/inventory/opening-balances", label: t("invOpeningBalances"),    icon: Ic.upload },
-    { to: "/inventory/compound-items",  label: t("invCompoundItems"),       icon: Ic.ingredients },
-    { to: "/inventory/sizes",           label: t("invDefineSizes"),          icon: Ic.sliders },
-    { to: "/inventory/colors",          label: t("invDefineColors"),         icon: Ic.tag },
-    { to: "/inventory/storekeeper-types", label: t("invStorekeeperRequestTypes"), icon: Ic.receipt },
-    { to: "/inventory/seasons",         label: t("invDefineSeasons"),        icon: Ic.calendar },
-    { to: "/inventory/print-barcode",   label: t("invPrintBarcode"),          icon: Ic.code },
-    { to: "/inventory/multi-barcode",   label: t("invMultiBarcodeItems"),    icon: Ic.code },
-    { to: "/inventory/adjusted-pricing", label: t("invAdjustedPricing"),     icon: Ic.profit },
-    { to: "/ingredients",              label: t("recipeInventory"),         icon: Ic.ingredients },
-    { to: "/inventory/item-file",       label: t("itemFile"),                icon: Ic.itemFile },
+    { to: "/inventory/item-file",        label: t("itemFile"),                icon: Ic.itemFile },
+    { to: "/ingredients",               label: t("recipeInventory"),         icon: Ic.ingredients },
     { to: "/products",                  label: t("productsList"),            icon: Ic.products },
+    { to: "/inventory/manage-ingredients", label: t("manageIngredients"), icon: Ic.ingredients },
   ], permissions, isSAIF);
 
-  /* 3b — الحركات */
+  /* 3b — الحركات (خيارات مفعّلة فقط) */
   const invTransactions = filterByPermission([
-    { to: "/inventory/receipt-issue",   label: t("invReceiptIssueVoucher"),  icon: Ic.receipt },
     { to: "/stock-transfers",           label: t("invItemTransfer"),         icon: Ic.transfers },
-    { to: "/inventory/quantity-adjustment", label: t("invQuantityAdjustment"), icon: Ic.adjustments },
-    { to: "/inventory/price-change",   label: t("invPriceIncreaseDecrease"), icon: Ic.profit },
-    { to: "/inventory/manufacturing",   label: t("invManufacturingOrder"),   icon: Ic.ingredients },
-    { to: "/inventory/revaluation",     label: t("invInventoryRevaluation"), icon: Ic.stockValue },
-    { to: "/inventory/approve-transfers", label: t("invApproveStockTransfers"), icon: Ic.check },
-    { to: "/inventory/clearance",      label: t("invClearanceOfGoods"),     icon: Ic.check },
-    { to: "/inventory/warehouse-requests", label: t("invWarehouseRequests"), icon: Ic.receipt },
-    { to: "/inventory/stocktake-compare", label: t("invStocktakeComparison"), icon: Ic.audit },
-    { to: "/inventory/post-transactions", label: t("postTransactions"),     icon: Ic.check },
-    { to: "/inventory/unlink-manufacturing", label: t("invUnlinkManufacturing"), icon: Ic.adjustments },
-    { to: "/inventory/receipt-from-po", label: t("invReceiptFromPurchaseOrder"), icon: Ic.receipt },
-    { to: "/inventory/issue-from-so",  label: t("invIssueFromSalesOrder"),  icon: Ic.receipt },
-    { to: "/inventory/outbound-transfer", label: t("invOutboundTransfer"),  icon: Ic.transfers },
-    { to: "/inventory/inbound-transfer", label: t("invInboundTransfer"),     icon: Ic.transfers },
-    { to: "/inventory/transfer-companies", label: t("invTransferCompanies"),  icon: Ic.transfers },
-    { to: "/inventory/dispensing-movement", label: t("invDispensingMovement"), icon: Ic.receipt },
-    { to: "/inventory/transfer-movement", label: t("invTransferMovement"),   icon: Ic.transfers },
-    { to: "/inventory/review-requests", label: t("invReviewWarehouseRequests"), icon: Ic.audit },
-    { to: "/inventory/clearances",      label: t("invWarehouseClearances"), icon: Ic.check },
-    { to: "/inventory/inout-movement", label: t("invInOutMovement"),        icon: Ic.receipt },
     { to: "/central-kitchen",           label: t("centralKitchen"),         icon: Ic.centralKitchen },
     { to: "/waste-tracker",             label: t("wasteEntry"),              icon: Ic.waste },
+    { to: "/inventory/stock-balance",   label: t("invItemBalances"),        icon: Ic.wallet },
+    { to: "/inventory/stock-movements", label: t("invDailyMovements"),      icon: Ic.calendar },
   ], permissions, isSAIF);
 
-  /* 3c — التقارير */
+  /* 3c — التقارير (خيارات مفعّلة فقط) */
   const invReports = filterByPermission([
     { to: "/inventory/reports/daily-movements", label: t("invDailyMovements"), icon: Ic.calendar },
-    { to: "/inventory/reports/basic-item-data", label: t("invBasicItemData"), icon: Ic.itemFile },
-    { to: "/inventory/reports/review-movements", label: t("invReviewWarehouseMovements"), icon: Ic.audit },
-    { to: "/inventory/reports/item-summary", label: t("invItemSummaryDetail"), icon: Ic.chart },
-    { to: "/inventory/reports/detailed-statement", label: t("invDetailedStatement"), icon: Ic.bookOpen },
-    { to: "/inventory/reports/review-item-movements", label: t("invReviewItemMovements"), icon: Ic.audit },
-    { to: "/inventory/reports/review-item-years", label: t("invReviewItemMovementsYears"), icon: Ic.audit },
-    { to: "/inventory/reports/inventory-value", label: t("invInventoryValue"), icon: Ic.stockValue },
-    { to: "/inventory/reports/sales-movements", label: t("invSalesMovements"), icon: Ic.receipt },
     { to: "/inventory/reports/item-balances", label: t("invItemBalances"), icon: Ic.wallet },
-    { to: "/inventory/reports/sales-summary", label: t("invSalesSummary"), icon: Ic.chart },
-    { to: "/inventory/reports/sales-vs-cost", label: t("invSalesVsCostComparison"), icon: Ic.netProfit },
-    { to: "/inventory/reports/item-locations", label: t("invItemLocations"), icon: Ic.building },
-    { to: "/inventory/reports/item-activity", label: t("invItemActivity"), icon: Ic.activity },
-    { to: "/inventory/reports/movement-summary", label: t("invMovementSummaryOverall"), icon: Ic.chart },
-    { to: "/inventory/reports/chart", label: t("invChart"), icon: Ic.chart },
-    { to: "/inventory/reports/value-by-category", label: t("invValueByCategory"), icon: Ic.layers },
-    { to: "/inventory/reports/warehouse-summary", label: t("invWarehouseMovementSummary"), icon: Ic.transfers },
-    { to: "/inventory/reports/value-by-date", label: t("invValueByDate"), icon: Ic.calendar },
-    { to: "/inventory/reports/movement-details", label: t("invMovementDetails"), icon: Ic.bookOpen },
-    { to: "/inventory/reports/revenue-cost-comparison", label: t("invRevenueCostComparison"), icon: Ic.netProfit },
-    { to: "/inventory/reports/expired-items", label: t("invExpiredItems"), icon: Ic.clock },
-    { to: "/inventory/reports/total-by-category", label: t("invTotalByCategory"), icon: Ic.layers },
-    { to: "/inventory/reports/turnover-ratio", label: t("invTurnoverRatio"), icon: Ic.trendUp },
-    { to: "/inventory/reports/reorder-level", label: t("invReorderLevelReport"), icon: Ic.manualForecast },
-    { to: "/inventory/reports/movement-by-class", label: t("invMovementByClassification"), icon: Ic.layers },
-    { to: "/inventory/reports/stagnation-period", label: t("invStagnationPeriod"), icon: Ic.clock },
-    { to: "/inventory/reports/monthly-ops", label: t("invMonthlyOpsSummary"), icon: Ic.calendar },
-    { to: "/inventory/reports/balances-comparative", label: t("invBalancesComparative"), icon: Ic.scale },
-    { to: "/inventory/reports/inventory-age", label: t("invInventoryAge"), icon: Ic.clock },
-    { to: "/inventory/reports/inventory-analysis", label: t("invInventoryAnalysis"), icon: Ic.audit },
-    { to: "/inventory/reports/inventory-aggregate", label: t("invInventoryAggregate"), icon: Ic.stockValue },
-    { to: "/inventory/reports/balances-by-group", label: t("invBalancesByGroup"), icon: Ic.layers },
     { to: "/finance/cost-audit",       label: t("costAuditCenter"),        icon: Ic.audit },
     { to: "/finance/cogs",             label: t("costOfGoodsSold"),         icon: Ic.stockValue },
   ], permissions, isSAIF);
 
-  /* 3d — الجرد */
-  const invStocktake = filterByPermission([
-    { to: "/inventory/stocktake/review", label: t("invStocktakeReview"), icon: Ic.audit },
-  ], permissions, isSAIF);
+  /* 3d — الجرد (قريباً) */
+  const invStocktake = filterByPermission([], permissions, isSAIF);
 
-  /* 3e — الأدوات المساعدة */
-  const invHelperTools = filterByPermission([
-    { to: "/inventory/tools/build-balances", label: t("invBuildInventoryBalances"), icon: Ic.check },
-    { to: "/inventory/tools/cancel-irregular", label: t("invCancelIrregularMovement"), icon: Ic.adjustments },
-    { to: "/inventory/tools/pull-from-excel", label: t("invPullFromExcel"), icon: Ic.upload },
-  ], permissions, isSAIF);
+  /* 3e — الأدوات المساعدة (قريباً) */
+  const invHelperTools = filterByPermission([], permissions, isSAIF);
 
 
   /* ═════════════════════════════════════════════════════════════════
@@ -467,48 +372,32 @@ export function buildNestedNavConfig(
      الملفات الرئيسية | الحركات | التقارير | الأدوات المساعدة
   ═════════════════════════════════════════════════════════════════ */
 
-  /* 4a — الملفات الرئيسية */
-  const procMasterFiles = filterByPermission([
-    { to: "/procurement/purchase-centers",  label: t("purchaseCenters"),    icon: Ic.building },
-    { to: "/procurement/purchase-reps",    label: t("purchaseReps"),       icon: Ic.userGroup },
-  ], permissions, isSAIF);
+  /* 4a — الملفات الرئيسية (قريباً) */
+  const procMasterFiles = filterByPermission([], permissions, isSAIF);
 
-  /* 4b — الحركات */
+  /* 4b — الحركات (خيارات مفعّلة فقط) */
   const procTransactions = filterByPermission([
     { to: "/procurement/invoices",         label: t("purchaseInvoices"),    icon: Ic.receipt },
+    { to: "/procurement/invoices/new",     label: t("newPurchaseInvoice"),   icon: Ic.receipt },
     { to: "/procurement/orders",           label: t("purchaseOrders"),      icon: Ic.purchaseOrder },
-    { to: "/procurement/print-barcode",    label: t("printBarcode"),        icon: Ic.code },
-    { to: "/procurement/invoice-from-receipt", label: t("invoiceFromReceipt"), icon: Ic.receipt },
-    { to: "/procurement/consignment",      label: t("purchaseUnderDisposal"), icon: Ic.supplier },
-    { to: "/procurement/post-transactions", label: t("postTransactions"),  icon: Ic.check },
+    { to: "/procurement/goods-receipts",   label: t("goodsReceipts"),       icon: Ic.receipt },
+    { to: "/procurement/requests",         label: t("purchaseRequests"),    icon: Ic.clipboardList },
     { to: "/smart-purchase",               label: t("smartPurchase"),      icon: Ic.smartPurchase },
     { to: "/manual-purchase-forecast",     label: t("manualPurchaseForecast"), icon: Ic.manualForecast },
     { to: "/stock-transfers",              label: t("stockTransfers"),      icon: Ic.transfers },
     { to: "/central-kitchen",              label: t("centralKitchen"),      icon: Ic.centralKitchen },
+    { to: "/upload-center",               label: t("uploadCenter"),        icon: Ic.upload },
   ], permissions, isSAIF);
 
-  /* 4c — التقارير */
+  /* 4c — التقارير (خيارات مفعّلة فقط) */
   const procReports = filterByPermission([
     { to: "/procurement/reports/daily-movements",  label: t("procDailyMovements"),    icon: Ic.calendar },
     { to: "/procurement/reports/review-movements", label: t("procReviewMovements"), icon: Ic.audit },
     { to: "/suppliers/balances",                    label: t("procSuppliersSummary"), icon: Ic.wallet },
-    { to: "/procurement/reports/by-type",           label: t("procPurchasesByType"), icon: Ic.chart },
-    { to: "/procurement/reports/by-category",       label: t("procPurchasesByCategory"), icon: Ic.layers },
-    { to: "/procurement/reports/by-month",          label: t("procPurchasesByMonth"), icon: Ic.calendar },
-    { to: "/procurement/reports/invoice-payment",   label: t("procInvoicePayment"),   icon: Ic.card },
-    { to: "/procurement/reports/order-report",     label: t("procOrderReport"),     icon: Ic.purchaseOrder },
-    { to: "/procurement/reports/reorder-report",   label: t("procReorderReport"),   icon: Ic.manualForecast },
-    { to: "/procurement/reports/reps-report",      label: t("procRepsReport"),     icon: Ic.userGroup },
-    { to: "/procurement/reports/receipt-review",   label: t("procReceiptReview"),  icon: Ic.audit },
-    { to: "/procurement/reports/payment-details",  label: t("procPaymentDetails"), icon: Ic.card },
   ], permissions, isSAIF);
 
-  /* 4d — الأدوات المساعدة */
-  const procHelperTools = filterByPermission([
-    { to: "/procurement/tools/check",       label: t("procCheckTransactions"),  icon: Ic.audit },
-    { to: "/procurement/tools/cancel",      label: t("procCancelIrregular"),    icon: Ic.adjustments },
-    { to: "/procurement/tools/irregular",   label: t("procViewIrregular"),      icon: Ic.bookOpen },
-  ], permissions, isSAIF);
+  /* 4d — الأدوات المساعدة (قريباً) */
+  const procHelperTools = filterByPermission([], permissions, isSAIF);
 
   /* legacy aliases for backward compatibility */
   const procPlanning  = [];
