@@ -908,6 +908,58 @@ class AccountStatementView(views.APIView):
         })
 
 
+def _get_journal_entry_schema():
+    """Return list of custom column definitions for Design Robot."""
+    from accounting.models import JournalEntryCustomColumn
+    return list(
+        JournalEntryCustomColumn.objects.filter(is_active=True)
+        .order_by("order", "name")
+        .values("id", "name", "label", "field_type", "order")
+    )
+
+
+class JournalEntrySchemaView(views.APIView):
+    """
+    Design Robot: GET custom columns; POST save design (replace columns).
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from accounting.models import JournalEntryCustomColumn
+        columns = list(
+            JournalEntryCustomColumn.objects.filter(is_active=True)
+            .order_by("order", "name")
+            .values("id", "name", "label", "field_type", "order")
+        )
+        return response.Response({"columns": columns})
+
+    def post(self, request):
+        from accounting.models import JournalEntryCustomColumn
+        from django.db import transaction as db_transaction
+        if not can_upload_or_modify_data(request.user):
+            return response.Response({"detail": "ليس لديك صلاحية"}, status=403)
+        columns = request.data.get("columns", [])
+        if not isinstance(columns, list):
+            return response.Response({"detail": "columns must be a list"}, status=400)
+        allowed_types = {"text", "number", "date"}
+        with db_transaction.atomic():
+            JournalEntryCustomColumn.objects.all().delete()
+            for i, col in enumerate(columns):
+                name = (col.get("name") or "").strip() or f"field_{i}"
+                label = (col.get("label") or "").strip() or name
+                field_type = col.get("field_type", "text")
+                if field_type not in allowed_types:
+                    field_type = "text"
+                JournalEntryCustomColumn.objects.create(
+                    name=name,
+                    label=label,
+                    field_type=field_type,
+                    order=i,
+                    is_active=True,
+                )
+        return response.Response({"detail": "تم حفظ التصميم", "columns": _get_journal_entry_schema()})
+
+
 class JournalEntryListCreateView(views.APIView):
     """
     قيد اليومية — List & Create Journal Entries
@@ -964,6 +1016,7 @@ class JournalEntryListCreateView(views.APIView):
                     "employee_name":  f"{line.employee.first_name} {line.employee.last_name}" if line.employee else None,
                     "reference_type": line.reference_type or "",
                     "reference_id":   line.reference_id or "",
+                    "metadata":       getattr(line, "metadata", None) or {},
                 })
             rows.append({
                 "id":          entry.id,
@@ -983,6 +1036,7 @@ class JournalEntryListCreateView(views.APIView):
             "page":     page,
             "pages":    (total + page_size - 1) // page_size,
             "entries":  rows,
+            "schema":   _get_journal_entry_schema(),
         })
 
     def post(self, request):
@@ -1043,6 +1097,9 @@ class JournalEntryListCreateView(views.APIView):
                 employee_id  = line_data.get("employee_id")
                 ref_type     = str(line_data.get("reference_type", "")).strip()[:32]
                 ref_id       = str(line_data.get("reference_id", "")).strip()[:64]
+                metadata     = line_data.get("metadata")
+                if not isinstance(metadata, dict):
+                    metadata = {}
 
                 # Try to find account
                 acc = None
@@ -1069,6 +1126,7 @@ class JournalEntryListCreateView(views.APIView):
                     employee_id=employee_id or None,
                     reference_type=ref_type or "",
                     reference_id=ref_id or "",
+                    metadata=metadata,
                 )
 
         return response.Response({"detail": "تم إنشاء القيد", "id": entry.id}, status=201)

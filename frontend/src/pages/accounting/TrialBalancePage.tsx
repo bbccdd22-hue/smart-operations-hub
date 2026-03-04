@@ -9,6 +9,15 @@ import {
   ChevronRight, ChevronLeft, Filter, Check, X,
 } from "lucide-react";
 import { fetchWithCsrf } from "../../lib/api";
+import {
+  loadLayout,
+  saveLayout,
+  getDisplayColumnOrder,
+  getColumnWidth,
+  getColumnLabel,
+  type TemplateLayout,
+} from "../../config/templateTableConfig";
+import TemplateLayoutToolbar from "../../components/TemplateLayoutToolbar";
 
 /* ─── types ────────────────────────────────────────────────────────────── */
 interface TrialRow {
@@ -66,6 +75,16 @@ export default function TrialBalancePage() {
   const [data, setData]       = useState<TrialData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
+  const [tableLayout, setTableLayout] = useState<TemplateLayout | null>(() =>
+    loadLayout("trial_balance")
+  );
+  const TEMPLATE_KEY = "trial_balance";
+  const displayColumnOrder = getDisplayColumnOrder(TEMPLATE_KEY, tableLayout, []);
+
+  const handleLayoutChange = useCallback((layout: TemplateLayout) => {
+    saveLayout(TEMPLATE_KEY, layout);
+    setTableLayout(layout);
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -144,6 +163,14 @@ export default function TrialBalancePage() {
             <button onClick={load} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#161b27] border border-white/10 text-sm text-gray-400 hover:text-white transition-colors">
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             </button>
+            <TemplateLayoutToolbar
+              templateKey={TEMPLATE_KEY}
+              initialLayout={tableLayout}
+              onLayoutChange={handleLayoutChange}
+              label={T("تصميم القالب", "Design template")}
+              isRTL={isRTL}
+              T={T}
+            />
           </div>
         </div>
 
@@ -226,65 +253,77 @@ export default function TrialBalancePage() {
         ) : data ? (
           <div className="bg-[#161b27] border border-white/10 rounded-xl overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-sm" style={{ minWidth: 640 }}>
+              <table className="w-full text-sm table-fixed" style={{ minWidth: 640 }}>
                 <thead>
-                  <tr className="bg-[#1e2533] text-xs text-gray-400 uppercase tracking-wide">
-                    <th className="px-4 py-3 text-start w-32">{T("رقم الحساب", "Code")}</th>
-                    <th className="px-4 py-3 text-start">{T("اسم الحساب", "Account Name")}</th>
-                    <th className="px-4 py-3 text-center hidden md:table-cell">{T("المستوى", "Level")}</th>
-                    <th className="px-4 py-3 text-end">{T("مدين", "Debit")}</th>
-                    <th className="px-4 py-3 text-end">{T("دائن", "Credit")}</th>
-                    <th className="px-4 py-3 text-end">{T("الرصيد", "Balance")}</th>
+                  <tr
+                    className="bg-[#1e2533] text-xs text-gray-400 uppercase tracking-wide"
+                    style={{ height: tableLayout?.rowHeight }}
+                  >
+                    {displayColumnOrder.map((colId) => (
+                      <th
+                        key={colId}
+                        className="px-4 py-3 text-start first:text-start last:text-end [&:nth-last-child(-n+3)]:text-end"
+                        style={{
+                          width: getColumnWidth(TEMPLATE_KEY, tableLayout, colId, false),
+                          minWidth: colId === "index" ? 40 : 70,
+                        }}
+                      >
+                        {getColumnLabel(TEMPLATE_KEY, colId, undefined, isRTL)}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {data.rows.map((row) => (
+                  {data.rows.map((row, rowIndex) => (
                     <tr
                       key={row.id}
                       className={`border-t border-white/5 hover:bg-white/5 transition-colors ${row.is_parent ? "bg-white/3 font-semibold" : ""}`}
+                      style={{ height: tableLayout?.rowHeight }}
                     >
-                      <td className="px-4 py-2.5 font-mono text-xs text-gray-400">{row.code}</td>
-                      <td className="px-4 py-2.5">
-                        <span
-                          className={`${row.is_parent ? "text-white font-semibold" : "text-gray-200"}`}
-                          style={{ paddingInlineStart: indent(row.level) }}
-                        >
-                          {isRTL ? row.name_ar : row.name_en}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 text-center hidden md:table-cell">
-                        <span className="text-xs bg-[#1e2533] text-gray-400 px-2 py-0.5 rounded">
-                          {T(`م${row.level}`, `L${row.level}`)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 text-end font-mono">
-                        {parseFloat(row.debit) > 0
-                          ? <span className="text-blue-400">{fmt(row.debit)}</span>
-                          : <span className="text-gray-600">—</span>}
-                      </td>
-                      <td className="px-4 py-2.5 text-end font-mono">
-                        {parseFloat(row.credit) > 0
-                          ? <span className="text-purple-400">{fmt(row.credit)}</span>
-                          : <span className="text-gray-600">—</span>}
-                      </td>
-                      <td className="px-4 py-2.5 text-end font-mono">
-                        <span className={parseFloat(row.balance) >= 0 ? "text-emerald-400" : "text-red-400"}>
-                          {fmt(row.balance)}
-                        </span>
-                      </td>
+                      {displayColumnOrder.map((colId) => {
+                        const alignEnd = ["debit", "credit", "balance"].includes(colId);
+                        const alignCenter = colId === "level";
+                        let content: React.ReactNode = "";
+                        if (colId === "index") content = rowIndex + 1;
+                        else if (colId === "code") content = <span className="font-mono text-xs text-gray-400">{row.code}</span>;
+                        else if (colId === "name") content = (
+                          <span className={row.is_parent ? "text-white font-semibold" : "text-gray-200"} style={{ paddingInlineStart: indent(row.level) }}>
+                            {isRTL ? row.name_ar : row.name_en}
+                          </span>
+                        );
+                        else if (colId === "level") content = (
+                          <span className="text-xs bg-[#1e2533] text-gray-400 px-2 py-0.5 rounded">
+                            {T(`م${row.level}`, `L${row.level}`)}
+                          </span>
+                        );
+                        else if (colId === "debit") content = parseFloat(row.debit) > 0 ? <span className="text-blue-400">{fmt(row.debit)}</span> : <span className="text-gray-600">—</span>;
+                        else if (colId === "credit") content = parseFloat(row.credit) > 0 ? <span className="text-purple-400">{fmt(row.credit)}</span> : <span className="text-gray-600">—</span>;
+                        else if (colId === "balance") content = <span className={parseFloat(row.balance) >= 0 ? "text-emerald-400" : "text-red-400"}>{fmt(row.balance)}</span>;
+                        return (
+                          <td
+                            key={colId}
+                            className={`px-4 py-2.5 font-mono ${alignEnd ? "text-end" : alignCenter ? "text-center" : "text-start"}`}
+                            style={{ width: getColumnWidth(TEMPLATE_KEY, tableLayout, colId, false) }}
+                          >
+                            {content}
+                          </td>
+                        );
+                      })}
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr className="bg-[#1e2533] border-t-2 border-white/20 text-sm font-bold">
-                    <td colSpan={3} className="px-4 py-3 text-gray-300">{T("الإجمالي العام", "Grand Total")}</td>
-                    <td className="px-4 py-3 text-end text-blue-400 font-mono">{fmt(data.grand_debit)}</td>
-                    <td className="px-4 py-3 text-end text-purple-400 font-mono">{fmt(data.grand_credit)}</td>
-                    <td className="px-4 py-3 text-end">
-                      <span className={data.is_balanced ? "text-emerald-400" : "text-red-400"}>
-                        {data.is_balanced ? T("✓ متوازن", "✓ Balanced") : fmt(data.difference)}
-                      </span>
-                    </td>
+                  <tr className="bg-[#1e2533] border-t-2 border-white/20 text-sm font-bold" style={{ height: tableLayout?.rowHeight }}>
+                    <td colSpan={Math.max(1, displayColumnOrder.length - 3)} className="px-4 py-3 text-gray-300">{T("الإجمالي العام", "Grand Total")}</td>
+                    {displayColumnOrder.filter((c) => c === "debit" || c === "credit" || c === "balance").map((colId) => (
+                      colId === "debit" ? <td key="debit" className="px-4 py-3 text-end text-blue-400 font-mono">{fmt(data.grand_debit)}</td> :
+                      colId === "credit" ? <td key="credit" className="px-4 py-3 text-end text-purple-400 font-mono">{fmt(data.grand_credit)}</td> :
+                      <td key="balance" className="px-4 py-3 text-end">
+                        <span className={data.is_balanced ? "text-emerald-400" : "text-red-400"}>
+                          {data.is_balanced ? T("✓ متوازن", "✓ Balanced") : fmt(data.difference)}
+                        </span>
+                      </td>
+                    ))}
                   </tr>
                 </tfoot>
               </table>

@@ -9,6 +9,8 @@ import {
   Check, Eye, Calendar, Layers, Filter,
 } from "lucide-react";
 import { fetchWithCsrf, fetchBranches, fetchBrands, fetchCostCenters, fetchEmployees } from "../../lib/api";
+import SchemaEditor, { type CustomColumn } from "../../components/SchemaEditor";
+import { loadJournalEntryLayout, getColumnWidth, getDefaultLayout, defaultColumnOrder, JOURNAL_ENTRY_FIXED_COLUMNS, type JournalEntryLayout } from "../../config/journalEntryTableConfig";
 import type { Branch } from "../../lib/api";
 import type { Brand } from "../../lib/api";
 import type { CostCenterOption, EmployeeOption } from "../../lib/api";
@@ -20,11 +22,14 @@ interface EntryLine {
   account_name: string;
   debit: string;
   credit: string;
-  line_reference?: string;  /* مرجع السطر → reference_id */
+  line_reference?: string;
+  /** تاريخ السطر (قابل للتعديل لكل صف). إن لم يُحدد يُستخدم تاريخ القيد من الأعلى. */
+  line_date?: string;
   branch_id?: number | null;
   brand_id?: number | null;
   cost_center_id?: number | null;
   employee_id?: number | null;
+  metadata?: Record<string, string | number>;
 }
 interface JournalEntry {
   id: number;
@@ -35,7 +40,7 @@ interface JournalEntry {
   created_by: string;
   total_debit: string;
   is_balanced: boolean;
-  lines: (EntryLine & { branch_name?: string | null; brand_name?: string | null; cost_center_name?: string | null; employee_name?: string | null })[];
+  lines: (EntryLine & { branch_name?: string | null; brand_name?: string | null; cost_center_name?: string | null; employee_name?: string | null; metadata?: Record<string, string | number> })[];
 }
 interface AccountOption { id: number; code: string; name_ar: string; level: number; }
 
@@ -47,8 +52,9 @@ const fmt = (v: string | number) => {
 };
 
 const emptyLine = (): EntryLine => ({
-  account_code: "", account_name: "", debit: "", credit: "", line_reference: "",
+  account_code: "", account_name: "", debit: "", credit: "", line_reference: "", line_date: "",
   branch_id: null, brand_id: null, cost_center_id: null, employee_id: null,
+  metadata: {},
 });
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -67,7 +73,6 @@ export default function JournalEntryPage() {
   /* form state */
   const [entryDate, setEntryDate]         = useState(today);
   const [description, setDescription]     = useState("");
-  const [journalRef, setJournalRef]       = useState("");
   const [totalJournalValue, setTotalJournalValue] = useState("");
   const [reverseEntry, setReverseEntry]   = useState(false);
   const [stage, setStage]                 = useState(false);
@@ -103,6 +108,21 @@ export default function JournalEntryPage() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [activeTab, setActiveTab] = useState<"new" | "log">("new");
 
+  /* Design Robot: custom columns schema (from API) */
+  const [schemaColumns, setSchemaColumns] = useState<CustomColumn[]>([]);
+  /* Design Robot: table layout (column widths, row height, column order) — from localStorage */
+  const [tableLayout, setTableLayout] = useState<JournalEntryLayout>(() => {
+    const loaded = loadJournalEntryLayout();
+    if (loaded && loaded.rowHeight != null) return loaded;
+    return getDefaultLayout([]);
+  });
+
+  /** ترتيب عرض الأعمدة في الجدول (ثابتة + مخصصة) */
+  const displayColumnOrder =
+    tableLayout.columnOrder?.length > 0
+      ? tableLayout.columnOrder
+      : defaultColumnOrder(schemaColumns.map((c) => c.name));
+
   /* load accounts */
   useEffect(() => {
     fetchWithCsrf("/api/accounting/chart/")
@@ -132,6 +152,7 @@ export default function JournalEntryPage() {
       if (!res.ok) throw new Error(`${res.status}`);
       const d = await res.json();
       setEntries(d.entries || []);
+      if (Array.isArray(d.schema)) setSchemaColumns(d.schema);
     } catch (e: unknown) {
       setListError((e as Error).message);
     } finally {
@@ -139,7 +160,22 @@ export default function JournalEntryPage() {
     }
   }, [fromDate, toDate]);
 
+  const refetchSchema = useCallback(async () => {
+    try {
+      const res = await fetchWithCsrf("/api/accounting/journal-entries/schema/");
+      if (res.ok) {
+        const d = await res.json();
+        if (Array.isArray(d.columns)) setSchemaColumns(d.columns);
+      }
+    } catch { /* ignore */ }
+  }, []);
+
   useEffect(() => { loadEntries(); }, [loadEntries]);
+
+  /* Design Robot: ensure schema is loaded on mount (e.g. when no entries in range) */
+  useEffect(() => {
+    refetchSchema();
+  }, [refetchSchema]);
 
   /* totals */
   const totalDebit  = lines.reduce((s, l) => s + (parseFloat(l.debit)  || 0), 0);
@@ -150,16 +186,29 @@ export default function JournalEntryPage() {
   const linesWithAmount = lines.filter((l) => l.account_code && (parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0));
   const everyLineHasCostCenter = linesWithAmount.length === 0 || linesWithAmount.every((l) => l.cost_center_id != null);
 
-  /* account search filter */
+  /* account search filter — البحث باسم الحساب أو رقم الحساب */
   const getFilteredAccounts = (idx: number) => {
-    const q = (acSearch[idx] || "").toLowerCase();
-    if (!q) return accounts.slice(0, 10);
-    return accounts.filter((a) => a.code.includes(q) || a.name_ar.toLowerCase().includes(q)).slice(0, 10);
+    const q = (acSearch[idx] || "").trim().toLowerCase();
+    if (!q) return accounts.slice(0, 15);
+    return accounts.filter(
+      (a) =>
+        a.code.toLowerCase().includes(q) ||
+        (a.name_ar || "").toLowerCase().includes(q)
+    ).slice(0, 25);
   };
 
   /* line mutators */
   const setLineField = (idx: number, field: keyof EntryLine, val: string | number | null) => {
     setLines((prev) => prev.map((l, i) => i === idx ? { ...l, [field]: val } : l));
+  };
+  const setLineMetadata = (idx: number, key: string, value: string | number) => {
+    setLines((prev) =>
+      prev.map((l, i) =>
+        i === idx
+          ? { ...l, metadata: { ...(l.metadata || {}), [key]: value } }
+          : l
+      )
+    );
   };
   const addLine    = () => setLines((prev) => [...prev, emptyLine()]);
   const removeLine = (idx: number) => {
@@ -222,20 +271,30 @@ export default function JournalEntryPage() {
       const payload = {
         entry_date: entryDate,
         description: description.trim(),
-        reference: journalRef.trim().slice(0, 64),
+        reference: "",
         lines: lines
           .filter((l) => l.account_code && (parseFloat(l.debit) > 0 || parseFloat(l.credit) > 0))
-          .map((l) => ({
-            account_code: l.account_code,
-            account_name: l.account_name,
-            debit:  parseFloat(l.debit)  || 0,
-            credit: parseFloat(l.credit) || 0,
-            reference_id: (l.line_reference || "").trim().slice(0, 64),
-            branch_id: l.branch_id ?? undefined,
-            brand_id: l.brand_id ?? undefined,
-            cost_center_id: l.cost_center_id ?? undefined,
-            employee_id: l.employee_id ?? undefined,
-          })),
+            .map((l) => {
+            const meta: Record<string, string | number> = {};
+            const lineDate = (l.line_date || "").trim() || entryDate;
+            if (lineDate) meta.line_date = lineDate;
+            schemaColumns.forEach((col) => {
+              const v = l.metadata?.[col.name];
+              if (v !== undefined && v !== null && v !== "") meta[col.name] = v;
+            });
+            return {
+              account_code: l.account_code,
+              account_name: l.account_name,
+              debit:  parseFloat(l.debit)  || 0,
+              credit: parseFloat(l.credit) || 0,
+              reference_id: (l.line_reference || "").trim().slice(0, 64),
+              branch_id: l.branch_id ?? undefined,
+              brand_id: l.brand_id ?? undefined,
+              cost_center_id: l.cost_center_id ?? undefined,
+              employee_id: l.employee_id ?? undefined,
+              metadata: meta,
+            };
+          }),
       };
       const res = await fetchWithCsrf("/api/accounting/journal-entries/", {
         method: "POST",
@@ -249,7 +308,6 @@ export default function JournalEntryPage() {
       }
       setSaveSuccess(true);
       setDescription("");
-      setJournalRef("");
       setTotalJournalValue("");
       setLines([emptyLine(), emptyLine()]);
       setAcSearch({});
@@ -273,6 +331,17 @@ export default function JournalEntryPage() {
     } catch { /* ignore */ }
   };
 
+  /** تسمية العمود للعرض (ثابت أو مخصص) */
+  const getColumnLabel = (columnId: string): string => {
+    const fixed = JOURNAL_ENTRY_FIXED_COLUMNS.find((c) => c.id === columnId);
+    if (fixed) return isRTL ? (fixed.labelAr || fixed.labelEn) : (fixed.labelEn || fixed.labelAr);
+    const custom = schemaColumns.find((c) => c.name === columnId);
+    return (custom?.label || columnId) as string;
+  };
+
+  const isFixedColumnId = (id: string): boolean =>
+    JOURNAL_ENTRY_FIXED_COLUMNS.some((c) => c.id === id);
+
   return (
     <div className="min-h-screen bg-[#0e1117] text-white" dir={isRTL ? "rtl" : "ltr"}>
 
@@ -284,11 +353,20 @@ export default function JournalEntryPage() {
               <ClipboardList className="h-6 w-6 text-amber-400" />
             </div>
             <div>
-              <h1 className="text-xl font-bold text-white tracking-tight">{T("قيد اليومية", "Journal Entry")}</h1>
-              <p className="text-sm text-gray-400 mt-0.5">{T("إدخال قيود محاسبية يدوية — قيد مزدوج مع أبعاد اختيارية", "Manual double-entry bookkeeping with optional dimensions")}</p>
+              <h1 className="text-xl font-bold text-white tracking-tight">{T("قيد اليومية القابل للتخصيص", "Customizable Journal Entry")}</h1>
+              <p className="text-sm text-gray-400 mt-0.5">{T("إدخال قيود محاسبية يدوية — أعمدة مخصصة لكل سطر (فاتورات متعددة)، قيد مزدوج", "Manual double-entry with custom columns per line (multi-invoice), optional dimensions")}</p>
             </div>
           </div>
           {/* تبويبات */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <SchemaEditor
+              initialColumns={schemaColumns}
+              initialLayout={tableLayout}
+              onSaved={() => { refetchSchema(); loadEntries(); }}
+              onLayoutChange={(layout) => setTableLayout(layout)}
+              isRTL={isRTL}
+              T={T}
+            />
           <div className="flex rounded-xl bg-[#161b27] p-1 border border-white/10">
             <button
               type="button"
@@ -315,6 +393,7 @@ export default function JournalEntryPage() {
               {T("سجل القيود", "Entries Log")}
             </button>
           </div>
+          </div>
         </div>
       </div>
 
@@ -332,12 +411,11 @@ export default function JournalEntryPage() {
             </div>
           </div>
           <div className="p-5 space-y-5">
-            {/* ── رأس القيد (مثل الصورة) ── */}
+            {/* ── رأس القيد: تاريخ الإدخال للقيد ووصف الحركة فقط (المرجع في كل صف) ── */}
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3">
               <div>
-                <label className="block text-[10px] text-gray-500 mb-0.5">{T("المرجع", "Reference")}</label>
-                <input type="text" value={journalRef} onChange={(e) => setJournalRef(e.target.value)} placeholder="—"
-                  className="w-full bg-[#0e1117] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white" />
+                <label className="block text-[10px] text-gray-500 mb-0.5">{T("تاريخ إدخال القيد", "Entry date")}</label>
+                <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} className="w-full bg-[#0e1117] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white" />
               </div>
               <div>
                 <label className="block text-[10px] text-gray-500 mb-0.5">{T("عدد الحركات", "No. of lines")}</label>
@@ -378,10 +456,6 @@ export default function JournalEntryPage() {
                 <input type="text" value={conversionRate} onChange={(e) => setConversionRate(e.target.value)} className="w-full bg-[#0e1117] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white text-end" />
               </div>
               <div>
-                <label className="block text-[10px] text-gray-500 mb-0.5">{T("التاريخ", "Date")}</label>
-                <input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} className="w-full bg-[#0e1117] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white" />
-              </div>
-              <div>
                 <label className="block text-[10px] text-gray-500 mb-0.5">{T("نوع الحركة", "Movement type")}</label>
                 <select value={movementType} onChange={(e) => setMovementType(e.target.value)} className="w-full bg-[#0e1117] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white">
                   <option value="manual">{T("يدوي", "Manual")}</option>
@@ -404,88 +478,175 @@ export default function JournalEntryPage() {
               </div>
             </div>
 
-            {/* ── جدول سطور القيد (أعمدة مثل الصورة) ── */}
+            {/* ── جدول سطور القيد (ترتيب وعرض من محرر التصميم) ── */}
             <div className="overflow-x-auto rounded-xl border border-white/10" style={{ minWidth: 0 }}>
-              <table className="w-full text-xs" style={{ minWidth: 1100 }}>
+              <table className="w-full text-xs table-fixed" style={{ minWidth: 1100 }}>
                 <thead>
                   <tr className="bg-[#1e2533] text-[10px] font-medium text-gray-400 uppercase tracking-wider">
-                    <th className="py-2 px-1.5 w-8 text-center">#</th>
-                    <th className="py-2 px-1.5 min-w-[70px]">{T("المرجع", "Ref")}</th>
-                    <th className="py-2 px-1.5 min-w-[80px]">{T("التاريخ", "Date")}</th>
-                    <th className="py-2 px-1.5 min-w-[100px] text-center">{T("المشروع", "Cost center")}</th>
-                    <th className="py-2 px-1.5 min-w-[120px]">{T("الوصف", "Description")}</th>
-                    <th className="py-2 px-1.5 w-24 text-end">{T("مدين", "Debit")}</th>
-                    <th className="py-2 px-1.5 w-24 text-end">{T("دائن", "Credit")}</th>
-                    <th className="py-2 px-1.5 w-20 text-end">{T("أجنبي", "Foreign")}</th>
-                    <th className="py-2 px-1.5 w-16">{T("الحالة", "Status")}</th>
-                    <th className="py-2 px-1.5 min-w-[180px]">{T("اسم الحساب", "Account name")}</th>
-                    <th className="py-2 px-1.5 min-w-[80px]">{T("رقم الحساب", "Account no.")}</th>
-                    <th className="py-2 px-1.5 w-14"></th>
+                    {displayColumnOrder.map((colId) => (
+                      <th
+                        key={colId}
+                        className={colId === "index" || colId === "cost_center" ? "py-2 px-1.5 text-center" : colId === "debit" || colId === "credit" || colId === "foreign" ? "py-2 px-1.5 text-end" : "py-2 px-1.5"}
+                        style={{ width: getColumnWidth(tableLayout, colId, !isFixedColumnId(colId)), minWidth: 40 }}
+                      >
+                        {getColumnLabel(colId)}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
                   {lines.map((line, idx) => (
-                    <tr key={idx} className="border-t border-white/5 hover:bg-white/[0.02]">
-                      <td className="py-1.5 px-1.5 text-center text-gray-500 font-mono">{idx + 1}</td>
-                      <td className="py-1.5 px-1.5">
-                        <input type="text" value={line.line_reference ?? ""} onChange={(e) => setLineField(idx, "line_reference", e.target.value)} placeholder="—"
-                          className="w-full bg-[#0e1117] border border-white/10 rounded px-1.5 py-1 text-[11px] text-white" />
-                      </td>
-                      <td className="py-1.5 px-1.5 text-gray-400">{entryDate}</td>
-                      <td className="py-1.5 px-1.5 text-center">
-                        <button type="button" onClick={() => { setDimPicker(null); setDimSearch(""); setDimPopoverLineIdx(dimPopoverLineIdx === idx ? null : idx); }}
-                          className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium ${line.cost_center_id ? "bg-amber-500/20 text-amber-400 border border-amber-500/30" : "bg-amber-500/10 text-amber-400 border border-amber-500/30"}`}>
-                          <Layers className="h-3 w-3" />
-                          {line.cost_center_id ? getCostCenterLabel(line.cost_center_id) : T("مشروع", "Project")}
-                        </button>
-                      </td>
-                      <td className="py-1.5 px-1.5">
-                        <input type="text" placeholder="—" className="w-full bg-[#0e1117] border border-white/10 rounded px-1.5 py-1 text-[11px] text-gray-400" readOnly />
-                      </td>
-                      <td className="py-1.5 px-1.5">
-                        <input type="number" min="0" step="any" placeholder="0.00" value={line.debit} onChange={(e) => { setLineField(idx, "debit", e.target.value); setLineField(idx, "credit", ""); }}
-                          className="w-full bg-[#0e1117] border border-white/15 rounded px-1.5 py-1 text-[11px] text-blue-400 text-end" />
-                      </td>
-                      <td className="py-1.5 px-1.5">
-                        <input type="number" min="0" step="any" placeholder="0.00" value={line.credit} onChange={(e) => { setLineField(idx, "credit", e.target.value); setLineField(idx, "debit", ""); }}
-                          className="w-full bg-[#0e1117] border border-white/15 rounded px-1.5 py-1 text-[11px] text-purple-400 text-end" />
-                      </td>
-                      <td className="py-1.5 px-1.5 text-gray-500">—</td>
-                      <td className="py-1.5 px-1.5 text-gray-500">عادي</td>
-                      <td className="py-1.5 px-1.5 relative">
-                        <input type="text" value={acSearch[idx] ?? (line.account_name ? `${line.account_code} — ${line.account_name}` : "")}
-                          onChange={(e) => { setAcSearch((p) => ({ ...p, [idx]: e.target.value })); setLineField(idx, "account_code", ""); setAcPicker(idx); }}
-                          onFocus={() => setAcPicker(idx)}
-                          placeholder={T("اسم الحساب...", "Account...")}
-                          className="w-full bg-[#0e1117] border border-white/15 rounded px-1.5 py-1 text-[11px] text-white placeholder-gray-500"
-                        />
-                        {acPicker === idx && (
-                          <div className="absolute top-full left-0 right-0 mt-1 z-40 min-w-[260px] bg-[#1e2533] border border-white/10 rounded-lg shadow-xl max-h-44 overflow-y-auto">
-                            {getFilteredAccounts(idx).map((a) => (
-                              <button key={a.id} type="button" className="w-full text-start px-2 py-1.5 hover:bg-white/5 text-[11px] border-b border-white/5 last:border-0"
-                                onClick={() => { setLineField(idx, "account_code", a.code); setLineField(idx, "account_name", a.name_ar); setAcSearch((p) => ({ ...p, [idx]: `${a.code} — ${a.name_ar}` })); setAcPicker(null); }}>
-                                <span className="font-mono text-amber-400/90 me-2">{a.code}</span>
-                                <span className="text-white">{a.name_ar}</span>
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </td>
-                      <td className="py-1.5 px-1.5 font-mono text-amber-400/90">{line.account_code || "—"}</td>
-                      <td className="py-1.5 px-1.5">
-                        <button type="button" onClick={() => removeLine(idx)} disabled={lines.length <= 2} className="p-1 rounded text-gray-500 hover:text-red-400 hover:bg-red-500/10 disabled:opacity-30">
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                      </td>
+                    <tr key={idx} className="border-t border-white/5 hover:bg-white/[0.02]" style={{ height: tableLayout.rowHeight }}>
+                      {displayColumnOrder.map((colId) => {
+                        const w = getColumnWidth(tableLayout, colId, !isFixedColumnId(colId));
+                        if (colId === "index") return <td key={colId} className="py-1.5 px-1.5 text-center text-gray-500 font-mono" style={{ width: w }}>{idx + 1}</td>;
+                        if (colId === "line_reference") return (
+                          <td key={colId} className="py-1.5 px-1.5" style={{ width: w }}>
+                            <input type="text" value={line.line_reference ?? ""} onChange={(e) => setLineField(idx, "line_reference", e.target.value)} placeholder="—" className="w-full bg-[#0e1117] border border-white/10 rounded px-1.5 py-1 text-[11px] text-white" />
+                          </td>
+                        );
+                        if (colId === "date") return (
+                          <td key={colId} className="py-1.5 px-1.5" style={{ width: w }}>
+                            <input type="date" value={line.line_date || entryDate} onChange={(e) => setLineField(idx, "line_date", e.target.value)} className="w-full bg-[#0e1117] border border-white/10 rounded px-1.5 py-1 text-[11px] text-white" />
+                          </td>
+                        );
+                        if (colId === "cost_center") return (
+                          <td key={colId} className="py-1.5 px-1.5 text-center" style={{ width: w }}>
+                            <button type="button" onClick={() => { setDimPicker(null); setDimSearch(""); setDimPopoverLineIdx(dimPopoverLineIdx === idx ? null : idx); }} className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium ${line.cost_center_id ? "bg-amber-500/20 text-amber-400 border border-amber-500/30" : "bg-amber-500/10 text-amber-400 border border-amber-500/30"}`}>
+                              <Layers className="h-3 w-3" /> {line.cost_center_id ? getCostCenterLabel(line.cost_center_id) : T("مشروع", "Project")}
+                            </button>
+                          </td>
+                        );
+                        if (colId === "description") return (
+                          <td key={colId} className="py-1.5 px-1.5" style={{ width: w }}>
+                            <input type="text" placeholder="—" className="w-full bg-[#0e1117] border border-white/10 rounded px-1.5 py-1 text-[11px] text-gray-400" readOnly />
+                          </td>
+                        );
+                        if (colId === "debit") return (
+                          <td key={colId} className="py-1.5 px-1.5" style={{ width: w }}>
+                            <input type="number" min="0" step="any" placeholder="0.00" value={line.debit} onChange={(e) => { setLineField(idx, "debit", e.target.value); setLineField(idx, "credit", ""); }} className="w-full bg-[#0e1117] border border-white/15 rounded px-1.5 py-1 text-[11px] text-blue-400 text-end" />
+                          </td>
+                        );
+                        if (colId === "credit") return (
+                          <td key={colId} className="py-1.5 px-1.5" style={{ width: w }}>
+                            <input type="number" min="0" step="any" placeholder="0.00" value={line.credit} onChange={(e) => { setLineField(idx, "credit", e.target.value); setLineField(idx, "debit", ""); }} className="w-full bg-[#0e1117] border border-white/15 rounded px-1.5 py-1 text-[11px] text-purple-400 text-end" />
+                          </td>
+                        );
+                        if (colId === "foreign") return <td key={colId} className="py-1.5 px-1.5 text-gray-500" style={{ width: w }}>—</td>;
+                        if (colId === "status") return <td key={colId} className="py-1.5 px-1.5 text-gray-500" style={{ width: w }}>عادي</td>;
+                        if (colId === "account_name") return (
+                          <td key={colId} className="py-1.5 px-1.5 relative" style={{ width: w }}>
+                            <input
+                              type="text"
+                              value={acSearch[idx] ?? (line.account_name ? `${line.account_code} — ${line.account_name}` : "")}
+                              onChange={(e) => { setAcSearch((p) => ({ ...p, [idx]: e.target.value })); setLineField(idx, "account_code", ""); setAcPicker(idx); }}
+                              onFocus={() => setAcPicker(idx)}
+                              placeholder={T("اسم الحساب...", "Account name...")}
+                              className="w-full bg-[#0e1117] border border-white/15 rounded px-1.5 py-1 text-[11px] text-white placeholder-gray-500"
+                            />
+                            {acPicker === idx && (
+                              <div className="absolute top-full start-0 mt-1 z-40 min-w-[280px] max-w-[320px] bg-[#1e2533] border border-white/15 rounded-xl shadow-xl overflow-hidden">
+                                <div className="p-2 border-b border-white/10 bg-[#0e1117]/80">
+                                  <label className="block text-[10px] text-gray-500 mb-1">{T("بحث بالاسم أو رقم الحساب", "Search by name or account number")}</label>
+                                  <input
+                                    type="text"
+                                    value={acSearch[idx] ?? ""}
+                                    onChange={(e) => setAcSearch((p) => ({ ...p, [idx]: e.target.value }))}
+                                    placeholder={T("اسم الحساب أو الرقم...", "Name or number...")}
+                                    className="w-full bg-[#161b27] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white placeholder-gray-500"
+                                    autoFocus
+                                  />
+                                </div>
+                                <div className="max-h-52 overflow-y-auto">
+                                  {getFilteredAccounts(idx).length === 0 ? (
+                                    <div className="px-3 py-4 text-center text-[11px] text-gray-500">{T("لا توجد نتائج", "No results")}</div>
+                                  ) : (
+                                    getFilteredAccounts(idx).map((a) => (
+                                      <button
+                                        key={a.id}
+                                        type="button"
+                                        className="w-full text-start px-3 py-2 hover:bg-amber-500/10 border-b border-white/5 text-[11px] flex items-baseline gap-2"
+                                        onClick={() => { setLineField(idx, "account_code", a.code); setLineField(idx, "account_name", a.name_ar); setAcSearch((p) => ({ ...p, [idx]: `${a.code} — ${a.name_ar}` })); setAcPicker(null); }}
+                                      >
+                                        <span className="font-mono text-amber-400/90 shrink-0 w-20">{a.code}</span>
+                                        <span className="text-white truncate">{a.name_ar}</span>
+                                      </button>
+                                    ))
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </td>
+                        );
+                        if (colId === "account_code") return (
+                          <td key={colId} className="py-1.5 px-1.5 relative" style={{ width: w }}>
+                            <input
+                              type="text"
+                              value={line.account_code}
+                              onChange={(e) => { setLineField(idx, "account_code", e.target.value); setAcSearch((p) => ({ ...p, [idx]: e.target.value })); setAcPicker(idx); }}
+                              onFocus={() => { setAcPicker(idx); setAcSearch((p) => ({ ...p, [idx]: line.account_code || (acSearch[idx] ?? "") })); }}
+                              placeholder={T("رقم الحساب...", "Account no...")}
+                              className="w-full bg-[#0e1117] border border-white/15 rounded px-1.5 py-1 text-[11px] font-mono text-amber-400/90 placeholder-gray-500"
+                            />
+                            {acPicker === idx && (
+                              <div className="absolute top-full start-0 mt-1 z-40 min-w-[280px] max-w-[320px] bg-[#1e2533] border border-white/15 rounded-xl shadow-xl overflow-hidden">
+                                <div className="p-2 border-b border-white/10 bg-[#0e1117]/80">
+                                  <label className="block text-[10px] text-gray-500 mb-1">{T("بحث بالاسم أو رقم الحساب", "Search by name or account number")}</label>
+                                  <input
+                                    type="text"
+                                    value={acSearch[idx] ?? ""}
+                                    onChange={(e) => setAcSearch((p) => ({ ...p, [idx]: e.target.value }))}
+                                    placeholder={T("اسم الحساب أو الرقم...", "Name or number...")}
+                                    className="w-full bg-[#161b27] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white placeholder-gray-500"
+                                    autoFocus
+                                  />
+                                </div>
+                                <div className="max-h-52 overflow-y-auto">
+                                  {getFilteredAccounts(idx).length === 0 ? (
+                                    <div className="px-3 py-4 text-center text-[11px] text-gray-500">{T("لا توجد نتائج", "No results")}</div>
+                                  ) : (
+                                    getFilteredAccounts(idx).map((a) => (
+                                      <button
+                                        key={a.id}
+                                        type="button"
+                                        className="w-full text-start px-3 py-2 hover:bg-amber-500/10 border-b border-white/5 text-[11px] flex items-baseline gap-2"
+                                        onClick={() => { setLineField(idx, "account_code", a.code); setLineField(idx, "account_name", a.name_ar); setAcSearch((p) => ({ ...p, [idx]: `${a.code} — ${a.name_ar}` })); setAcPicker(null); }}
+                                      >
+                                        <span className="font-mono text-amber-400/90 shrink-0 w-20">{a.code}</span>
+                                        <span className="text-white truncate">{a.name_ar}</span>
+                                      </button>
+                                    ))
+                                  )}
+                                </div>
+                              </div>
+                            )}
+                          </td>
+                        );
+                        if (colId === "actions") return (
+                          <td key={colId} className="py-1.5 px-1.5" style={{ width: w }}>
+                            <button type="button" onClick={() => removeLine(idx)} disabled={lines.length <= 2} className="p-1 rounded text-gray-500 hover:text-red-400 hover:bg-red-500/10 disabled:opacity-30"><Trash2 className="h-3.5 w-3.5" /></button>
+                          </td>
+                        );
+                        const customCol = schemaColumns.find((c) => c.name === colId);
+                        if (customCol) return (
+                          <td key={colId} className="py-1.5 px-1.5" style={{ width: w }}>
+                            {customCol.field_type === "date" && <input type="date" value={(line.metadata?.[colId] as string) ?? ""} onChange={(e) => setLineMetadata(idx, colId, e.target.value)} className="w-full bg-[#0e1117] border border-white/10 rounded px-1.5 py-1 text-[11px] text-white" />}
+                            {customCol.field_type === "number" && <input type="number" step="any" value={(line.metadata?.[colId] as string) ?? ""} onChange={(e) => setLineMetadata(idx, colId, e.target.value)} className="w-full bg-[#0e1117] border border-white/10 rounded px-1.5 py-1 text-[11px] text-white text-end" />}
+                            {(customCol.field_type === "text" || !customCol.field_type) && <input type="text" value={(line.metadata?.[colId] as string) ?? ""} onChange={(e) => setLineMetadata(idx, colId, e.target.value)} placeholder="—" className="w-full bg-[#0e1117] border border-white/10 rounded px-1.5 py-1 text-[11px] text-white" />}
+                          </td>
+                        );
+                        return <td key={colId} className="py-1.5 px-1.5 text-gray-500" style={{ width: w }}>—</td>;
+                      })}
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-white/10 bg-[#1e2533]/50 text-[11px] font-semibold">
-                    <td className="py-2 px-1.5" colSpan={5}></td>
-                    <td className="py-2 px-1.5 text-end text-blue-400 font-mono">{totalDebit.toFixed(2)}</td>
-                    <td className="py-2 px-1.5 text-end text-purple-400 font-mono">{totalCredit.toFixed(2)}</td>
-                    <td colSpan={4}></td>
+                    {displayColumnOrder.map((colId) => {
+                      if (colId === "debit") return <td key={colId} className="py-2 px-1.5 text-end text-blue-400 font-mono" style={{ width: getColumnWidth(tableLayout, colId, false) }}>{totalDebit.toFixed(2)}</td>;
+                      if (colId === "credit") return <td key={colId} className="py-2 px-1.5 text-end text-purple-400 font-mono" style={{ width: getColumnWidth(tableLayout, colId, false) }}>{totalCredit.toFixed(2)}</td>;
+                      return <td key={colId} className="py-2 px-1.5" style={{ width: getColumnWidth(tableLayout, colId, !isFixedColumnId(colId)) }}></td>;
+                    })}
                   </tr>
                 </tfoot>
               </table>
@@ -740,6 +901,9 @@ export default function JournalEntryPage() {
                               <th className="px-3 py-2.5 text-start font-medium">{T("الحساب", "Account")}</th>
                               <th className="px-3 py-2.5 text-end font-medium">{T("مدين", "Debit")}</th>
                               <th className="px-3 py-2.5 text-end font-medium">{T("دائن", "Credit")}</th>
+                              {schemaColumns.map((col) => (
+                                <th key={col.name} className="px-3 py-2.5 text-start font-medium">{col.label}</th>
+                              ))}
                               <th className="px-3 py-2.5 text-start font-medium">{T("الفرع", "Branch")}</th>
                               <th className="px-3 py-2.5 text-start font-medium">{T("العلامة", "Brand")}</th>
                               <th className="px-3 py-2.5 text-start font-medium">{T("مركز التكلفة", "Cost Center")}</th>
@@ -760,6 +924,11 @@ export default function JournalEntryPage() {
                                 <td className="px-3 py-2 text-end text-purple-400 font-mono">
                                   {parseFloat(line.credit) > 0 ? fmt(line.credit) : "—"}
                                 </td>
+                                {schemaColumns.map((col) => (
+                                  <td key={col.name} className="px-3 py-2 text-gray-400">
+                                    {line.metadata?.[col.name] != null ? String(line.metadata[col.name]) : "—"}
+                                  </td>
+                                ))}
                                 <td className="px-3 py-2 text-gray-400">{line.branch_name ?? "—"}</td>
                                 <td className="px-3 py-2 text-gray-400">{line.brand_name ?? "—"}</td>
                                 <td className="px-3 py-2 text-gray-400">{line.cost_center_name ?? "—"}</td>

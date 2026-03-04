@@ -1,14 +1,24 @@
 /**
  * كشف حساب — Account Statement
- * يعرض حركات حساب معين مع رصيد تراكمي.
+ * يعرض حركات حساب معين مع رصيد تراكمي. يدعم تصميم القالب (ترتيب وعرض الأعمدة).
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import {
   BookOpen, RefreshCw, AlertCircle, Download, Printer,
-  Search, TrendingUp, TrendingDown, Filter,
+  Search,
 } from "lucide-react";
 import { fetchWithCsrf } from "../../lib/api";
+import TemplateLayoutToolbar from "../../components/TemplateLayoutToolbar";
+import {
+  loadLayout,
+  getDisplayColumnOrder,
+  getColumnWidth,
+  getColumnLabel,
+  type TemplateLayout,
+} from "../../config/templateTableConfig";
+
+const TEMPLATE_KEY = "account_statement";
 
 /* ─── types ────────────────────────────────────────────────────────────── */
 interface Transaction {
@@ -87,6 +97,12 @@ export default function AccountStatementPage() {
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState<string | null>(null);
 
+  const [tableLayout, setTableLayout] = useState<TemplateLayout | null>(() => loadLayout(TEMPLATE_KEY));
+  const displayColumnOrder = useMemo(
+    () => getDisplayColumnOrder(TEMPLATE_KEY, tableLayout, []),
+    [tableLayout]
+  );
+
   /* load chart accounts for autocomplete */
   useEffect(() => {
     fetchAccounts().then((r) => setAccounts(Array.isArray(r) ? r : [])).catch(() => setAccounts([]));
@@ -155,6 +171,14 @@ export default function AccountStatementPage() {
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap no-print">
+            {data && (
+              <TemplateLayoutToolbar
+                templateKey={TEMPLATE_KEY}
+                onLayoutChange={(l) => setTableLayout(l)}
+                isRTL={isRTL}
+                T={T}
+              />
+            )}
             {data && (
               <button onClick={exportCSV} className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-[#161b27] border border-white/10 text-sm text-gray-400 hover:text-white transition-colors">
                 <Download className="h-4 w-4" /> {T("تصدير", "Export")}
@@ -261,57 +285,56 @@ export default function AccountStatementPage() {
           ) : (
             <div className="bg-[#161b27] border border-white/10 rounded-xl overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full text-sm" style={{ minWidth: 700 }}>
+                <table className="w-full text-sm table-fixed" style={{ minWidth: 700 }}>
                   <thead>
                     <tr className="bg-[#1e2533] text-xs text-gray-400 uppercase tracking-wide">
-                      <th className="px-4 py-3 text-start w-28">{T("التاريخ", "Date")}</th>
-                      <th className="px-4 py-3 text-start">{T("البيان", "Description")}</th>
-                      <th className="px-4 py-3 text-center hidden md:table-cell">{T("المصدر", "Source")}</th>
-                      <th className="px-4 py-3 text-center hidden md:table-cell">{T("الفرع", "Branch")}</th>
-                      <th className="px-4 py-3 text-end">{T("مدين", "Debit")}</th>
-                      <th className="px-4 py-3 text-end">{T("دائن", "Credit")}</th>
-                      <th className="px-4 py-3 text-end">{T("الرصيد", "Balance")}</th>
+                      {displayColumnOrder.map((colId) => (
+                        <th
+                          key={colId}
+                          className={`px-4 py-3 ${colId === "debit" || colId === "credit" || colId === "balance" ? "text-end" : colId === "source" || colId === "branch" ? "text-center hidden md:table-cell" : "text-start"}`}
+                          style={{ width: getColumnWidth(TEMPLATE_KEY, tableLayout, colId, false), minWidth: 60 }}
+                        >
+                          {getColumnLabel(TEMPLATE_KEY, colId, undefined, isRTL)}
+                        </th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
                     {(Array.isArray(data?.transactions) ? data.transactions : []).map((tx) => (
-                      <tr key={tx.id} className="border-t border-white/5 hover:bg-white/5 transition-colors">
-                        <td className="px-4 py-2.5 font-mono text-xs text-gray-400">{tx.date}</td>
-                        <td className="px-4 py-2.5 text-white text-sm">{tx.description}</td>
-                        <td className="px-4 py-2.5 text-center hidden md:table-cell">
-                          <span className="text-xs bg-[#1e2533] text-gray-400 px-2 py-0.5 rounded">
-                            {SOURCE_LABELS[tx.source_type] || tx.source_type}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2.5 text-center text-xs text-gray-400 hidden md:table-cell">{tx.branch || "—"}</td>
-                        <td className="px-4 py-2.5 text-end font-mono">
-                          {parseFloat(tx.debit) > 0
-                            ? <span className="text-blue-400">{fmt(tx.debit)}</span>
-                            : <span className="text-gray-600">—</span>}
-                        </td>
-                        <td className="px-4 py-2.5 text-end font-mono">
-                          {parseFloat(tx.credit) > 0
-                            ? <span className="text-purple-400">{fmt(tx.credit)}</span>
-                            : <span className="text-gray-600">—</span>}
-                        </td>
-                        <td className="px-4 py-2.5 text-end font-mono">
-                          <span className={parseFloat(tx.balance) >= 0 ? "text-emerald-400" : "text-red-400"}>
-                            {fmt(tx.balance)}
-                          </span>
-                        </td>
+                      <tr key={tx.id} className="border-t border-white/5 hover:bg-white/5 transition-colors" style={{ height: tableLayout?.rowHeight ? `${tableLayout.rowHeight}px` : undefined }}>
+                        {displayColumnOrder.map((colId) => {
+                          const w = getColumnWidth(TEMPLATE_KEY, tableLayout, colId, false);
+                          if (colId === "date") return <td key={colId} className="px-4 py-2.5 font-mono text-xs text-gray-400" style={{ width: w }}>{tx.date}</td>;
+                          if (colId === "description") return <td key={colId} className="px-4 py-2.5 text-white text-sm" style={{ width: w }}>{tx.description}</td>;
+                          if (colId === "source") return <td key={colId} className="px-4 py-2.5 text-center hidden md:table-cell" style={{ width: w }}><span className="text-xs bg-[#1e2533] text-gray-400 px-2 py-0.5 rounded">{SOURCE_LABELS[tx.source_type] || tx.source_type}</span></td>;
+                          if (colId === "branch") return <td key={colId} className="px-4 py-2.5 text-center text-xs text-gray-400 hidden md:table-cell" style={{ width: w }}>{tx.branch || "—"}</td>;
+                          if (colId === "debit") return <td key={colId} className="px-4 py-2.5 text-end font-mono" style={{ width: w }}>{parseFloat(tx.debit) > 0 ? <span className="text-blue-400">{fmt(tx.debit)}</span> : <span className="text-gray-600">—</span>}</td>;
+                          if (colId === "credit") return <td key={colId} className="px-4 py-2.5 text-end font-mono" style={{ width: w }}>{parseFloat(tx.credit) > 0 ? <span className="text-purple-400">{fmt(tx.credit)}</span> : <span className="text-gray-600">—</span>}</td>;
+                          if (colId === "balance") return <td key={colId} className="px-4 py-2.5 text-end font-mono" style={{ width: w }}><span className={parseFloat(tx.balance) >= 0 ? "text-emerald-400" : "text-red-400"}>{fmt(tx.balance)}</span></td>;
+                          return <td key={colId} style={{ width: w }}>—</td>;
+                        })}
                       </tr>
                     ))}
                   </tbody>
                   <tfoot>
-                    <tr className="bg-[#1e2533] border-t-2 border-white/20 font-bold text-sm">
-                      <td colSpan={4} className="px-4 py-3 text-gray-300">{T("الإجمالي", "Total")}</td>
-                      <td className="px-4 py-3 text-end text-blue-400 font-mono">{fmt(data.total_debit)}</td>
-                      <td className="px-4 py-3 text-end text-purple-400 font-mono">{fmt(data.total_credit)}</td>
-                      <td className="px-4 py-3 text-end">
-                        <span className={parseFloat(data.closing_balance) >= 0 ? "text-emerald-400" : "text-red-400"}>
-                          {fmt(data.closing_balance)}
-                        </span>
-                      </td>
+                    <tr className="bg-[#1e2533] border-t-2 border-white/20 font-bold text-sm" style={{ height: tableLayout?.rowHeight ? `${tableLayout.rowHeight}px` : undefined }}>
+                      {(() => {
+                        const idxDebit = displayColumnOrder.indexOf("debit");
+                        const labelSpan = idxDebit >= 0 ? idxDebit : displayColumnOrder.length;
+                        const rest = displayColumnOrder.slice(labelSpan);
+                        return (
+                          <>
+                            <td colSpan={labelSpan} className="px-4 py-3 text-gray-300">{T("الإجمالي", "Total")}</td>
+                            {rest.map((colId) => {
+                              const w = getColumnWidth(TEMPLATE_KEY, tableLayout, colId, false);
+                              if (colId === "debit") return <td key={colId} className="px-4 py-3 text-end text-blue-400 font-mono" style={{ width: w }}>{fmt(data.total_debit)}</td>;
+                              if (colId === "credit") return <td key={colId} className="px-4 py-3 text-end text-purple-400 font-mono" style={{ width: w }}>{fmt(data.total_credit)}</td>;
+                              if (colId === "balance") return <td key={colId} className="px-4 py-3 text-end" style={{ width: w }}><span className={parseFloat(data.closing_balance) >= 0 ? "text-emerald-400" : "text-red-400"}>{fmt(data.closing_balance)}</span></td>;
+                              return <td key={colId} style={{ width: w }} />;
+                            })}
+                          </>
+                        );
+                      })()}
                     </tr>
                   </tfoot>
                 </table>

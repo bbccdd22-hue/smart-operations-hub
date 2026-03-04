@@ -29,6 +29,7 @@ urlpatterns = [
     path("trial-balance/", views.TrialBalanceView.as_view()),
     path("account-statement/", views.AccountStatementView.as_view()),
     path("journal-entries/", views.JournalEntryListCreateView.as_view()),
+    path("journal-entries/schema/", views.JournalEntrySchemaView.as_view()),
     path("journal-entries/<int:pk>/", views.JournalEntryDetailView.as_view()),
     path("cost-centers/", views.CostCenterListView.as_view()),
 ]

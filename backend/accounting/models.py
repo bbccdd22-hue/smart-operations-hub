@@ -377,6 +377,12 @@ class JournalEntryLine(TimestampedModel):
         db_index=True,
         help_text="معرف المستند (رقم فاتورة، رقم استلام، إلخ)",
     )
+    # Dynamic metadata for multi-invoice / custom columns (Design Robot)
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="حقول مخصصة: purchase_date, invoice_ref, vendor_name, إلخ",
+    )
 
     class Meta:
         ordering = ["id"]
@@ -389,3 +395,35 @@ class JournalEntryLine(TimestampedModel):
             models.Index(fields=["employee", "journal_entry"], name="jel_emp_je_idx"),
             models.Index(fields=["reference_type", "reference_id"], name="jel_ref_type_id_idx"),
         ]
+
+
+class JournalEntryCustomColumn(TimestampedModel):
+    """
+    Design Robot: custom column definition for Journal Entry lines.
+    Values are stored in JournalEntryLine.metadata[key].
+    """
+    FIELD_TYPE_CHOICES = [
+        ("text", "Text"),
+        ("number", "Number"),
+        ("date", "Date"),
+    ]
+    name = models.CharField(
+        max_length=64,
+        unique=True,
+        db_index=True,
+        help_text="Internal key (e.g. purchase_date, invoice_ref, vendor_name)",
+    )
+    label = models.CharField(max_length=128, help_text="Display label (e.g. Maintenance Date)")
+    field_type = models.CharField(
+        max_length=16,
+        choices=FIELD_TYPE_CHOICES,
+        default="text",
+        db_index=True,
+    )
+    order = models.PositiveSmallIntegerField(default=0, help_text="Display order")
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["order", "name"]
+        verbose_name = "Journal Entry Custom Column"
+        verbose_name_plural = "Journal Entry Custom Columns"
