@@ -78,6 +78,7 @@ INSTALLED_APPS = [
     "onboarding",
     "zatca",
     "payments",
+    "customizer",
 ]
 
 
@@ -192,6 +193,18 @@ else:
     CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_origins.split(",") if o.strip()]
 
 CORS_ALLOW_CREDENTIALS = True
+# Allow frontend custom header so preflight succeeds (لوحة المالك / executive dashboard)
+CORS_ALLOW_HEADERS = [
+    "accept",
+    "accept-encoding",
+    "accept-language",
+    "authorization",
+    "content-type",
+    "origin",
+    "x-csrftoken",
+    "x-requested-with",
+    "x-network-id",
+]
 
 # Dev convenience: keep local origins as fallback even in debug=true
 CORS_ALLOWED_ORIGINS_DEV = [

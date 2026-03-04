@@ -2,7 +2,7 @@
  * لوحة تحكم المالك النهائية – Executive Dashboard
  * صافي الربح، تنبيهات الأمان، تقارير تحليلية
  */
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { format, subDays } from "date-fns";
@@ -19,14 +19,21 @@ import {
   ResponsiveContainer,
   Legend,
   CartesianGrid,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
 } from "recharts";
 import { useAuth } from "../contexts/AuthContext";
 import { useTheme } from "../contexts/ThemeContext";
 import {
   fetchExecutiveDashboard,
+  fetchExecutiveSummary,
   fetchBrands,
   fetchBranches,
   type ExecutiveDashboardData,
+  type ExecutiveSummaryData,
   type Brand,
   type Branch,
 } from "../lib/api";
@@ -49,10 +56,15 @@ export default function ExecutiveDashboardPage() {
     !!user?.permissions?.perm_full_system_access;
 
   const [data, setData] = useState<ExecutiveDashboardData | null>(null);
+  const [summary, setSummary] = useState<ExecutiveSummaryData | null>(null);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const retryCountRef = useRef(0);
+  const loadingRef = useRef(false);
+  const initialLoadDoneRef = useRef(false);
+  const MAX_AUTO_RETRIES = 20;
 
   const defaultTo = new Date();
   const defaultFrom = subDays(defaultTo, 30);
@@ -63,22 +75,33 @@ export default function ExecutiveDashboardPage() {
   const [filterBranch, setFilterBranch] = useState<number | "">("");
 
   const loadData = useCallback(async () => {
+    if (loadingRef.current) return;
+    loadingRef.current = true;
     setLoading(true);
-    setError(null);
+    const params = {
+      date_from: dateFrom,
+      date_to: dateTo,
+      from_date: dateFrom,
+      to_date: dateTo,
+      ...(filterBrand && { brand: filterBrand }),
+      ...(filterBranch !== "" && { branch_id: filterBranch }),
+    };
     try {
-      const params: Parameters<typeof fetchExecutiveDashboard>[0] = {
-        date_from: dateFrom,
-        date_to: dateTo,
-      };
-      if (filterBrand) params.brand = filterBrand;
-      if (filterBranch !== "") params.branch_id = filterBranch;
-      const res = await fetchExecutiveDashboard(params);
+      const [res, sum] = await Promise.all([
+        fetchExecutiveDashboard(params),
+        fetchExecutiveSummary(params),
+      ]);
       setData(res);
+      setSummary(sum);
+      setError(null);
+      retryCountRef.current = 0;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed");
       setData(null);
+      setSummary(null);
     } finally {
       setLoading(false);
+      loadingRef.current = false;
     }
   }, [dateFrom, dateTo, filterBrand, filterBranch]);
 
@@ -106,10 +129,23 @@ export default function ExecutiveDashboardPage() {
     setFilterBranch("");
   }, [filterBrand]);
 
+  /** تحميل أولي مرة واحدة عند الدخول؛ بعدها يتم التحميل فقط عند النقر على «ابحث» أو «تحديث» */
   useEffect(() => {
-    if (!user || !canAccess) return;
+    if (!user || !canAccess || initialLoadDoneRef.current) return;
+    initialLoadDoneRef.current = true;
     loadData();
   }, [loadData, user, canAccess]);
+
+  /** Auto-Reconnect: retry every 5s when error, no overlap, stop after MAX_AUTO_RETRIES */
+  useEffect(() => {
+    if (!user || !canAccess || !error) return;
+    const id = setInterval(() => {
+      if (loadingRef.current || retryCountRef.current >= MAX_AUTO_RETRIES) return;
+      retryCountRef.current += 1;
+      loadData();
+    }, 5000);
+    return () => clearInterval(id);
+  }, [error, user, canAccess, loadData]);
 
   if (!user || !canAccess) return null;
 
@@ -130,21 +166,26 @@ export default function ExecutiveDashboardPage() {
       className={`min-h-screen px-4 py-6 ${dark ? "bg-slate-900/95 text-white" : "bg-slate-50 text-slate-900"}`}
     >
       <div className="mx-auto max-w-7xl">
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <Link
-              to="/admin-hub"
-              className={`text-sm ${dark ? "text-white/60 hover:text-white" : "text-slate-500 hover:text-slate-900"}`}
-            >
-              ← {t("adminDashboard")}
-            </Link>
-            <h1 className="mt-1 text-2xl font-bold">
-              {t("executiveDashboard") ?? "لوحة تحكم المالك"}
-            </h1>
-            <p className={`mt-0.5 text-sm ${dark ? "text-white/50" : "text-slate-500"}`}>
-              {t("executiveDashboardDesc") ?? "صافي الربح، تنبيهات، تقارير تحليلية"}
-            </p>
-          </div>
+        <div className="mb-4">
+          <Link
+            to="/admin-hub"
+            className={`text-sm ${dark ? "text-white/60 hover:text-white" : "text-slate-500 hover:text-slate-900"}`}
+          >
+            ← {t("adminDashboard")}
+          </Link>
+          <h1 className="mt-1 text-2xl font-bold">
+            {t("executiveDashboard") ?? "لوحة تحكم المالك"}
+          </h1>
+          <p className={`mt-0.5 text-sm ${dark ? "text-white/50" : "text-slate-500"}`}>
+            {t("executiveDashboardDesc") ?? "صافي الربح، تنبيهات، تقارير تحليلية"}
+          </p>
+        </div>
+
+        {/* منطقة الفلاتر + زر ابحث */}
+        <div className={`mb-8 rounded-2xl border p-4 ${dark ? "border-white/15 bg-white/5" : "border-slate-200 bg-slate-100/60"}`}>
+          <p className={`mb-3 text-sm font-medium ${dark ? "text-white/70" : "text-slate-600"}`}>
+            {t("filters") ?? "الفلاتر"} — {t("searchFiltersHint") ?? "اختر الفترة والعلامة والفرع ثم اضغط ابحث"}
+          </p>
           <div className="flex flex-wrap items-center gap-3">
             <UltimateDateRangePicker value={dateRange} onChange={setDateRange} triggerDark={dark} />
             <UnifiedFilterSelect
@@ -172,26 +213,172 @@ export default function ExecutiveDashboardPage() {
               type="button"
               onClick={loadData}
               disabled={loading}
-              className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
+              className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-50"
+              title={t("search") ?? "ابحث"}
             >
-              {loading ? "..." : t("refreshData") ?? "تحديث"}
+              {loading ? "..." : (t("search") ?? "ابحث")}
+            </button>
+            <button
+              type="button"
+              onClick={loadData}
+              disabled={loading}
+              className={`rounded-xl border px-4 py-2.5 text-sm font-medium ${dark ? "border-white/30 bg-white/10 hover:bg-white/15" : "border-slate-300 bg-white hover:bg-slate-50"} disabled:opacity-50`}
+            >
+              {t("refreshData") ?? "تحديث البيانات"}
             </button>
           </div>
         </div>
 
         {error && (
-          <div className="mb-4 rounded-xl border border-rose-500/50 bg-rose-500/10 px-4 py-3 text-rose-700 dark:text-rose-300">
-            {error}
+          <div className="mb-4 flex flex-col gap-3 rounded-xl border border-rose-500/50 bg-rose-500/10 px-4 py-3 text-rose-700 dark:text-rose-300">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <span>{error}</span>
+              <div className="flex items-center gap-2">
+                <span className="text-xs opacity-80">{t("autoReconnect") ?? "إعادة الاتصال تلقائياً كل 3 ثوانٍ"}</span>
+                <button
+                  type="button"
+                  onClick={() => { retryCountRef.current = 0; setError(null); loadData(); }}
+                  disabled={loading}
+                  className="rounded-lg border border-rose-500/50 bg-rose-500/20 px-4 py-2 text-sm font-medium hover:bg-rose-500/30 disabled:opacity-50"
+                >
+                  {t("retry") ?? "إعادة المحاولة"}
+                </button>
+              </div>
+            </div>
+            <p className="text-xs opacity-90">
+              {t("executiveSummary404Hint") ?? "إذا استمر الخطأ: أغلق نوافذ Backend و Frontend ثم شغّل من مجلد المشروع الملف start_all_auto.bat — سيُعيد تشغيل السيرفرات ويصلح 404."}
+            </p>
           </div>
         )}
 
-        {loading && !data ? (
+        {loading && !data && !summary ? (
           <div className="flex min-h-[40vh] items-center justify-center">
             <div className="h-12 w-12 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
           </div>
-        ) : data ? (
-          <div className="space-y-6">
-            {/* KPI: متوسط صافي الربح */}
+        ) : (data || summary) ? (
+          <div className="space-y-8">
+            {/* 4 Key metrics from Executive Summary API */}
+            {summary && (
+              <>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <KPICard
+                    label={t("revenue") ?? "الإيرادات"}
+                    value={Number(summary.total_revenue)}
+                    formatter={(n) => sar(n)}
+                    delay={0}
+                  />
+                  <KPICard
+                    label={t("cogs") ?? "تكلفة المبيعات"}
+                    value={Number(summary.total_cogs)}
+                    formatter={(n) => sar(n)}
+                    delay={50}
+                  />
+                  <KPICard
+                    label={t("grossProfit") ?? "الربح الإجمالي"}
+                    value={Number(summary.gross_profit)}
+                    formatter={(n) => sar(n)}
+                    delay={100}
+                  />
+                  <KPICard
+                    label={t("netMargin") ?? "صافي الهامش %"}
+                    value={summary.net_margin_pct}
+                    formatter={(n) => `${Number(n).toFixed(1)}%`}
+                    delay={150}
+                  />
+                </div>
+
+                {/* Bar: Sales vs Expenses by Branch */}
+                {summary.by_branch?.length > 0 && (
+                  <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/50 dark:border-white/10 dark:bg-white/5">
+                    <h2 className="border-b border-slate-200 px-4 py-3 text-lg font-semibold dark:border-white/10">
+                      {t("salesVsExpensesByBranch") ?? "المبيعات vs المصروفات حسب الفرع"}
+                    </h2>
+                    <div className="h-80 min-h-[320px] w-full p-4">
+                      <ResponsiveContainer width="100%" height="100%" minWidth={380} minHeight={300}>
+                        <BarChart
+                          data={summary.by_branch}
+                          margin={{ top: 12, right: 24, left: 12, bottom: 12 }}
+                          layout="vertical"
+                        >
+                          <CartesianGrid
+                            strokeDasharray="3 3"
+                            stroke={dark ? "rgba(255,255,255,0.1)" : "rgba(148,163,184,0.3)"}
+                          />
+                          <XAxis type="number" stroke={dark ? "#94a3b8" : "#64748b"} fontSize={11} tickFormatter={(v) => (v >= 1000 ? `${v / 1000}k` : String(v))} />
+                          <YAxis type="category" dataKey="branch_name" width={160} tick={{ fontSize: 12 }} stroke={dark ? "#94a3b8" : "#64748b"} />
+                          <Tooltip
+                            contentStyle={{
+                              borderRadius: 12,
+                              border: dark ? "1px solid rgba(255,255,255,0.2)" : "1px solid rgba(148,163,184,0.3)",
+                              background: dark ? "rgba(15,23,42,0.95)" : "rgba(255,255,255,0.98)",
+                              color: dark ? "#f1f5f9" : "#1e293b",
+                            }}
+                            formatter={(v: number) => [sar(v), ""]}
+                            labelFormatter={(l) => l}
+                          />
+                          <Legend />
+                          <Bar
+                            dataKey="sales"
+                            name={t("sales") ?? "المبيعات"}
+                            fill="#34d399"
+                            radius={[0, 4, 4, 0]}
+                            onClick={(payload: unknown) => {
+                              const row = payload as { branch_id?: number };
+                              if (row?.branch_id != null) {
+                                navigate(`/analytics/sales-summary?from_date=${encodeURIComponent(dateFrom)}&to_date=${encodeURIComponent(dateTo)}&branch_id=${row.branch_id}`);
+                              }
+                            }}
+                            cursor="pointer"
+                          />
+                          <Bar dataKey="expenses" name={t("expenses") ?? "المصروفات"} fill="#f87171" radius={[0, 4, 4, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )}
+
+                {/* Pie: Sales by Product Category */}
+                {summary.by_category?.length > 0 && (
+                  <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/50 dark:border-white/10 dark:bg-white/5">
+                    <h2 className="border-b border-slate-200 px-4 py-3 text-lg font-semibold dark:border-white/10">
+                      {t("salesByCategory") ?? "توزيع المبيعات حسب الفئة"}
+                    </h2>
+                    <div className="h-80 min-h-[300px] w-full p-4">
+                      <ResponsiveContainer width="100%" height="100%" minWidth={300} minHeight={280}>
+                        <PieChart>
+                          <Pie
+                            data={summary.by_category}
+                            dataKey="sales"
+                            nameKey="category"
+                            cx="50%"
+                            cy="50%"
+                            outerRadius="70%"
+                            label={({ category, percent }) => `${category?.slice(0, 12) ?? ""} ${(percent * 100).toFixed(0)}%`}
+                            onClick={(payload: unknown) => {
+                              const row = payload as { category?: string };
+                              if (row?.category != null) {
+                                navigate(`/products?search=${encodeURIComponent(row.category)}`);
+                              }
+                            }}
+                            cursor="pointer"
+                          >
+                            {summary.by_category.map((_, i) => (
+                              <Cell key={i} fill={["#34d399", "#60a5fa", "#a78bfa", "#f472b6", "#fbbf24", "#22d3ee"][i % 6]} />
+                            ))}
+                          </Pie>
+                          <Tooltip formatter={(v: number) => [sar(v), ""]} />
+                          <Legend />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* KPI: متوسط صافي الربح (existing) */}
+            {data && (
+            <>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <KPICard
                 label={t("avgNetProfit") ?? "متوسط صافي الربح اليومي"}
@@ -221,8 +408,8 @@ export default function ExecutiveDashboardPage() {
               <h2 className="border-b border-slate-200 px-4 py-3 text-lg font-semibold dark:border-white/10">
                 {t("netProfitChart") ?? "صافي الربح (مبيعات - تكاليف - رواتب - إهلاك)"}
               </h2>
-              <div className="h-72 p-4">
-                <ResponsiveContainer width="100%" height="100%">
+              <div className="h-80 min-h-[320px] w-full p-4">
+                <ResponsiveContainer width="100%" height="100%" minWidth={380} minHeight={300}>
                   <LineChart data={data.net_profit_series} margin={{ top: 8, right: 16, left: 8, bottom: 8 }}>
                     <CartesianGrid
                       strokeDasharray="3 3"
@@ -325,9 +512,9 @@ export default function ExecutiveDashboardPage() {
               </div>
             </div>
 
-            {/* جداول تحليلية */}
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/50 dark:border-white/10 dark:bg-white/5">
+            {/* جداول تحليلية — مسافات أوضح لمنع التداخل */}
+            <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
+              <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/50 dark:border-white/10 dark:bg-white/5">
                 <h2 className="border-b border-slate-200 px-4 py-3 text-lg font-semibold dark:border-white/10">
                   {t("topProfitableProducts") ?? "أكثر المنتجات ربحية"}
                 </h2>
@@ -358,7 +545,7 @@ export default function ExecutiveDashboardPage() {
                   )}
                 </div>
               </div>
-              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/50 dark:border-white/10 dark:bg-white/5">
+              <div className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/50 dark:border-white/10 dark:bg-white/5">
                 <h2 className="border-b border-slate-200 px-4 py-3 text-lg font-semibold dark:border-white/10">
                   {t("branchEfficiency") ?? "أكثر الفروع كفاءة"}
                 </h2>
@@ -390,6 +577,8 @@ export default function ExecutiveDashboardPage() {
                 </div>
               </div>
             </div>
+            </>
+            )}
           </div>
         ) : null}
       </div>

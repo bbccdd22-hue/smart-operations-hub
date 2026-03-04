@@ -74,18 +74,30 @@ export type DashboardInsight = {
 
 import { NETWORK_ID, ZERO_TIER_IP } from "../config/network";
 
-/** [SAFETY LOCK] API base – ZeroTier 10.219.168.113. In dev, use /api (Vite proxy = same-origin, fixes 403). */
+/** Dev: when opened via LAN IP (e.g. 172.23.135.143:5173), proxy can return 404; use direct backend URL. */
+function getDevApiBase(): string {
+  if (typeof window === "undefined" || !window.location?.hostname) return "/api";
+  const h = window.location.hostname;
+  if (h === "localhost" || h === "127.0.0.1") return "/api";
+  return `http://${h}:8000/api`;
+}
+
+/** [SAFETY LOCK] API base – ZeroTier 10.219.168.113. In dev, /api or direct backend when via LAN IP. */
 const API_BASE_FALLBACK = `http://${ZERO_TIER_IP}:8000/api`;
 export const API_BASE =
   import.meta.env.DEV
-    ? "/api" /* Dev: Vite proxies /api → backend; same-origin = cookies work */
+    ? getDevApiBase()
     : (import.meta.env.VITE_API_BASE && typeof import.meta.env.VITE_API_BASE === "string")
       ? import.meta.env.VITE_API_BASE
       : API_BASE_FALLBACK;
 
-/** All remote API requests include Network ID f3797ba7a810f0e3 */
-function apiHeaders(opts: RequestInit = {}): Record<string, string> {
-  return { "X-Network-ID": NETWORK_ID, ...(opts.headers as Record<string, string>) };
+/** In dev omit X-Network-ID to avoid CORS preflight block (backend does not use it). In production include it. */
+export function apiHeaders(opts: RequestInit = {}): Record<string, string> {
+  const base = { ...(opts.headers as Record<string, string>) };
+  if (!import.meta.env.DEV) {
+    base["X-Network-ID"] = NETWORK_ID;
+  }
+  return base;
 }
 
 const DEFAULT_TIMEOUT_MS = 30000;
@@ -1230,6 +1242,40 @@ export type ExecutiveDashboardData = {
     margin_pct: number;
   }>;
 };
+
+/** Executive Summary – Revenue, COGS, Gross Profit, Net Margin + by_branch, by_category */
+export type ExecutiveSummaryData = {
+  total_revenue: string;
+  total_cogs: string;
+  gross_profit: string;
+  net_margin_pct: number;
+  by_branch: Array<{ branch_id: number; branch_name: string; sales: number; expenses: number }>;
+  by_category: Array<{ category: string; sales: number }>;
+  filters: { from_date: string; to_date: string; branch_ids: number[] };
+};
+
+export async function fetchExecutiveSummary(params?: {
+  from_date?: string;
+  to_date?: string;
+  date_from?: string;
+  date_to?: string;
+  branch_id?: number;
+  brand?: string;
+}): Promise<ExecutiveSummaryData> {
+  const qs = new URLSearchParams();
+  const from = params?.from_date ?? params?.date_from;
+  const to = params?.to_date ?? params?.date_to;
+  if (from) qs.set("from_date", from);
+  if (to) qs.set("to_date", to);
+  if (params?.branch_id != null) qs.set("branch_id", String(params.branch_id));
+  if (params?.brand) qs.set("brand", params.brand);
+  const res = await fetch(`${API_BASE}/executive-summary/?${qs.toString()}`, {
+    credentials: "include",
+    headers: apiHeaders(),
+  });
+  if (!res.ok) throw new Error("Failed to fetch executive summary");
+  return res.json();
+}
 
 export async function fetchExecutiveDashboard(params?: {
   date_from?: string;

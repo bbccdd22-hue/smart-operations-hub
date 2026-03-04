@@ -41,6 +41,7 @@ import SmartUploadPage from "./pages/SmartUploadPage";
 import ActivityLogPage from "./pages/ActivityLogPage";
 import SystemErrorLogsPage from "./pages/SystemErrorLogsPage";
 import SystemHeartbeatPage from "./pages/SystemHeartbeatPage";
+import SystemCustomizerPage from "./pages/SystemCustomizerPage";
 import TestDashboardPage from "./pages/TestDashboardPage";
 import LoginPage from "./pages/LoginPage";
 import HubPage from "./pages/HubPage";
@@ -102,6 +103,7 @@ import KdsPage from "./pages/KdsPage";
 import SupplierPortalLoginPage from "./pages/SupplierPortalLoginPage";
 import SupplierPortalDashboardPage from "./pages/SupplierPortalDashboardPage";
 import CategoryAnalyticsPage from "./pages/CategoryAnalyticsPage";
+import SalesSummaryPage from "./pages/SalesSummaryPage";
 import OwnerDashboardVipPage from "./pages/OwnerDashboardVipPage";
 import NotificationsDropdown from "./components/NotificationsDropdown";
 import OwnerSignatureFooter from "./components/OwnerSignatureFooter";
@@ -188,6 +190,7 @@ export default function App() {
         <Route path="activity-log" element={<ActivityLogPage />} />
         <Route path="error-logs" element={<SystemErrorLogsPage />} />
         <Route path="system-heartbeat" element={<SystemHeartbeatPage />} />
+        <Route path="system-customizer" element={<SystemCustomizerPage />} />
         <Route path="test-dashboard" element={<TestDashboardPage />} />
         <Route path="users" element={<UsersPage />} />
         <Route path="users/:id" element={<UserProfilePage />} />
@@ -216,6 +219,7 @@ export default function App() {
           <Route path="pos/tables" element={<PosTablesPage />} />
           <Route path="analytics/food-cost" element={<FoodCostDashboard />} />
           <Route path="analytics/categories" element={<CategoryAnalyticsPage />} />
+          <Route path="analytics/sales-summary" element={<SalesSummaryPage />} />
           <Route path="owner-dashboard" element={<OwnerDashboardVipPage />} />
           <Route path="employee-self" element={<EmployeeSelfServicePage />} />
           <Route path="kitchen" element={<KitchenDisplayPage />} />
@@ -302,7 +306,7 @@ export default function App() {
           </ProtectedRoute>
         }
       >
-        <Route index element={<DashboardPage />} />
+        <Route index element={<ExecutiveDashboardPage />} />
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="executive-dashboard" element={<ExecutiveDashboardPage />} />
         <Route path="dashboard/reports" element={<ManagementReportsPage />} />
@@ -313,6 +317,7 @@ export default function App() {
         <Route path="pos/tables" element={<PosTablesPage />} />
         <Route path="analytics/food-cost" element={<FoodCostDashboard />} />
         <Route path="analytics/categories" element={<CategoryAnalyticsPage />} />
+        <Route path="analytics/sales-summary" element={<SalesSummaryPage />} />
         <Route path="owner-dashboard" element={<OwnerDashboardVipPage />} />
         <Route path="employee-self" element={<EmployeeSelfServicePage />} />
         <Route path="kitchen" element={<KitchenDisplayPage />} />

@@ -18,8 +18,15 @@ start_all.bat
 ## التشغيل اليدوي (إذا احتجت)
 
 **الطرفية 1 – Backend:**
+
+إذا لم يُشغّل Backend (خطأ DJANGO_SECRET_KEY)، استخدم أحد الخيارين:
+
+- **سريع (تطوير فقط):** من جذر المشروع نفّذ `run_backend.bat` — يضبط مفتاح تطوير ويشغّل Django.
+- **يدوي:** اضبط المتغيرات ثم شغّل السيرفر:
 ```bash
 cd backend
+set DJANGO_SECRET_KEY=dev-secret-key-not-for-production
+set DJANGO_DEBUG=true
 python manage.py runserver 0.0.0.0:8000 --noreload
 ```
 
@@ -37,9 +44,15 @@ npm run dev
 | Backend | 8000 | http://127.0.0.1:8000 |
 | Frontend | 5173 | http://localhost:5173 |
 
+## الـ Proxy (Frontend → Backend)
+
+- Vite يوجّه كل طلب يبدأ بـ `/api` إلى الـ Backend (الافتراضي: `http://127.0.0.1:8000`).
+- إذا ظهرت أخطاء 404 لـ `/api/reports/executive-summary/`: تأكد أن Backend يعمل على المنفذ 8000 ثم استخدم زر **إعادة المحاولة** في لوحة المالك.
+
 ## التحقق من التشغيل
 
-- Backend: `Invoke-WebRequest http://127.0.0.1:8000/api/auth/me/` → يرد 401 بدون auth (طبيعي)
+- Backend: `Invoke-WebRequest http://127.0.0.1:8000/api/health/` → 200، أو `/api/auth/me/` → 401 بدون auth (طبيعي)
+- تقرير المالك: `http://127.0.0.1:8000/api/reports/executive-summary/?from_date=2026-01-01&to_date=2026-01-31` → 401 بدون تسجيل دخول (يعني المسار يعمل)
 - Frontend: المتصفح على http://localhost:5173
 - تسجيل الدخول: `SAIF` (أحرف كبيرة)
 

@@ -130,6 +130,7 @@ const ROUTE_PERM: Record<string, string> = {
   "/admin-hub/error-logs":               "perm_full_system_access",
   "/admin-hub/system-heartbeat":         "perm_full_system_access",
   "/admin-hub/test-dashboard":          "perm_full_system_access",
+  "/admin-hub/system-customizer":       "perm_full_system_access",
   "/admin-hub/system-options":           "perm_full_system_access",
   "/admin-hub/system-codes":             "perm_full_system_access",
   /* ── Sales ──────────────────────────────────────────────────────── */
@@ -140,6 +141,7 @@ const ROUTE_PERM: Record<string, string> = {
   "/kitchen":                            "perm_shift_closing",
   "/dashboard/heartbeat":                "perm_management_reports",
   "/dashboard/reports":                  "perm_management_reports",
+  "/analytics/sales-summary":            "perm_management_reports",
   "/profit-dashboard":                   "perm_management_reports",
   "/finance/daily-revenue":              "perm_financial_reports",
   /* ── Inventory ──────────────────────────────────────────────────── */
@@ -284,6 +286,7 @@ export function buildNestedNavConfig(
     { to: "/admin-hub/notification-settings",label: t("notificationSettings"),  icon: Ic.bellSettings },
     { to: "/admin-hub/error-logs",           label: t("systemErrorLogs"),       icon: Ic.error },
     { to: "/admin-hub/system-heartbeat",     label: t("systemHeartbeat"),       icon: Ic.system },
+    { to: "/admin-hub/system-customizer",    label: t("systemCustomizer"),      icon: Ic.sliders },
     { to: "/admin-hub/test-dashboard",       label: "Test Dashboard",           icon: Ic.analytics },
   ], permissions, isSAIF).filter(() => showAdminHub);
 
@@ -314,6 +317,7 @@ export function buildNestedNavConfig(
   const salesReports = filterByPermission([
     { to: "/sales/reports/daily-movement",    label: t("salesDailyMovement"),    icon: Ic.calendar },
     { to: "/sales/reports/review-movements",   label: t("salesReviewMovements"),  icon: Ic.audit },
+    { to: "/analytics/sales-summary",         label: t("salesSummary"),           icon: Ic.barChart },
     { to: "/dashboard/reports",   label: t("managementReports"),   icon: Ic.salesReport },
     { to: "/profit-dashboard",   label: t("profitDashboard"),     icon: Ic.profit },
     { to: "/finance/daily-revenue", label: t("dailyRevenue"),     icon: Ic.barChart },

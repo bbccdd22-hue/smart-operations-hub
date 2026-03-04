@@ -2,12 +2,15 @@ from django.urls import include, path
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
 
 from core.health_views import HealthCheckView
+from analytics.executive_summary_views import ExecutiveSummaryView
 
 urlpatterns = [
     path("health/", HealthCheckView.as_view(), name="health-check"),
+    path("executive-summary/", ExecutiveSummaryView.as_view(), name="api-executive-summary"),
     path("auth/", include("core.urls")),
     path("system/", include("core.system_urls")),
     path("dashboard/", include("analytics.urls")),
+    path("reports/", include("analytics.report_urls")),
     path("shifts/", include("shifts.urls")),
     path("org/", include("org.urls")),
     path("imports/", include("imports.urls")),
@@ -23,6 +26,7 @@ urlpatterns = [
     path("pos/", include("pos.urls")),
     path("bi/", include("bi.urls")),
     path("notifications/", include("notifications.urls")),
+    path("customizer/", include("customizer.urls")),
     # Test Dashboard – superuser only
     path("test-dashboard/", include("core.test_dashboard_urls")),
     # Onboarding – public signup + tenant info

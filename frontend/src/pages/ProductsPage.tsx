@@ -1,7 +1,9 @@
 /**
  * قائمة المنتجات + ملف المنتج (مع تحرير الوصفة والتكاليف)
+ * Supports URL param: search (e.g. from Executive Dashboard category drill-down).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   ShoppingBag, Search, X, BookOpen, CheckCircle2,
@@ -88,6 +90,7 @@ function ProductThumbnail({
 /* ─── component ───────────────────────────────────────────────────────── */
 export default function ProductsPage() {
   const { t: _t, i18n } = useTranslation();
+  const [searchParams, setSearchParams] = useSearchParams();
   const isRTL = i18n.language === "ar";
   const T = useCallback((ar: string, en: string) => (isRTL ? ar : en), [isRTL]);
 
@@ -95,8 +98,8 @@ export default function ProductsPage() {
   const [products, setProducts]         = useState<ProductSummary[]>([]);
   const [loadingList, setLoadingList]   = useState(false);
   const [listError, setListError]       = useState<string | null>(null);
-  const [searchQ, setSearchQ]           = useState("");
-  const [debouncedQ, setDebouncedQ]     = useState("");
+  const [searchQ, setSearchQ]           = useState(() => searchParams.get("search") ?? "");
+  const [debouncedQ, setDebouncedQ]     = useState(() => searchParams.get("search") ?? "");
   const [filterActive, setFilterActive] = useState<"all" | "true" | "false">("all");
   const [filterRecipe, setFilterRecipe] = useState<"all" | "yes" | "no">("all");
   const [sortField, setSortField]       = useState<"name" | "price" | "cost" | "recipe">("name");
@@ -138,6 +141,13 @@ export default function ProductsPage() {
     const timer = setTimeout(() => setDebouncedQ(searchQ), 350);
     return () => clearTimeout(timer);
   }, [searchQ]);
+
+  /* Sync search from URL (e.g. drill-down from Executive Dashboard) */
+  useEffect(() => {
+    const q = searchParams.get("search") ?? "";
+    setSearchQ(q);
+    setDebouncedQ(q);
+  }, [searchParams]);
 
   /* ingredient search filtering */
   useEffect(() => {
