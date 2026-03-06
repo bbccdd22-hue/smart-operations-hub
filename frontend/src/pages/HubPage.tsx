@@ -147,11 +147,12 @@ export default function HubPage() {
         fetchHubExecutiveSummary({ date_from: dateFrom, date_to: dateTo }),
         fetchBrands(),
       ]);
-      setRows(summaryRes.rows ?? []);
-      setBrands(brandsRes ?? []);
+      setRows(Array.isArray(summaryRes?.rows) ? summaryRes.rows : []);
+      setBrands(Array.isArray(brandsRes) ? brandsRes : []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch");
       setRows([]);
+      setBrands([]);
     } finally {
       setLoading(false);
     }

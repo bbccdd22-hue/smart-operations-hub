@@ -62,6 +62,7 @@ SYSTEM_CODE_PURCHASE_REQUEST = "PR1002"      # PurchaseRequest - طلب شراء
 SYSTEM_CODE_PURCHASE_ORDER = "PR1003"        # PurchaseOrder - أمر شراء
 SYSTEM_CODE_GOODS_RECEIPT = "PR1004"        # GoodsReceipt - استلام بضاعة
 SYSTEM_CODE_SUPPLIER_INVOICE = "PR1005"     # SupplierInvoice - فاتورة المورد
+SYSTEM_CODE_SUPPLIER_INVOICE_LINE = "PR1006"  # SupplierInvoiceLine - سطر فاتورة المورد
 
 # --- HR & Payroll (HR) ---
 SYSTEM_CODE_EMPLOYEE = "HR1001"              # Employee - موظف

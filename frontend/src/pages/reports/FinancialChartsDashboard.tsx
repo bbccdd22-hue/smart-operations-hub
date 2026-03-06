@@ -49,7 +49,9 @@ const LEVEL_LABELS_AR: Record<number, string> = {
 
 export default function FinancialChartsDashboard() {
   const { i18n } = useTranslation();
-  const { brands: orgBrands, branches: orgBranches, branchesByBrandId } = useOrgs();
+  const { brands, branches, branchesByBrandId } = useOrgs();
+  const orgBrands = Array.isArray(brands) ? brands : [];
+  const orgBranches = Array.isArray(branches) ? branches : [];
   const isRTL = i18n.language === "ar";
   const lang = i18n.language;
   const [accounts, setAccounts] = useState<ChartAccount[]>([]);
@@ -73,7 +75,7 @@ export default function FinancialChartsDashboard() {
   const branchesForBrand = useMemo(
     () =>
       filterBrand && selectedBrand
-        ? (branchesByBrandId[selectedBrand.id] ?? [])
+        ? (Array.isArray(branchesByBrandId[selectedBrand.id]) ? branchesByBrandId[selectedBrand.id] : [])
         : orgBranches,
     [filterBrand, selectedBrand, branchesByBrandId, orgBranches]
   );

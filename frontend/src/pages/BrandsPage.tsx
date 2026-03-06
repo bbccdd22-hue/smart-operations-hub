@@ -25,7 +25,7 @@ export default function BrandsPage() {
   const loadBrands = () => {
     setLoading(true);
     fetchBrands()
-      .then(setBrands)
+      .then((r) => setBrands(Array.isArray(r) ? r : []))
       .catch(() => setBrands([]))
       .finally(() => setLoading(false));
   };
@@ -110,7 +110,7 @@ export default function BrandsPage() {
                   </td>
                 </tr>
               ) : (
-                brands.map((b) => (
+                (Array.isArray(brands) ? brands : []).map((b) => (
                   <tr
                     key={b.id}
                     className="border-b border-white/5 transition hover:bg-white/5"

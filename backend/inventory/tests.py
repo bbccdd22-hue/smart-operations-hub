@@ -1,3 +1,114 @@
+import json
+import uuid
+
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 
-# Create your tests here.
+from inventory.models import Ingredient, Unit
+
+
+class DefaultDisplayUnitPersistenceTests(TestCase):
+    def setUp(self):
+        user_model = get_user_model()
+        self.user = user_model.objects.create_user(username="tester", password="123")
+        self.client.force_login(self.user)
+        self.base_unit, _ = Unit.objects.get_or_create(
+            code="ml",
+            defaults={"name_en": "Milliliter", "name_ar": "مل"},
+        )
+        self.ingredient = Ingredient.objects.create(
+            name_en=f"Milk-{uuid.uuid4().hex[:8]}",
+            name_ar="حليب",
+            base_unit=self.base_unit,
+            package_conversion_factor="12000",
+            package_name_en="Case*12",
+            package_name_ar="كرتون*12",
+            default_display_unit="base",
+        )
+
+    def test_patch_default_display_unit_persists_after_refresh(self):
+        patch_res = self.client.patch(
+            f"/api/inventory/ingredients/{self.ingredient.id}/",
+            data=json.dumps({"default_display_unit": "package"}),
+            content_type="application/json",
+        )
+        self.assertEqual(patch_res.status_code, 200, patch_res.content)
+
+        self.ingredient.refresh_from_db()
+        self.assertEqual(self.ingredient.default_display_unit, "package")
+
+        detail_res = self.client.get(f"/api/inventory/ingredients/{self.ingredient.id}/")
+        self.assertEqual(detail_res.status_code, 200, detail_res.content)
+        self.assertEqual(detail_res.json().get("default_display_unit"), "package")
+
+    def test_default_display_unit_resets_to_base_when_package_removed(self):
+        self.ingredient.default_display_unit = "package"
+        self.ingredient.save(update_fields=["default_display_unit"])
+
+        patch_res = self.client.patch(
+            f"/api/inventory/ingredients/{self.ingredient.id}/",
+            data=json.dumps({"package_conversion_factor": None}),
+            content_type="application/json",
+        )
+        self.assertEqual(patch_res.status_code, 200, patch_res.content)
+
+        self.ingredient.refresh_from_db()
+        self.assertEqual(self.ingredient.default_display_unit, "base")
+
+    def test_patch_allows_package_default_when_active_and_factor_valid(self):
+        ing = Ingredient.objects.create(
+            name_en=f"Milk2-{uuid.uuid4().hex[:8]}",
+            name_ar="",
+            base_unit=self.base_unit,
+            package_conversion_factor="12000",
+            package_name_en="",
+            package_name_ar="",
+            package_is_active=True,
+            default_display_unit="base",
+        )
+        patch_res = self.client.patch(
+            f"/api/inventory/ingredients/{ing.id}/",
+            data=json.dumps({"default_display_unit": "package"}),
+            content_type="application/json",
+        )
+        self.assertEqual(patch_res.status_code, 200, patch_res.content)
+        ing.refresh_from_db()
+        self.assertEqual(ing.default_display_unit, "package")
+
+    def test_patch_accepts_package_name_alias_for_default_display_unit(self):
+        patch_res = self.client.patch(
+            f"/api/inventory/ingredients/{self.ingredient.id}/",
+            data=json.dumps({"default_display_unit": "case*12"}),
+            content_type="application/json",
+        )
+        self.assertEqual(patch_res.status_code, 200, patch_res.content)
+        self.ingredient.refresh_from_db()
+        self.assertEqual(self.ingredient.default_display_unit, "package")
+
+    def test_patch_can_set_package_and_default_in_single_request(self):
+        ing = Ingredient.objects.create(
+            name_en=f"Milk3-{uuid.uuid4().hex[:8]}",
+            name_ar="",
+            base_unit=self.base_unit,
+            package_conversion_factor=None,
+            package_name_en="",
+            package_name_ar="",
+            package_is_active=True,
+            default_display_unit="base",
+        )
+        patch_res = self.client.patch(
+            f"/api/inventory/ingredients/{ing.id}/",
+            data=json.dumps(
+                {
+                    "package_conversion_factor": "1000",
+                    "package_name_en": "Bottle 1L",
+                    "package_is_active": True,
+                    "default_display_unit": "package",
+                }
+            ),
+            content_type="application/json",
+        )
+        self.assertEqual(patch_res.status_code, 200, patch_res.content)
+        ing.refresh_from_db()
+        self.assertEqual(str(ing.package_conversion_factor), "1000.000000")
+        self.assertEqual(ing.default_display_unit, "package")

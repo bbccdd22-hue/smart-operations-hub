@@ -83,6 +83,22 @@ def process_product_sale_depletion(upload) -> dict:
         for branch_id, sku_to_qty in by_branch.items():
             if not sku_to_qty:
                 continue
+
+            # ── Double-depletion guard ────────────────────────────────────────
+            # If this branch already uses POS real-time depletion, skip Excel
+            # depletion to avoid counting the same sales twice.
+            try:
+                from org.models import Branch as _Branch
+                _branch_obj = _Branch.objects.filter(pk=branch_id).only("pos_depletion_enabled").first()
+                if _branch_obj and getattr(_branch_obj, "pos_depletion_enabled", False):
+                    errors.append(
+                        f"Branch {branch_id}: Excel depletion skipped "
+                        f"(POS real-time depletion is enabled for this branch)."
+                    )
+                    continue
+            except Exception:  # noqa: BLE001
+                pass
+
             reqs = explode_recipe_requirements(dict(sku_to_qty))
             if not reqs:
                 continue
@@ -146,3 +162,102 @@ def process_product_sale_depletion(upload) -> dict:
         "branches_processed": branches_processed,
         "errors": errors,
     }
+
+
+def deplete_from_pos_sale(sale) -> list[str]:
+    """
+    Deplete inventory for a single POS SaleTransaction.
+
+    Called automatically via post_save signal when:
+      - settings.POS_REALTIME_DEPLETION_ENABLED is True
+      - sale.branch.pos_depletion_enabled is True
+
+    Returns a list of warning/error messages (empty means clean run).
+    Reuses the same locked BranchStock path as Excel depletion for consistency.
+
+    items format: [{product_sku, qty, ...}, ...]
+    """
+    from django.conf import settings
+
+    warnings: list[str] = []
+
+    # Guard: branch-level flag
+    branch = getattr(sale, "branch", None)
+    if branch is None or not getattr(branch, "pos_depletion_enabled", False):
+        return []
+
+    # Guard: global feature flag
+    if not getattr(settings, "POS_REALTIME_DEPLETION_ENABLED", False):
+        return []
+
+    items = getattr(sale, "items", None) or []
+    if not items:
+        return []
+
+    # Build {sku: total_qty} map from the sale items list
+    sku_to_qty: dict[str, int] = defaultdict(int)
+    for idx, item in enumerate(items):
+        if not isinstance(item, dict):
+            warnings.append(f"Sale {sale.id}: item[{idx}] is not a dict, skipped.")
+            continue
+        sku = (item.get("product_sku") or "").strip()
+        if not sku:
+            warnings.append(f"Sale {sale.id}: item[{idx}] has no product_sku, skipped.")
+            continue
+        try:
+            qty = int(float(item.get("qty", 0)))
+        except (TypeError, ValueError):
+            warnings.append(f"Sale {sale.id}: item[{idx}] invalid qty, skipped.")
+            continue
+        if qty > 0:
+            sku_to_qty[sku] += qty
+
+    if not sku_to_qty:
+        return warnings
+
+    # Idempotency: skip if already processed for this sale
+    ref_prefix = f"pos_sale_{sale.id}_"
+    if StockMovement.objects.filter(reference__startswith=ref_prefix).exists():
+        warnings.append(f"Sale {sale.id}: already depleted, skipped.")
+        return warnings
+
+    # Explode recipes to ingredient requirements
+    reqs = explode_recipe_requirements(dict(sku_to_qty))
+    if not reqs:
+        # No matching recipes — log and return (not necessarily an error)
+        warnings.append(
+            f"Sale {sale.id}: no recipe lines found for SKUs {list(sku_to_qty.keys())}."
+        )
+        return warnings
+
+    branch_id = branch.id
+
+    with transaction.atomic():
+        for req in reqs:
+            qty_deplete = req.qty
+            if qty_deplete <= 0:
+                continue
+
+            stock = _get_or_create_branch_stock_locked(branch_id, req.ingredient_id)
+            delta = -qty_deplete
+            ref = f"{ref_prefix}i{req.ingredient_id}"
+
+            StockMovement.objects.create(
+                branch_id=branch_id,
+                ingredient_id=req.ingredient_id,
+                movement_type=StockMovementType.DEPLETION,
+                qty_delta=delta,
+                reference=ref[:128],
+            )
+
+            new_on_hand = stock.on_hand + delta
+            if new_on_hand < 0:
+                warnings.append(
+                    f"Sale {sale.id}: negative stock for ingredient {req.ingredient_name} "
+                    f"at branch {branch_id} "
+                    f"(on_hand={stock.on_hand}, depleted={qty_deplete})."
+                )
+            stock.on_hand = new_on_hand
+            stock.save(update_fields=["on_hand"])
+
+    return warnings

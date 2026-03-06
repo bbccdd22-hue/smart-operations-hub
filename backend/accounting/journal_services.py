@@ -43,8 +43,9 @@ def _get_account_and_notify(code: str, fallback_name_ar: str) -> tuple[ChartAcco
                 title="حساب مفقود في الشجرة",
                 message=f"الكود {code} ({fallback_name_ar}) غير موجود في دليل الحسابات. تم تسجيل القيد بأسم ثابت. أضف الحساب لربط القيود.",
             )
-    except Exception:  # noqa: BLE001
-        pass
+    except Exception as exc:
+        from core.error_logging import log_system_error
+        log_system_error("other", f"Failed to notify about missing chart account {code}", context={"code": code}, exc=exc)
     return (None, fallback_name_ar)
 
 

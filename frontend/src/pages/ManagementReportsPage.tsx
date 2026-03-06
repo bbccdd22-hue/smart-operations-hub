@@ -53,7 +53,7 @@ export default function ManagementReportsPage() {
   const [activeSection, setActiveSection] = useState<"net_sales" | "sales_variance">("net_sales");
 
   useEffect(() => {
-    fetchBrands().then(setBrands);
+    fetchBrands().then((r) => setBrands(Array.isArray(r) ? r : [])).catch(() => setBrands([]));
   }, []);
 
   useEffect(() => {
@@ -62,7 +62,7 @@ export default function ManagementReportsPage() {
       setSelectedBranchId("");
       return;
     }
-    fetchBranches(selectedBrand).then(setBranches);
+    fetchBranches(selectedBrand).then((b) => setBranches(Array.isArray(b) ? b : [])).catch(() => setBranches([]));
   }, [selectedBrand]);
 
   const brandsParam = selectedBrand ? [selectedBrand] : undefined;

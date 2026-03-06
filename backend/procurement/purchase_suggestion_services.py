@@ -10,8 +10,55 @@ from django.db.models import Sum
 from django.db.models import Q
 
 from imports.models import ProductSale
-from inventory.models import BranchStock, Ingredient
+from inventory.models import BranchStock, Ingredient, IngredientPackage
 from inventory.services import explode_recipe_requirements
+
+
+def _fmt_qty(value: Decimal) -> str:
+    rounded = value.quantize(Decimal("0.0001"))
+    return format(rounded, "f").rstrip("0").rstrip(".") or "0"
+
+
+def _get_default_package(ing: Ingredient):
+    """
+    Returns the best default IngredientPackage to display for this ingredient.
+    Priority:
+      1. New multi-package system: package with is_default=True and is_active=True
+      2. New multi-package system: first active package (fallback)
+      3. Legacy single-package fields (package_name_en/ar + conversion_factor)
+    Returns None if default_display_unit != "package" or no valid package found.
+    """
+    if getattr(ing, "default_display_unit", "base") != "package":
+        return None
+
+    # ── New multi-package system ───────────────────────────────
+    # packages are prefetched via select_related / prefetch_related
+    try:
+        pkgs = list(ing.packages.filter(is_active=True).order_by("-is_default", "sort_order", "id"))
+    except Exception:
+        pkgs = []
+
+    if pkgs:
+        # prefer the one marked is_default
+        for p in pkgs:
+            if p.is_default:
+                return p
+        return pkgs[0]  # fallback to first active
+
+    # ── Legacy single-package fields ──────────────────────────
+    if (
+        getattr(ing, "package_is_active", True)
+        and bool(ing.package_conversion_factor and ing.package_conversion_factor > 0)
+        and bool((ing.package_name_en or "").strip() or (ing.package_name_ar or "").strip())
+    ):
+        # Return a lightweight namespace so callers can treat it uniformly
+        class _LegacyPkg:
+            name_en = ing.package_name_en or ""
+            name_ar = ing.package_name_ar or ""
+            conversion_factor = ing.package_conversion_factor
+        return _LegacyPkg()
+
+    return None
 
 
 def get_purchase_suggestions(
@@ -80,30 +127,79 @@ def get_purchase_suggestions(
         )
     }
 
-    # 5. حساب الاقتراح
+    ingredients_by_id = {
+        ing.id: ing
+        for ing in Ingredient.objects.filter(pk__in=ingredient_ids)
+            .select_related("base_unit")
+            .prefetch_related("packages")   # load multi-package data
+    }
+
+    # 5. حساب الاقتراح (base qty + preferred display qty حسب default_display_unit)
     buffer_factor = 1 + (safety_buffer_days / max(1, horizon_days))
     out = []
     for r in requirements:
+        ing = ingredients_by_id.get(r.ingredient_id)
+        if not ing:
+            continue
         stock = stock_map.get(r.ingredient_id)
         on_hand = stock.on_hand if stock else Decimal("0")
         required = r.qty * Decimal(str(buffer_factor))
         suggested = max(Decimal("0"), required - on_hand)
         if suggested <= 0:
             continue
-        ing = Ingredient.objects.filter(pk=r.ingredient_id).select_related("base_unit").first()
-        if not ing:
-            continue
-        unit_code = ing.base_unit.code if ing.base_unit else "pcs"
+
+        base_unit_code = ing.base_unit.code if ing.base_unit else "pcs"
+        base_unit_label = (ing.base_unit.name_en if ing.base_unit else "") or base_unit_code
+        base_unit_label_ar = (ing.base_unit.name_ar if ing.base_unit else "") or base_unit_label
+
+        # ── Resolve default package (new or legacy) ────────────
+        default_pkg = _get_default_package(ing)
+        use_package = default_pkg is not None
+
+        conversion_factor = Decimal(str(default_pkg.conversion_factor)) if use_package else Decimal("1")
+        required_display  = required  / conversion_factor
+        on_hand_display   = on_hand   / conversion_factor
+        suggested_display = suggested / conversion_factor
+
+        if use_package:
+            display_unit_code    = (default_pkg.name_en or default_pkg.name_ar or "package").strip() or "package"
+            display_unit_label   = (default_pkg.name_en or default_pkg.name_ar or "Package").strip() or "Package"
+            display_unit_label_ar = (default_pkg.name_ar or default_pkg.name_en or "عبوة").strip() or "عبوة"
+        else:
+            display_unit_code    = base_unit_code
+            display_unit_label   = base_unit_label
+            display_unit_label_ar = base_unit_label_ar
+
+        effective_display_unit = "package" if use_package else "base"
+
         out.append({
             "ingredient_id": r.ingredient_id,
             "ingredient_name": r.ingredient_name,
             "ingredient_name_ar": r.ingredient_name_ar or "",
             "serial_code": r.serial_code or "",
-            "unit_code": unit_code,
-            "required_qty": str(round(r.qty, 4)),
-            "on_hand": str(on_hand),
-            "suggested_purchase_qty": str(round(suggested, 4)),
+            # Main display keys
+            "unit_code": display_unit_code,
+            "required_qty": _fmt_qty(required_display),
+            "on_hand": _fmt_qty(on_hand_display),
+            "suggested_purchase_qty": _fmt_qty(suggested_display),
             "horizon_days": horizon_days,
+            # Base quantities for auditing / math verification
+            "base_unit_code": base_unit_code,
+            "base_unit_label": base_unit_label,
+            "required_base_qty": _fmt_qty(required),
+            "on_hand_base_qty": _fmt_qty(on_hand),
+            "suggested_purchase_base_qty": _fmt_qty(suggested),
+            # Display metadata
+            "display_unit_source": effective_display_unit,
+            "default_display_unit": getattr(ing, "default_display_unit", "base"),
+            "display_unit_code": display_unit_code,
+            "display_unit_label": display_unit_label,
+            "display_unit_label_ar": display_unit_label_ar,
+            "package_conversion_factor": (
+                _fmt_qty(Decimal(str(default_pkg.conversion_factor)))
+                if use_package
+                else None
+            ),
         })
-    out.sort(key=lambda x: (-float(x["suggested_purchase_qty"]), x["ingredient_name"]))
+    out.sort(key=lambda x: (-float(x["suggested_purchase_base_qty"]), x["ingredient_name"]))
     return out

@@ -17,7 +17,16 @@ import {
 } from "recharts";
 import { format, parseISO } from "date-fns";
 import { ar } from "date-fns/locale";
-import { fetchForecast, fetchBranches, fetchBrands, type ForecastDay, type Branch, type Brand } from "../lib/api";
+import {
+  fetchForecast,
+  fetchBranches,
+  fetchBrands,
+  fetchPurchaseSuggestions,
+  type ForecastDay,
+  type Branch,
+  type Brand,
+  type PurchaseSuggestion,
+} from "../lib/api";
 import UnifiedFilterSelect from "../components/UnifiedFilterSelect";
 
 function sar(n: number, locale?: string) {
@@ -61,9 +70,11 @@ export default function PredictiveDashboardPage() {
   const [selectedBrand, setSelectedBrand] = useState<string>("");
   const [branchId, setBranchId] = useState<number | "">("");
   const [branches, setBranches] = useState<Branch[]>([]);
+  const [purchaseSuggestions, setPurchaseSuggestions] = useState<PurchaseSuggestion[]>([]);
+  const [purchaseLoading, setPurchaseLoading] = useState(false);
 
   useEffect(() => {
-    fetchBrands().then(setBrands);
+    fetchBrands().then((r) => setBrands(Array.isArray(r) ? r : [])).catch(() => setBrands([]));
   }, []);
 
   useEffect(() => {
@@ -73,7 +84,7 @@ export default function PredictiveDashboardPage() {
       return;
     }
     fetchBranches(selectedBrand).then((b) => {
-      setBranches(b);
+      setBranches(Array.isArray(b) ? b : []);
       setBranchId("");
     });
   }, [selectedBrand]);
@@ -85,6 +96,32 @@ export default function PredictiveDashboardPage() {
       brandId: brandObj?.id,
     }).then(setForecast);
   }, [branchId, selectedBrand, brands]);
+
+  useEffect(() => {
+    if (branchId === "") {
+      setPurchaseSuggestions([]);
+      return;
+    }
+    let cancelled = false;
+    setPurchaseLoading(true);
+    fetchPurchaseSuggestions({
+      branch_id: branchId,
+      horizon_days: 7,
+      lookback_days: 90,
+    })
+      .then((res) => {
+        if (!cancelled) setPurchaseSuggestions((res.suggestions ?? []).slice(0, 6));
+      })
+      .catch(() => {
+        if (!cancelled) setPurchaseSuggestions([]);
+      })
+      .finally(() => {
+        if (!cancelled) setPurchaseLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [branchId]);
 
   const metrics = useMemo(() => {
     const days30 = forecast?.next_30_days ?? [];
@@ -304,6 +341,62 @@ export default function PredictiveDashboardPage() {
           </div>
         </section>
       </div>
+
+      {branchId !== "" && (
+        <section className="rounded-2xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900/90">
+          <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50/80 px-4 py-2 dark:border-slate-700 dark:bg-slate-800/50">
+            <h2 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+              {isRTL ? "ملخص التنبؤ الذكي للشراء (7 أيام)" : "Smart Purchase Snapshot (7 days)"}
+            </h2>
+            <Link
+              to="/smart-purchase"
+              className="text-xs font-medium text-emerald-600 hover:text-emerald-500 dark:text-emerald-400"
+            >
+              {isRTL ? "عرض كامل" : "Open full report"}
+            </Link>
+          </div>
+          <div className="p-4">
+            {purchaseLoading ? (
+              <div className="text-sm text-slate-500 dark:text-slate-400">
+                {isRTL ? "جاري تحميل اقتراحات الشراء..." : "Loading purchase suggestions..."}
+              </div>
+            ) : purchaseSuggestions.length === 0 ? (
+              <div className="text-sm text-slate-500 dark:text-slate-400">
+                {isRTL ? "لا توجد اقتراحات شراء حالياً لهذا الفرع" : "No purchase suggestions for this branch"}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {purchaseSuggestions.map((s) => (
+                  <div
+                    key={`${s.ingredient_id}-${s.serial_code}`}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-100 px-3 py-2 dark:border-slate-700"
+                  >
+                    <div className="min-w-0">
+                      <div className="truncate text-sm font-medium text-slate-700 dark:text-slate-200">
+                        {isRTL && s.ingredient_name_ar ? s.ingredient_name_ar : s.ingredient_name}
+                      </div>
+                      <div className="text-xs text-slate-500 dark:text-slate-400">
+                        {s.display_unit_source === "package"
+                          ? (isRTL ? "الوحدة الافتراضية: عبوة" : "Default unit: Package")
+                          : (isRTL ? "الوحدة الافتراضية: أساسية" : "Default unit: Base")}
+                      </div>
+                    </div>
+                    <div className="text-right font-mono text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                      {s.suggested_purchase_qty} {s.unit_code}
+                      {s.display_unit_source === "package" && s.suggested_purchase_base_qty && s.base_unit_code && (
+                        <div className="text-xs font-normal text-slate-500 dark:text-slate-400">
+                          {isRTL ? "الأساس: " : "Base: "}
+                          {s.suggested_purchase_base_qty} {s.base_unit_code}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

@@ -232,7 +232,7 @@ export default function ChartOfAccountsPage() {
   const load = () => {
     setLoading(true);
     fetchChartAccounts()
-      .then(setAccounts)
+      .then((r) => setAccounts(Array.isArray(r) ? r : []))
       .catch((e) => setError(e instanceof Error ? e.message : "Failed"))
       .finally(() => setLoading(false));
   };

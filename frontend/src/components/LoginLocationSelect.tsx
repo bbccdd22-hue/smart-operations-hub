@@ -180,12 +180,12 @@ export default function LoginLocationSelect({
   const [branchTypes, setBranchTypes] = useState<BranchType[]>([]);
 
   useEffect(() => {
-    fetchCities().then(setCities);
-    fetchBranchTypes().then(setBranchTypes);
+    fetchCities().then((r) => setCities(Array.isArray(r) ? r : [])).catch(() => setCities([]));
+    fetchBranchTypes().then((r) => setBranchTypes(Array.isArray(r) ? r : [])).catch(() => setBranchTypes([]));
   }, []);
 
   useEffect(() => {
-    if (cityId) fetchDistricts(cityId as number).then(setDistricts);
+    if (cityId) fetchDistricts(cityId as number).then((r) => setDistricts(Array.isArray(r) ? r : [])).catch(() => setDistricts([]));
     else setDistricts([]);
   }, [cityId]);
 
@@ -195,13 +195,13 @@ export default function LoginLocationSelect({
     labelAr: c.name_ar,
     code: c.option_code,
   }));
-  const districtOpts: Option[] = districts.map((d) => ({
+  const districtOpts: Option[] = (Array.isArray(districts) ? districts : []).map((d) => ({
     id: d.id,
     label: d.name_en,
     labelAr: d.name_ar,
     code: d.option_code,
   }));
-  const branchTypeOpts: Option[] = branchTypes.map((b) => ({
+  const branchTypeOpts: Option[] = (Array.isArray(branchTypes) ? branchTypes : []).map((b) => ({
     id: b.id,
     label: b.name_en,
     labelAr: b.name_ar,

@@ -1,9 +1,20 @@
 # Smart Operations Hub - Production dependencies
 # [Ref: Render deployment, Net Sales 981,459.30 SAR logic]
 django>=5.0,<6.1
+# Testing
+pytest>=8.0
+pytest-django>=4.8
+pytest-json-report>=1.5
 djangorestframework>=3.15
-django-cors-headers>=4.0
+django-cors-headers>=4.3.1
 psycopg[binary]>=3.2
+psycopg2-binary>=2.9.9
+# Production: Redis + Celery + Stripe + Monitoring
+redis>=5.0.0
+celery[redis]>=5.3.6
+django-redis>=5.4.0
+stripe>=8.5.0
+newrelic>=9.0.0
 pandas>=2.2
 openpyxl>=3.1
 numpy>=1.24

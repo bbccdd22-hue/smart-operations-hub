@@ -3,10 +3,13 @@ Procurement Hub - نظام المشتريات والموردين.
 سلسلة: طلب شراء → أمر شراء → استلام بضاعة → فاتورة مورد.
 الربط المحاسبي: استحقاق للمورد عند الاستلام، تحديث المخزون تلقائياً.
 """
+import hashlib
+import secrets
 from decimal import Decimal
 
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 from config.constants import (
     SYSTEM_CODE_GOODS_RECEIPT,
@@ -14,6 +17,7 @@ from config.constants import (
     SYSTEM_CODE_PURCHASE_REQUEST,
     SYSTEM_CODE_SUPPLIER,
     SYSTEM_CODE_SUPPLIER_INVOICE,
+    SYSTEM_CODE_SUPPLIER_INVOICE_LINE,
 )
 from org.models import Branch, Brand, TimestampedModel
 
@@ -35,9 +39,25 @@ class Supplier(TimestampedModel):
     )
     payment_terms = models.CharField(max_length=255, blank=True, default="")
     is_active = models.BooleanField(default=True)
+
+    # ── Legacy plain-text key (kept for backward-compatibility; do NOT use for new keys) ──
     portal_api_key = models.CharField(
         max_length=64, blank=True, default="", db_index=True,
-        help_text="مفتاح API للبوابة – للموردين تسجيل الفواتير آلياً",
+        help_text="مفتاح API القديم — نص صريح. استخدم api_key_hash للمفاتيح الجديدة.",
+    )
+
+    # ── Hashed API key (new, secure) ───────────────────────────────────────────
+    api_key_hash = models.CharField(
+        max_length=64, blank=True, default="", db_index=True,
+        help_text="SHA-256 hash of the supplier portal API key. Never store the raw key.",
+    )
+    api_key_created_at = models.DateTimeField(
+        null=True, blank=True,
+        help_text="When the current hashed key was generated.",
+    )
+    api_key_revoked = models.BooleanField(
+        default=False,
+        help_text="Set True to immediately invalidate the supplier's portal access.",
     )
 
     class Meta:
@@ -46,6 +66,42 @@ class Supplier(TimestampedModel):
 
     def __str__(self):
         return self.name
+
+    # ── API key helpers ────────────────────────────────────────────────────────
+
+    def generate_new_api_key(self) -> str:
+        """
+        Generates a secure random API key, stores only its SHA-256 hash,
+        and returns the raw key so it can be shown to the supplier exactly once.
+
+        Usage:
+            raw_key = supplier.generate_new_api_key()
+            # send raw_key to supplier securely — it is never stored again
+        """
+        raw_key = secrets.token_urlsafe(32)
+        self.api_key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+        self.api_key_created_at = timezone.now()
+        self.api_key_revoked = False
+        self.save(update_fields=["api_key_hash", "api_key_created_at", "api_key_revoked"])
+        return raw_key
+
+    def check_api_key(self, raw_key: str) -> bool:
+        """
+        Constant-time comparison of the incoming raw key against the stored hash.
+        Returns False immediately if the key is revoked or no hash is stored.
+        """
+        if not raw_key or self.api_key_revoked or not self.api_key_hash:
+            return False
+        candidate_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+        return secrets.compare_digest(candidate_hash, self.api_key_hash)
+
+    def generate_api_key(self) -> str:
+        """Alias for generate_new_api_key — yields raw key shown once only."""
+        return self.generate_new_api_key()
+
+    def verify_api_key(self, raw_key: str) -> bool:
+        """Alias for check_api_key — timing-safe verification."""
+        return self.check_api_key(raw_key)
 
 
 class PurchaseRequestStatus(models.TextChoices):
@@ -211,7 +267,7 @@ class SupplierInvoiceStatus(models.TextChoices):
 
 
 class SupplierInvoice(TimestampedModel):
-    """فاتورة المورد - عند الترحيل: خصم من حساب المورد."""
+    """فاتورة المورد - عند الترحيل: خصم من حساب المورد. تدعم سطور تفصيلية وضريبة."""
     system_code = models.CharField(
         max_length=16, default=SYSTEM_CODE_SUPPLIER_INVOICE, db_index=True,
     )
@@ -223,7 +279,21 @@ class SupplierInvoice(TimestampedModel):
 
     invoice_number = models.CharField(max_length=64, db_index=True)
     invoice_date = models.DateField(db_index=True)
-    total_amount = models.DecimalField(max_digits=14, decimal_places=2)
+    total_amount = models.DecimalField(
+        max_digits=14, decimal_places=2,
+        help_text="إجمالي الفاتورة (معادل total_amount_incl_vat إن وُجد)",
+    )
+    # VAT and itemized totals (optional; when lines exist these are computed)
+    subtotal_excl_vat = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True, default=Decimal("0.00"),
+    )
+    total_vat_amount = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True, default=Decimal("0.00"),
+    )
+    total_amount_incl_vat = models.DecimalField(
+        max_digits=14, decimal_places=2, null=True, blank=True,
+        help_text="subtotal_excl_vat + total_vat_amount",
+    )
     status = models.CharField(
         max_length=16, choices=SupplierInvoiceStatus.choices, default=SupplierInvoiceStatus.DRAFT, db_index=True,
     )
@@ -243,6 +313,49 @@ class SupplierInvoice(TimestampedModel):
 
     def __str__(self):
         return f"INV-{self.invoice_number}"
+
+
+class SupplierInvoiceLine(TimestampedModel):
+    """سطر فاتورة المورد – صنف، كمية، وحدة، سعر، ضريبة."""
+    system_code = models.CharField(
+        max_length=16, default=SYSTEM_CODE_SUPPLIER_INVOICE_LINE, db_index=True,
+    )
+    invoice = models.ForeignKey(
+        SupplierInvoice, on_delete=models.CASCADE, related_name="lines",
+    )
+    ingredient = models.ForeignKey(
+        "inventory.Ingredient",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="supplier_invoice_lines",
+    )
+    description = models.CharField(max_length=255, blank=True, default="")
+    quantity = models.DecimalField(max_digits=14, decimal_places=4)
+    unit = models.ForeignKey(
+        "inventory.Unit",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="supplier_invoice_lines",
+    )
+    unit_price_excl_vat = models.DecimalField(max_digits=14, decimal_places=4, default=Decimal("0.00"))
+    vat_rate = models.DecimalField(
+        max_digits=5, decimal_places=2, default=Decimal("0.00"),
+        help_text="نسبة الضريبة % (مثل 15)",
+    )
+    line_total_excl_vat = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+    line_vat_amount = models.DecimalField(max_digits=14, decimal_places=2, default=Decimal("0.00"))
+    line_total_incl_vat = models.DecimalField(
+        max_digits=14, decimal_places=2, default=Decimal("0.00"),
+        help_text="line_total_excl_vat + line_vat_amount",
+    )
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return f"{self.invoice.invoice_number}: {self.description or (self.ingredient.name_en if self.ingredient else '')} x{self.quantity}"
 
 
 class SupplierPortalUser(models.Model):

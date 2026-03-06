@@ -12,6 +12,7 @@ import {
   type ReactNode,
 } from "react";
 import { fetchBrands, fetchBranches, type Brand, type Branch } from "../lib/api";
+import { useAuth } from "./AuthContext";
 
 export const ORG_DATA_CHANGED_EVENT = "org-data-changed";
 
@@ -32,9 +33,10 @@ export type OrgsContextValue = OrgsState & {
 const OrgsContext = createContext<OrgsContextValue | null>(null);
 
 export function OrgsProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [brands, setBrands] = useState<Brand[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
@@ -45,8 +47,8 @@ export function OrgsProvider({ children }: { children: ReactNode }) {
         fetchBrands(),
         fetchBranches(),
       ]);
-      setBrands(brandsData);
-      setBranches(branchesData);
+      setBrands(Array.isArray(brandsData) ? brandsData : []);
+      setBranches(Array.isArray(branchesData) ? branchesData : []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load");
       setBrands([]);
@@ -57,8 +59,14 @@ export function OrgsProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    refresh();
-  }, [refresh]);
+    if (user) refresh();
+    else {
+      setBrands([]);
+      setBranches([]);
+      setLoading(false);
+      setError(null);
+    }
+  }, [user, refresh]);
 
   useEffect(() => {
     const onChanged = () => refresh();
@@ -68,9 +76,11 @@ export function OrgsProvider({ children }: { children: ReactNode }) {
 
   const branchesByBrand: Record<string, Branch[]> = {};
   const branchesByBrandId: Record<number, Branch[]> = {};
-  for (const b of brands) {
+  const brandsList = Array.isArray(brands) ? brands : [];
+  const branchesList = Array.isArray(branches) ? branches : [];
+  for (const b of brandsList) {
     const key = (b.brand_code ?? b.slug ?? b.name).trim() || String(b.id);
-    const list = branches.filter((br) => br.brand?.id === b.id || br.brand?.name === b.name);
+    const list = branchesList.filter((br) => br.brand?.id === b.id || br.brand?.name === b.name);
     branchesByBrand[key] = list;
     branchesByBrandId[b.id] = list;
   }

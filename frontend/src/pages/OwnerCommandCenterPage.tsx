@@ -75,7 +75,7 @@ export default function OwnerCommandCenterPage() {
   }, [user, canAccess, navigate]);
 
   useEffect(() => {
-    fetchBrands().then(setBrands);
+    fetchBrands().then((r) => setBrands(Array.isArray(r) ? r : [])).catch(() => setBrands([]));
   }, []);
 
   /** الفروع تُجلب حسب البراند المحدد فقط (تتابع براند → فرع) */
@@ -86,7 +86,7 @@ export default function OwnerCommandCenterPage() {
       return;
     }
     fetchBranches(filterBrand)
-      .then((b) => setBranches(b.filter((x) => (x as { branch_code?: string }).branch_code !== "IN_TRANSIT")))
+      .then((b) => setBranches((Array.isArray(b) ? b : []).filter((x) => (x as { branch_code?: string }).branch_code !== "IN_TRANSIT")))
       .catch(() => setBranches([]));
     setFilterBranch("");
   }, [filterBrand]);
@@ -209,14 +209,14 @@ export default function OwnerCommandCenterPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {data.pending_transfers.length === 0 ? (
+                    {(Array.isArray(data?.pending_transfers) ? data.pending_transfers : []).length === 0 ? (
                       <tr>
                         <td colSpan={4} className="py-6 text-center text-slate-500 dark:text-white/50">
                           لا توجد تحويلات معلقة
                         </td>
                       </tr>
                     ) : (
-                      data.pending_transfers.map((tr) => (
+                      (Array.isArray(data?.pending_transfers) ? data.pending_transfers : []).map((tr) => (
                         <tr key={tr.id} className="border-b border-slate-100 dark:border-white/5">
                           <td className="px-3 py-2">{tr.from_branch_name}</td>
                           <td className="px-3 py-2">{tr.to_branch_name}</td>
@@ -232,7 +232,7 @@ export default function OwnerCommandCenterPage() {
                   </tbody>
                 </table>
               </div>
-              {data.pending_transfers.length > 0 && (
+              {(Array.isArray(data?.pending_transfers) ? data.pending_transfers : []).length > 0 && (
                 <Link
                   to="/stock-transfers"
                   className="block border-t border-slate-200 px-4 py-2 text-center text-sm text-emerald-600 hover:bg-slate-50 dark:border-white/10 dark:text-emerald-400 dark:hover:bg-white/5"
@@ -256,14 +256,14 @@ export default function OwnerCommandCenterPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {data.latest_errors.length === 0 ? (
+                    {(Array.isArray(data?.latest_errors) ? data.latest_errors : []).length === 0 ? (
                       <tr>
                         <td colSpan={3} className="py-6 text-center text-slate-500 dark:text-white/50">
                           لا توجد أخطاء
                         </td>
                       </tr>
                     ) : (
-                      data.latest_errors.map((e) => (
+                      (Array.isArray(data?.latest_errors) ? data.latest_errors : []).map((e) => (
                         <tr key={e.id} className="border-b border-slate-100 dark:border-white/5">
                           <td className="px-3 py-2">
                             <span className="rounded bg-rose-500/20 px-2 py-0.5 text-xs text-rose-400">
@@ -282,7 +282,7 @@ export default function OwnerCommandCenterPage() {
                   </tbody>
                 </table>
               </div>
-              {data.latest_errors.length > 0 && (
+              {(Array.isArray(data?.latest_errors) ? data.latest_errors : []).length > 0 && (
                 <Link
                   to="/admin-hub/error-logs"
                   className="block border-t border-slate-200 px-4 py-2 text-center text-sm text-emerald-600 hover:bg-slate-50 dark:border-white/10 dark:text-emerald-400 dark:hover:bg-white/5"
@@ -344,11 +344,11 @@ export default function OwnerCommandCenterPage() {
                 {t("lowStockItems") ?? "أصناف معرضة للنفاذ"}
               </h2>
               <div className="overflow-x-auto p-4" style={{ WebkitOverflowScrolling: "touch" }}>
-                {data.low_stock_items.length === 0 ? (
+                {(Array.isArray(data?.low_stock_items) ? data.low_stock_items : []).length === 0 ? (
                   <p className="py-8 text-center text-slate-500 dark:text-white/50">لا توجد أصناف منخفضة</p>
                 ) : (
                   <div className="space-y-3">
-                    {data.low_stock_items.map((item, i) => (
+                    {(Array.isArray(data?.low_stock_items) ? data.low_stock_items : []).map((item, i) => (
                       <div
                         key={`${item.ingredient_name}-${item.branch_name}-${i}`}
                         className="flex items-center justify-between rounded-lg bg-slate-100 px-3 py-2 dark:bg-white/5"

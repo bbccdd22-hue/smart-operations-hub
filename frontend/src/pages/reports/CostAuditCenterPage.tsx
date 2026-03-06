@@ -1,12 +1,22 @@
 /**
  * سجل تدقيق التكاليف التشغيلية – مركز التدقيق
- * شريط بحث ذكي: شامل، فوري، سجل بحث، فلاتر سريعة
+ * شريط بحث ذكي + تصميم القالب (ترتيب وعرض الأعمدة)
  */
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { Link } from "react-router-dom";
 import { fetchCostAuditEntries, excludeCostAuditEntry, type CostAuditEntry } from "../../lib/api";
 import { useAuth } from "../../contexts/AuthContext";
+import TemplateLayoutToolbar from "../../components/TemplateLayoutToolbar";
+import {
+  loadLayout,
+  getDisplayColumnOrder,
+  getColumnWidth,
+  getColumnLabel,
+  type TemplateLayout,
+} from "../../config/templateTableConfig";
+
+const TEMPLATE_KEY = "cost_audit";
 
 const SEARCH_HISTORY_KEY = "cost-audit-search-history";
 const SEARCH_HISTORY_MAX = 5;
@@ -87,6 +97,12 @@ export default function CostAuditCenterPage() {
   const [showHistoryDropdown, setShowHistoryDropdown] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const [tableLayout, setTableLayout] = useState<TemplateLayout | null>(() => loadLayout(TEMPLATE_KEY));
+  const displayColumnOrder = useMemo(
+    () => getDisplayColumnOrder(TEMPLATE_KEY, tableLayout, []),
+    [tableLayout]
+  );
 
   const debouncedSearch = useDebouncedValue(searchQuery, 150);
 
@@ -227,6 +243,72 @@ export default function CostAuditCenterPage() {
         .filter((e) => !e.is_excluded)
         .reduce((s, e) => s + parseFloat(e.amount || "0"), 0),
     [filteredAndSorted]
+  );
+
+  const visibleColumns = useMemo(
+    () => (isSAIF ? displayColumnOrder : displayColumnOrder.filter((c) => c !== "actions")),
+    [displayColumnOrder, isSAIF]
+  );
+
+  const renderCell = useCallback(
+    (colId: string, row: CostAuditEntry, rowIndex: number) => {
+      switch (colId) {
+        case "index":
+          return rowIndex + 1;
+        case "date":
+          return row.recorded_at
+            ? new Date(row.recorded_at).toLocaleString(isRTL ? "ar-SA" : "en")
+            : "—";
+        case "account_code":
+          return <span className="font-mono text-slate-800 dark:text-white">{row.account_code}</span>;
+        case "account_name":
+          return <span className="text-xs text-slate-500">{row.account_name || "—"}</span>;
+        case "description":
+          return <span className="max-w-[200px] truncate text-slate-600 dark:text-slate-400">{row.description || "—"}</span>;
+        case "amount":
+          return <span className="font-mono font-medium">{parseFloat(row.amount || "0").toLocaleString("ar-SA")} ر.س</span>;
+        case "source":
+          return <span className="max-w-[160px] truncate text-xs text-slate-500">{row.source_file || "—"}</span>;
+        case "category": {
+          const cat = getCostCategory(row.account_code);
+          return (
+            <span
+              className={`rounded px-2 py-0.5 text-xs ${
+                cat === "cogs"
+                  ? "bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200"
+                  : cat === "opex"
+                    ? "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200"
+                    : "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
+              }`}
+            >
+              {cat === "cogs" ? "COGS" : cat === "opex" ? "OpEx" : isRTL ? "أخرى" : "Other"}
+            </span>
+          );
+        }
+        case "actions":
+          return (
+            <button
+              type="button"
+              disabled={excludingId === row.id}
+              onClick={() => handleExclude(row.id, !row.is_excluded)}
+              className={`rounded px-2 py-1 text-xs font-medium transition ${
+                row.is_excluded
+                  ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/50 dark:text-emerald-200"
+                  : "bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/50 dark:text-red-200"
+              }`}
+            >
+              {excludingId === row.id
+                ? "..."
+                : row.is_excluded
+                  ? isRTL ? "إعادة" : "Restore"
+                  : isRTL ? "استبعاد من الحساب" : "Exclude"}
+            </button>
+          );
+        default:
+          return "—";
+      }
+    },
+    [isRTL, excludingId, handleExclude]
   );
 
   return (
@@ -407,6 +489,12 @@ export default function CostAuditCenterPage() {
             {isRTL ? "المجموع المعتمد (غير المستبعد)" : "Approved total (non-excluded)"}:{" "}
             <strong>{totalIncluded.toLocaleString("ar-SA")} ر.س</strong>
           </span>
+          <TemplateLayoutToolbar
+            templateKey={TEMPLATE_KEY}
+            onLayoutChange={(l) => setTableLayout(l)}
+            isRTL={isRTL}
+            T={(ar, en) => (isRTL ? ar : en)}
+          />
           {(debouncedSearch || bigAmountsOnly || expenseTypeFilter !== "all" || categoryFilter !== "all") && (
             <span className="text-xs text-slate-500 dark:text-slate-400">
               {isRTL ? `${filteredAndSorted.length} نتيجة` : `${filteredAndSorted.length} results`}
@@ -417,116 +505,60 @@ export default function CostAuditCenterPage() {
           <table className="min-w-full text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-100/80 dark:border-slate-700 dark:bg-slate-700/50">
-                <th className="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-200">
-                  {isRTL ? "التاريخ" : "Date"}
-                </th>
-                <th className="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-200">
-                  {isRTL ? "البند" : "Item"}
-                </th>
-                <th className="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-200">
-                  {isRTL ? "الوصف" : "Description"}
-                </th>
-                <th className="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-200">
-                  {isRTL ? "القيمة" : "Amount"}
-                </th>
-                <th className="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-200">
-                  {isRTL ? "المصدر" : "Source"}
-                </th>
-                <th className="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-200">
-                  {isRTL ? "نوع" : "Type"}
-                </th>
-                {isSAIF && (
-                  <th className="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-200">
-                    {isRTL ? "استبعاد" : "Exclude"}
+                {visibleColumns.map((colId) => (
+                  <th
+                    key={colId}
+                    className="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-200"
+                    style={{
+                      width: getColumnWidth(TEMPLATE_KEY, tableLayout, colId, false),
+                      minWidth: getColumnWidth(TEMPLATE_KEY, tableLayout, colId, true),
+                    }}
+                  >
+                    {getColumnLabel(TEMPLATE_KEY, colId, undefined, isRTL)}
                   </th>
-                )}
+                ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={isSAIF ? 7 : 6} className="px-4 py-8 text-center text-slate-500">
+                  <td colSpan={visibleColumns.length} className="px-4 py-8 text-center text-slate-500">
                     {isRTL ? "جاري التحميل..." : "Loading..."}
                   </td>
                 </tr>
               ) : filteredAndSorted.length === 0 ? (
                 <tr>
-                  <td colSpan={isSAIF ? 7 : 6} className="px-4 py-8 text-center text-slate-500">
+                  <td colSpan={visibleColumns.length} className="px-4 py-8 text-center text-slate-500">
                     {isRTL
                       ? "لا توجد إدخالات. قم برفع ملف قائمة الدخل أولاً."
                       : "No entries. Upload an income statement file first."}
                   </td>
                 </tr>
               ) : (
-                filteredAndSorted.map((e) => (
+                filteredAndSorted.map((e, idx) => (
                   <tr
                     key={e.id}
                     className={`border-b border-slate-100 dark:border-slate-700 ${
                       e.is_excluded ? "bg-amber-50/50 dark:bg-amber-900/10" : ""
                     }`}
+                    style={{
+                      height: tableLayout?.rowHeight
+                        ? `${tableLayout.rowHeight}px`
+                        : undefined,
+                    }}
                   >
-                    <td className="px-4 py-2 text-slate-600 dark:text-slate-400">
-                      {e.recorded_at
-                        ? new Date(e.recorded_at).toLocaleString(isRTL ? "ar-SA" : "en")
-                        : "—"}
-                    </td>
-                    <td className="px-4 py-2">
-                      <span className="font-mono text-slate-800 dark:text-white">{e.account_code}</span>
-                      <br />
-                      <span className="text-xs text-slate-500">{e.account_name || "—"}</span>
-                    </td>
-                    <td className="px-4 py-2 text-slate-600 dark:text-slate-400 max-w-[200px] truncate">
-                      {e.description || "—"}
-                    </td>
-                    <td className="px-4 py-2 font-mono font-medium">
-                      {parseFloat(e.amount).toLocaleString("ar-SA")} ر.س
-                    </td>
-                    <td className="px-4 py-2 text-xs text-slate-500 max-w-[160px] truncate">
-                      {e.source_file || "—"}
-                    </td>
-                    <td className="px-4 py-2">
-                      <span
-                        className={`rounded px-2 py-0.5 text-xs ${
-                          getCostCategory(e.account_code) === "cogs"
-                            ? "bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200"
-                            : getCostCategory(e.account_code) === "opex"
-                              ? "bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200"
-                              : "bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300"
-                        }`}
+                    {visibleColumns.map((colId) => (
+                      <td
+                        key={colId}
+                        className="px-4 py-2"
+                        style={{
+                          width: getColumnWidth(TEMPLATE_KEY, tableLayout, colId, false),
+                          minWidth: getColumnWidth(TEMPLATE_KEY, tableLayout, colId, true),
+                        }}
                       >
-                        {getCostCategory(e.account_code) === "cogs"
-                          ? "COGS"
-                          : getCostCategory(e.account_code) === "opex"
-                            ? "OpEx"
-                            : isRTL
-                              ? "أخرى"
-                              : "Other"}
-                      </span>
-                    </td>
-                    {isSAIF && (
-                      <td className="px-4 py-2">
-                        <button
-                          type="button"
-                          disabled={excludingId === e.id}
-                          onClick={() => handleExclude(e.id, !e.is_excluded)}
-                          className={`rounded px-2 py-1 text-xs font-medium transition ${
-                            e.is_excluded
-                              ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200 dark:bg-emerald-900/50 dark:text-emerald-200"
-                              : "bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900/50 dark:text-red-200"
-                          }`}
-                        >
-                          {excludingId === e.id
-                            ? "..."
-                            : e.is_excluded
-                              ? isRTL
-                                ? "إعادة"
-                                : "Restore"
-                              : isRTL
-                                ? "استبعاد من الحساب"
-                                : "Exclude"}
-                        </button>
+                        {renderCell(colId, e, idx)}
                       </td>
-                    )}
+                    ))}
                   </tr>
                 ))
               )}

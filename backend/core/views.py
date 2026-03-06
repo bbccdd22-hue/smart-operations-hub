@@ -54,8 +54,9 @@ def login_view(request):
     try:
         from hr.attendance_services import record_clock_in
         record_clock_in(user)
-    except Exception:
-        pass
+    except Exception as exc:
+        from core.error_logging import log_system_error
+        log_system_error("other", f"Failed to record clock-in for {user.username}", user=user, exc=exc)
     profile = get_user_profile(user)
     branch = profile.branch if profile else None
     brand = (branch.brand if branch else profile.brand) if profile else None
@@ -92,8 +93,9 @@ def logout_view(request):
         try:
             from hr.attendance_services import record_clock_out
             record_clock_out(user)
-        except Exception:
-            pass
+        except Exception as exc:
+            from core.error_logging import log_system_error
+            log_system_error("other", f"Failed to record clock-out for {user.username}", user=user, exc=exc)
     logout(request)
     return JsonResponse({"detail": "Logged out"})
 
@@ -113,10 +115,15 @@ def _get_role_permissions(profile):
 
 
 class CurrentUserView(APIView):
-    """Returns current authenticated user and role."""
-    permission_classes = [IsAuthenticated]
+    """Returns current authenticated user and role. Returns 401 (not 403) when not authenticated so devtools show 'Unauthorized'."""
+    permission_classes = [AllowAny]
 
     def get(self, request):
+        if not request.user.is_authenticated:
+            return Response(
+                {"detail": "Authentication credentials were not provided."},
+                status=status.HTTP_401_UNAUTHORIZED,
+            )
         from core.permissions import is_super_admin
         user = request.user
         profile = get_user_profile(user)

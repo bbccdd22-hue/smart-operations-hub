@@ -183,11 +183,11 @@ export default function AddUserModal({
                 {t("assignedBrands")}
               </label>
               <div className="glass-card max-h-32 overflow-y-auto rounded-xl p-2">
-                {brands.length === 0 ? (
+                {(Array.isArray(brands) ? brands : []).length === 0 ? (
                   <p className="py-2 text-center text-sm text-white/50">No brands</p>
                 ) : (
                   <div className="space-y-1">
-                    {brands.map((b) => (
+                    {(Array.isArray(brands) ? brands : []).map((b) => (
                       <label
                         key={b.id}
                         className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-white/5"
@@ -211,11 +211,11 @@ export default function AddUserModal({
                 {t("assignedBranches")}
               </label>
               <div className="glass-card max-h-32 overflow-y-auto rounded-xl p-2">
-                {branches.length === 0 ? (
+                {(Array.isArray(branches) ? branches : []).length === 0 ? (
                   <p className="py-2 text-center text-sm text-white/50">No branches</p>
                 ) : (
                   <div className="space-y-1">
-                    {branches.map((b) => (
+                    {(Array.isArray(branches) ? branches : []).map((b) => (
                       <label
                         key={b.id}
                         className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-white/5"

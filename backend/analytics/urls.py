@@ -11,6 +11,10 @@ from analytics.views import (
 )
 from analytics.command_center_views import OwnerCommandCenterView
 from analytics.executive_dashboard_views import ExecutiveDashboardView
+from analytics.executive_summary_views import ExecutiveSummaryView
+from analytics.food_cost_views import FoodCostDashboardView
+from analytics.category_views import CategoryAnalyticsView
+from analytics.sales_summary_views import SalesSummaryView
 
 urlpatterns = [
     path("summary/", OwnerDashboardSummaryView.as_view(), name="owner-dashboard-summary"),
@@ -22,5 +26,9 @@ urlpatterns = [
     path("system-health/", SystemHealthView.as_view(), name="system-health"),
     path("command-center/", OwnerCommandCenterView.as_view(), name="owner-command-center"),
     path("executive-dashboard/", ExecutiveDashboardView.as_view(), name="executive-dashboard"),
+    path("executive-summary/", ExecutiveSummaryView.as_view(), name="dashboard-executive-summary"),
+    path("food-cost/", FoodCostDashboardView.as_view(), name="food-cost-dashboard"),
+    path("categories/", CategoryAnalyticsView.as_view(), name="category-analytics"),
+    path("sales-summary/", SalesSummaryView.as_view(), name="sales-summary"),
 ]
 

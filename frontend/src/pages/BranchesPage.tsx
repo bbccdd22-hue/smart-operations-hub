@@ -30,15 +30,15 @@ export default function BranchesPage() {
   const loadBranches = () => {
     setLoading(true);
     fetchBranches()
-      .then(setBranches)
+      .then((r) => setBranches(Array.isArray(r) ? r : []))
       .catch(() => setBranches([]))
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
     loadBranches();
-    fetchBrands().then(setBrands);
-    fetchCities().then(setCities);
+    fetchBrands().then((r) => setBrands(Array.isArray(r) ? r : [])).catch(() => setBrands([]));
+    fetchCities().then((r) => setCities(Array.isArray(r) ? r : [])).catch(() => setCities([]));
   }, []);
 
   const handleModalClose = () => {
@@ -122,7 +122,7 @@ export default function BranchesPage() {
                   </td>
                 </tr>
               ) : (
-                branches.map((b) => (
+                (Array.isArray(branches) ? branches : []).map((b) => (
                   <tr
                     key={b.id}
                     className="border-b border-white/5 transition hover:bg-white/5"

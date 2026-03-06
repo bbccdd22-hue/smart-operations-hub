@@ -294,7 +294,7 @@ export default function UserEditModal({
                           }}
                           className="glass-input min-h-[100px] w-full rounded-xl px-4 py-2.5 text-white"
                         >
-                          {brands.map((b) => (
+                          {(Array.isArray(brands) ? brands : []).map((b) => (
                             <option key={b.id} value={b.id}>{b.name}</option>
                           ))}
                         </select>
@@ -315,7 +315,7 @@ export default function UserEditModal({
                         className="glass-input w-full rounded-xl px-4 py-2.5 text-white"
                       >
                         <option value="">{t("selectBrand")}</option>
-                        {brands.map((b) => (
+                        {(Array.isArray(brands) ? brands : []).map((b) => (
                           <option key={b.id} value={b.id}>{b.name}</option>
                         ))}
                       </select>
@@ -328,7 +328,7 @@ export default function UserEditModal({
                         className="glass-input w-full rounded-xl px-4 py-2.5 text-white"
                       >
                         <option value="">{t("selectBranch")}</option>
-                        {(brandId ? branches.filter((b) => b.brand?.id === Number(brandId)) : branches).map((b) => (
+                        {(brandId ? (Array.isArray(branches) ? branches : []).filter((b) => b.brand?.id === Number(brandId)) : (Array.isArray(branches) ? branches : [])).map((b) => (
                           <option key={b.id} value={b.id}>
                             {branchDisplayName(b, lang)} ({b.brand?.name})
                           </option>

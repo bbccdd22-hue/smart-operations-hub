@@ -12,6 +12,7 @@ from shifts.serializers import (
     ShiftClosingCreatePayloadSerializer,
     ShiftClosingSerializer,
 )
+from core.pagination import paginate_queryset
 from core.permissions import get_user_scope, has_financial_auditor_access
 from org.models import Branch
 
@@ -48,8 +49,9 @@ class ShiftClosingListForAuditorView(APIView):
                 pass
         from django.db.models import Count
         qs = qs.annotate(attachments_count=Count("attachments")).order_by("-submitted_at", "shift__branch__name")
+        page_items, pagination = paginate_queryset(qs, request)
         closings = []
-        for c in qs[:200]:  # limit for performance
+        for c in page_items:
             closings.append({
                 "id": c.id,
                 "date": str(c.shift.opened_at.date()),
@@ -64,7 +66,7 @@ class ShiftClosingListForAuditorView(APIView):
                 "variance_cash": float(c.variance_cash or 0),
                 "attachments_count": c.attachments_count,
             })
-        return Response({"closings": closings})
+        return Response({"closings": closings, "pagination": pagination})
 
 
 class ShiftClosingByBranchDateView(APIView):
@@ -115,7 +117,10 @@ class ShiftClosingCreateView(APIView):
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("You can only close shifts for your assigned branch.")
 
-        branch = Branch.objects.get(id=branch_id)
+        try:
+            branch = Branch.objects.get(id=branch_id)
+        except Branch.DoesNotExist:
+            return Response({"detail": "Branch not found"}, status=status.HTTP_404_NOT_FOUND)
         opened_at = datetime.combine(target_date, datetime.min.time())
 
         shift = Shift.objects.filter(
@@ -225,8 +230,12 @@ class ShiftClosingCreateView(APIView):
             try:
                 from accounting.journal_services import create_journal_entry_from_shift_closing
                 create_journal_entry_from_shift_closing(closing, created_by=request.user)
-            except Exception:  # noqa: BLE001
-                pass  # لا نمنع الإقفال إذا فشل إنشاء القيد
+            except Exception as exc:
+                from core.error_logging import log_system_error
+                log_system_error(
+                    "other", f"Failed to create journal entry for shift closing {closing.id}",
+                    user=request.user, context={"closing_id": closing.id}, exc=exc,
+                )
 
         return Response({
             "closing": ShiftClosingSerializer(closing).data,
@@ -239,7 +248,10 @@ class ShiftClosingSubmitView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request, pk):
-        closing = ShiftClosing.objects.select_related("shift").get(pk=pk)
+        try:
+            closing = ShiftClosing.objects.select_related("shift").get(pk=pk)
+        except ShiftClosing.DoesNotExist:
+            return Response({"detail": "Shift closing not found"}, status=status.HTTP_404_NOT_FOUND)
         if closing.status == "submitted":
             return Response({"detail": "Already submitted"}, status=400)
         scope = get_user_scope(request.user)
@@ -265,8 +277,12 @@ class ShiftClosingSubmitView(APIView):
         try:
             from accounting.journal_services import create_journal_entry_from_shift_closing
             create_journal_entry_from_shift_closing(closing, created_by=request.user)
-        except Exception:  # noqa: BLE001
-            pass  # لا نمنع الإقفال إذا فشل إنشاء القيد
+        except Exception as exc:
+            from core.error_logging import log_system_error
+            log_system_error(
+                "other", f"Failed to create journal entry for shift closing {closing.id}",
+                user=request.user, context={"closing_id": closing.id}, exc=exc,
+            )
         return Response({
             "closing": ShiftClosingSerializer(closing).data,
             "is_submitted": True,
@@ -328,7 +344,10 @@ class ShiftClosingAttachmentListCreateView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request, closing_pk):
-        closing = ShiftClosing.objects.get(pk=closing_pk)
+        try:
+            closing = ShiftClosing.objects.get(pk=closing_pk)
+        except ShiftClosing.DoesNotExist:
+            return Response({"detail": "Shift closing not found"}, status=status.HTTP_404_NOT_FOUND)
         scope = get_user_scope(request.user)
         can_view = (
             has_financial_auditor_access(request.user)
@@ -343,7 +362,10 @@ class ShiftClosingAttachmentListCreateView(APIView):
         return Response(ser.data)
 
     def post(self, request, closing_pk):
-        closing = ShiftClosing.objects.get(pk=closing_pk)
+        try:
+            closing = ShiftClosing.objects.get(pk=closing_pk)
+        except ShiftClosing.DoesNotExist:
+            return Response({"detail": "Shift closing not found"}, status=status.HTTP_404_NOT_FOUND)
         scope = get_user_scope(request.user)
         if scope["branch_ids"] is not None and closing.shift.branch_id not in (scope["branch_ids"] or []):
             from rest_framework.exceptions import PermissionDenied
@@ -425,7 +447,10 @@ class ShiftClosingAttachmentDestroyView(APIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def delete(self, request, pk):
-        att = ShiftClosingAttachment.objects.select_related("closing__shift").get(pk=pk)
+        try:
+            att = ShiftClosingAttachment.objects.select_related("closing__shift").get(pk=pk)
+        except ShiftClosingAttachment.DoesNotExist:
+            return Response({"detail": "Attachment not found"}, status=status.HTTP_404_NOT_FOUND)
         scope = get_user_scope(request.user)
         if scope["branch_ids"] is not None and att.closing.shift.branch_id not in (scope["branch_ids"] or []):
             from rest_framework.exceptions import PermissionDenied

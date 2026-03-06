@@ -103,19 +103,22 @@ export default function SmartUploadPage() {
   const brandSelectRef = useRef<HTMLSelectElement>(null);
 
   useEffect(() => {
-    fetchBrands().then(setBrands);
+    fetchBrands().then((r) => setBrands(Array.isArray(r) ? r : [])).catch(() => setBrands([]));
   }, []);
   useEffect(() => {
     brandSelectRef.current?.focus();
   }, [brands.length]);
   useEffect(() => {
-    fetchBranches(selectedBrandId ? brands.find((b) => b.id === selectedBrandId)?.slug : undefined).then(setBranches);
+    const brandList = Array.isArray(brands) ? brands : [];
+    const slug = selectedBrandId ? brandList.find((b) => b.id === selectedBrandId)?.slug : undefined;
+    fetchBranches(slug).then((r) => setBranches(Array.isArray(r) ? r : [])).catch(() => setBranches([]));
     setSelectedBranchId(null);
   }, [selectedBrandId, brands]);
 
   useEffect(() => {
-    if (preview?.detected_brand && brands.length) {
-      const b = brands.find((x) => x.slug === preview.detected_brand);
+    const brandList = Array.isArray(brands) ? brands : [];
+    if (preview?.detected_brand && brandList.length) {
+      const b = brandList.find((x) => x.slug === preview.detected_brand);
       if (b) setSelectedBrandId(b.id);
     }
   }, [preview?.detected_brand, brands]);
@@ -380,7 +383,7 @@ export default function SmartUploadPage() {
               }}
             >
               <option value="">— Select Brand —</option>
-              {brands.map((b) => (
+              {(Array.isArray(brands) ? brands : []).map((b) => (
                 <option key={b.id} value={b.id}>{b.name}</option>
               ))}
             </select>
@@ -571,7 +574,7 @@ export default function SmartUploadPage() {
                   className="glass-input rounded-lg px-3 py-2 text-sm text-white"
                 >
                   <option value="">Auto (filename)</option>
-                  {brands.map((b) => (
+                  {(Array.isArray(brands) ? brands : []).map((b) => (
                     <option key={b.id} value={b.id}>{b.name}</option>
                   ))}
                 </select>
@@ -584,7 +587,7 @@ export default function SmartUploadPage() {
                   className="glass-input rounded-lg px-3 py-2 text-sm text-white"
                 >
                   <option value="">Auto</option>
-                  {branches.map((b) => (
+                  {(Array.isArray(branches) ? branches : []).map((b) => (
                     <option key={b.id} value={b.id}>{b.name}</option>
                   ))}
                 </select>
@@ -756,7 +759,7 @@ export default function SmartUploadPage() {
                   className="glass-input rounded-xl px-4 py-2 text-white"
                 >
                   <option value="">Auto (from file / filename)</option>
-                  {brands.map((b) => (
+                  {(Array.isArray(brands) ? brands : []).map((b) => (
                     <option key={b.id} value={b.id}>{b.name}</option>
                   ))}
                 </select>
@@ -769,7 +772,7 @@ export default function SmartUploadPage() {
                   className="glass-input rounded-xl px-4 py-2 text-white"
                 >
                   <option value="">Auto (from file / filename)</option>
-                  {branches.map((b) => (
+                  {(Array.isArray(branches) ? branches : []).map((b) => (
                     <option key={b.id} value={b.id}>{b.name}</option>
                   ))}
                 </select>

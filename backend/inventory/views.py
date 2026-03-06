@@ -1,11 +1,10 @@
 from django.db.models import Q
-from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_exempt
 from decimal import Decimal
 
 from rest_framework import permissions, response, status, views
 from rest_framework.exceptions import PermissionDenied
 
+from core.pagination import paginate_queryset
 from core.permissions import can_view_cost_price, get_user_scope
 from analytics.views import _apply_branch_scope
 from org.models import Branch
@@ -13,6 +12,9 @@ from inventory.models import (
     BranchStock,
     FoodicsProduct,
     Ingredient,
+    IngredientPackage,
+    Recipe,
+    RecipeLine,
     StockMovement,
     StockTransfer,
     StockTransferLine,
@@ -43,11 +45,9 @@ class ProductsWithRecipesView(views.APIView):
         return response.Response(out)
 
 
-@method_decorator(csrf_exempt, name="dispatch")
 class ProductionPlanView(views.APIView):
     """What-if: given branch + list of product quantities, return exploded ingredients with stock."""
-    # [TEMPORARY] AllowAny + csrf_exempt for remote access testing - restore for production
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         branch_id = request.data.get("branch_id")
@@ -81,7 +81,7 @@ class ProductionPlanView(views.APIView):
 
 class RecipeBulkUploadView(views.APIView):
     """Bulk upload recipes via Excel. Columns: Product, Ingredient, Qty, Unit."""
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         file = request.FILES.get("file")
@@ -118,7 +118,12 @@ class IngredientListView(views.APIView):
 
     def get(self, request):
         system_group = request.query_params.get("system_group", "").strip()
-        qs = Ingredient.objects.filter(is_active=True).select_related("base_unit").order_by("name_en")
+        qs = (
+            Ingredient.objects.filter(is_active=True)
+            .select_related("base_unit")
+            .prefetch_related("packages")
+            .order_by("name_en")
+        )
         if system_group and system_group in ("raw_materials", "packaging", "other"):
             qs = qs.filter(system_group=system_group)
         ing_ids_with_movements = set(
@@ -131,6 +136,16 @@ class IngredientListView(views.APIView):
         out = []
         for ing in qs:
             bu = ing.base_unit
+            pkgs = list(ing.packages.all())
+            packages_data = [{
+                "id": p.id,
+                "name_en": p.name_en,
+                "name_ar": p.name_ar,
+                "conversion_factor": str(p.conversion_factor),
+                "is_active": p.is_active,
+                "is_default": p.is_default,
+                "sort_order": p.sort_order,
+            } for p in pkgs]
             out.append({
                 "id": ing.id,
                 "serial_code": ing.serial_code or "",
@@ -149,6 +164,7 @@ class IngredientListView(views.APIView):
                 "default_display_unit": getattr(ing, "default_display_unit", "base"),
                 "has_transactions": ing.id in all_with_transactions,
                 "unit_cost": str(ing.unit_cost) if ing.unit_cost is not None else None,
+                "packages": packages_data,
             })
         return response.Response(out)
 
@@ -169,6 +185,11 @@ class IngredientListView(views.APIView):
         pkg_factor = data.get("package_conversion_factor")
         pkg_name_en = (data.get("package_name_en") or "").strip()
         pkg_name_ar = (data.get("package_name_ar") or "").strip()
+        default_display_unit = data.get("default_display_unit", "base")
+        if default_display_unit not in ("base", "package"):
+            default_display_unit = "base"
+        raw_unit_cost = data.get("unit_cost")
+        unit_cost_val = Decimal(str(raw_unit_cost)) if raw_unit_cost is not None and str(raw_unit_cost).strip() else None
         ing = Ingredient.objects.create(
             name_en=name_en,
             name_ar=name_ar,
@@ -178,6 +199,8 @@ class IngredientListView(views.APIView):
             package_conversion_factor=Decimal(str(pkg_factor)) if pkg_factor else None,
             package_name_en=pkg_name_en or "",
             package_name_ar=pkg_name_ar or "",
+            default_display_unit=default_display_unit,
+            unit_cost=unit_cost_val,
         )
         return response.Response({
             "id": ing.id,
@@ -218,6 +241,15 @@ class IngredientDetailView(views.APIView):
             "default_display_unit": getattr(ing, "default_display_unit", "base"),
             "has_transactions": has_transactions,
             "unit_cost": str(ing.unit_cost) if ing.unit_cost is not None else None,
+            "packages": [{
+                "id": p.id,
+                "name_en": p.name_en,
+                "name_ar": p.name_ar,
+                "conversion_factor": str(p.conversion_factor),
+                "is_active": p.is_active,
+                "is_default": p.is_default,
+                "sort_order": p.sort_order,
+            } for p in ing.packages.order_by("sort_order", "id")],
         })
 
     def patch(self, request, pk):
@@ -289,13 +321,118 @@ class IngredientDetailView(views.APIView):
         return response.Response(status=status.HTTP_204_NO_CONTENT)
 
 
+class IngredientPackageListCreateView(views.APIView):
+    """قائمة وإنشاء عبوات لصنف معين — يدعم عبوات متعددة."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, ingredient_id):
+        ing = Ingredient.objects.filter(id=ingredient_id).first()
+        if not ing:
+            return response.Response({"detail": "Ingredient not found"}, status=404)
+        pkgs = ing.packages.order_by("sort_order", "id")
+        return response.Response([{
+            "id": p.id,
+            "name_en": p.name_en,
+            "name_ar": p.name_ar,
+            "conversion_factor": str(p.conversion_factor),
+            "is_active": p.is_active,
+            "is_default": p.is_default,
+            "sort_order": p.sort_order,
+        } for p in pkgs])
+
+    def post(self, request, ingredient_id):
+        ing = Ingredient.objects.filter(id=ingredient_id).first()
+        if not ing:
+            return response.Response({"detail": "Ingredient not found"}, status=404)
+        data = request.data
+        name_en = (data.get("name_en") or "").strip()
+        name_ar = (data.get("name_ar") or "").strip()
+        factor = data.get("conversion_factor")
+        if not name_en or not factor:
+            return response.Response(
+                {"detail": "name_en and conversion_factor are required"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        try:
+            factor_val = Decimal(str(factor))
+            if factor_val <= 0:
+                raise ValueError
+        except (Exception,):
+            return response.Response({"detail": "conversion_factor must be a positive number"}, status=400)
+        is_default = bool(data.get("is_default", False))
+        if is_default:
+            ing.packages.update(is_default=False)
+        pkg = IngredientPackage.objects.create(
+            ingredient=ing,
+            name_en=name_en,
+            name_ar=name_ar,
+            conversion_factor=factor_val,
+            is_active=data.get("is_active", True),
+            is_default=is_default,
+            sort_order=data.get("sort_order", 0),
+        )
+        return response.Response({
+            "id": pkg.id,
+            "name_en": pkg.name_en,
+            "name_ar": pkg.name_ar,
+            "conversion_factor": str(pkg.conversion_factor),
+            "is_active": pkg.is_active,
+            "is_default": pkg.is_default,
+            "sort_order": pkg.sort_order,
+        }, status=status.HTTP_201_CREATED)
+
+
+class IngredientPackageDetailView(views.APIView):
+    """تعديل / حذف / تعيين كافتراضي — عبوة صنف."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, ingredient_id, pk):
+        pkg = IngredientPackage.objects.filter(id=pk, ingredient_id=ingredient_id).first()
+        if not pkg:
+            return response.Response({"detail": "Package not found"}, status=404)
+        data = request.data
+        if "name_en" in data:
+            pkg.name_en = (data["name_en"] or "").strip() or pkg.name_en
+        if "name_ar" in data:
+            pkg.name_ar = (data.get("name_ar") or "").strip()
+        if "conversion_factor" in data and data["conversion_factor"]:
+            try:
+                pkg.conversion_factor = Decimal(str(data["conversion_factor"]))
+            except (Exception,):
+                pass
+        if "is_active" in data:
+            pkg.is_active = bool(data["is_active"])
+        if "is_default" in data and data["is_default"]:
+            pkg.ingredient.packages.exclude(id=pkg.id).update(is_default=False)
+            pkg.is_default = True
+        if "sort_order" in data:
+            pkg.sort_order = int(data.get("sort_order", 0))
+        pkg.save()
+        return response.Response({
+            "id": pkg.id,
+            "name_en": pkg.name_en,
+            "name_ar": pkg.name_ar,
+            "conversion_factor": str(pkg.conversion_factor),
+            "is_active": pkg.is_active,
+            "is_default": pkg.is_default,
+            "sort_order": pkg.sort_order,
+        })
+
+    def delete(self, request, ingredient_id, pk):
+        pkg = IngredientPackage.objects.filter(id=pk, ingredient_id=ingredient_id).first()
+        if not pkg:
+            return response.Response({"detail": "Package not found"}, status=404)
+        pkg.delete()
+        return response.Response(status=status.HTTP_204_NO_CONTENT)
+
+
 class ProductCatalogUploadView(views.APIView):
     """
     Upload Product Catalog (Saif format) [Ref: 132745].
     Headers: المنتج, الوحدة, كود تعريف المنتج, السعر غير شامل الضريبة.
     Creates/updates Products (final items sold). Ingredients uploaded separately.
     """
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
 
     def post(self, request):
         file = request.FILES.get("file")
@@ -394,7 +531,7 @@ class WasteReportView(views.APIView):
     Waste log: GET list by date (optional branch_id for theoretical from Prep List).
     POST to save. Query params: date, branch_id.
     """
-    permission_classes = [permissions.AllowAny]
+    permission_classes = [permissions.IsAuthenticated]
 
     def get(self, request):
         from collections import defaultdict
@@ -775,3 +912,631 @@ class StockTransferRejectView(views.APIView):
             log_system_error("transfer_failed", str(e), user=request.user, context={"transfer_id": transfer.id}, exc=e)
             raise
         return response.Response({"status": "rejected", "id": transfer.id, "uuid": str(transfer.uuid)})
+
+
+class FoodicsProductSearchView(views.APIView):
+    """بحث عن منتجات Foodics بالاسم أو الـ SKU — يُستخدم في التنبؤ اليدوي للشراء."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        q = (request.query_params.get("q") or "").strip()
+        if len(q) < 1:
+            # Return all active products (up to 100) when no query
+            qs = FoodicsProduct.objects.filter(is_active=True).order_by("name")[:100]
+        else:
+            qs = FoodicsProduct.objects.filter(is_active=True).filter(
+                Q(name__icontains=q) | Q(foodics_product_id__icontains=q)
+            ).order_by("name")[:40]
+
+        return response.Response({
+            "products": [
+                {"id": p.id, "sku": p.foodics_product_id, "name": p.name}
+                for p in qs
+            ]
+        })
+
+
+class ProductListView(views.APIView):
+    """قائمة جميع المنتجات مع معلوماتها الأساسية وعدد مكونات الوصفة."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        q = (request.query_params.get("q") or "").strip()
+        active_filter = request.query_params.get("active")  # "true" / "false" / None
+
+        qs = FoodicsProduct.objects.select_related("sales_unit").prefetch_related(
+            "recipe__lines__ingredient__base_unit",
+            "recipe__lines__unit",
+            "recipe__lines__ingredient__packages",
+        ).order_by("name")
+
+        if q:
+            qs = qs.filter(Q(name__icontains=q) | Q(foodics_product_id__icontains=q))
+        if active_filter == "true":
+            qs = qs.filter(is_active=True)
+        elif active_filter == "false":
+            qs = qs.filter(is_active=False)
+
+        out = []
+        for p in qs:
+            try:
+                recipe = p.recipe
+                has_recipe = True
+                lines_list = recipe.lines.all()
+                recipe_lines_count = len(lines_list)
+
+                # Calculate total production cost using prefetched data
+                total_cost = Decimal("0")
+                has_any_cost = False
+                for line in lines_list:
+                    ing = line.ingredient
+                    if ing.unit_cost is not None:
+                        try:
+                            recipe_unit_code = line.unit.code if line.unit else ""
+                            base_unit_code = ing.base_unit.code if ing.base_unit else ""
+                            if recipe_unit_code == base_unit_code:
+                                factor = Decimal("1")
+                            else:
+                                factor = Decimal("1")
+                                for pkg in ing.packages.all():
+                                    if pkg.is_active and pkg.conversion_factor:
+                                        factor = Decimal(str(pkg.conversion_factor))
+                                        break
+                            total_cost += line.qty * factor * ing.unit_cost
+                            has_any_cost = True
+                        except Exception:
+                            pass
+
+                cost_str = str(total_cost.quantize(Decimal("0.01"))) if has_any_cost else None
+            except Exception:
+                has_recipe = False
+                recipe_lines_count = 0
+                cost_str = None
+
+            out.append({
+                "id": p.id,
+                "sku": p.foodics_product_id,
+                "name": p.name,
+                "is_active": p.is_active,
+                "price_excl_tax": str(p.price_excl_tax) if p.price_excl_tax else None,
+                "sales_unit": p.sales_unit.code if p.sales_unit else None,
+                "has_recipe": has_recipe,
+                "recipe_lines_count": recipe_lines_count,
+                "total_cost": cost_str,
+            })
+
+        return response.Response({"products": out, "count": len(out)})
+
+
+class ProductDetailView(views.APIView):
+    """تفاصيل منتج واحد مع مكونات وصفته الكاملة."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, pk):
+        try:
+            product = FoodicsProduct.objects.select_related(
+                "sales_unit",
+                "recipe__yield_unit",
+            ).prefetch_related(
+                "recipe__lines__ingredient__base_unit",
+                "recipe__lines__unit",
+            ).get(pk=pk)
+        except FoodicsProduct.DoesNotExist:
+            return response.Response({"detail": "Not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        result = {
+            "id": product.id,
+            "sku": product.foodics_product_id,
+            "name": product.name,
+            "is_active": product.is_active,
+            "price_excl_tax": str(product.price_excl_tax) if product.price_excl_tax else None,
+            "sales_unit": product.sales_unit.code if product.sales_unit else None,
+            "created_at": product.created_at.isoformat() if product.created_at else None,
+            "updated_at": product.updated_at.isoformat() if product.updated_at else None,
+            "recipe": None,
+        }
+
+        if hasattr(product, "recipe"):
+            recipe = product.recipe
+            lines = []
+            total_cost = Decimal("0")
+            has_any_cost = False
+
+            for line in recipe.lines.all().order_by("ingredient__name_en"):
+                ing = line.ingredient
+                qty = line.qty
+
+                # Calculate line cost: qty (in recipe unit) × unit_cost (per base unit)
+                # If recipe unit == base unit, factor=1; else use conversion via base unit
+                line_cost = None
+                line_cost_str = None
+                if ing.unit_cost is not None:
+                    # unit_cost is per base unit; qty in recipe may be in a different unit
+                    # Attempt simple calculation: assume recipe qty is in base unit unless
+                    # we can find conversion factor
+                    try:
+                        recipe_unit_code = line.unit.code if line.unit else ""
+                        base_unit_code = ing.base_unit.code if ing.base_unit else ""
+                        if recipe_unit_code == base_unit_code:
+                            factor = Decimal("1")
+                        else:
+                            # Try to find conversion via IngredientPackage
+                            factor = Decimal("1")
+                            from inventory.models import IngredientPackage
+                            pkg = IngredientPackage.objects.filter(
+                                ingredient=ing, is_active=True
+                            ).first()
+                            if pkg and pkg.conversion_factor:
+                                factor = Decimal(str(pkg.conversion_factor))
+
+                        line_cost = (qty * factor * ing.unit_cost).quantize(Decimal("0.0001"))
+                        total_cost += line_cost
+                        has_any_cost = True
+                        line_cost_str = str(line_cost)
+                    except Exception:
+                        line_cost_str = None
+
+                lines.append({
+                    "ingredient_id": ing.id,
+                    "ingredient_name": ing.name_en or "",
+                    "ingredient_name_ar": ing.name_ar or "",
+                    "serial_code": ing.serial_code or "",
+                    "qty": str(qty),
+                    "unit_code": line.unit.code if line.unit else "",
+                    "unit_label": (line.unit.name_en or line.unit.code) if line.unit else "",
+                    "unit_label_ar": (line.unit.name_ar or line.unit.name_en or line.unit.code) if line.unit else "",
+                    "base_unit_code": ing.base_unit.code if ing.base_unit else "",
+                    "unit_cost": str(ing.unit_cost) if ing.unit_cost is not None else None,
+                    "line_cost": line_cost_str,
+                })
+
+            result["recipe"] = {
+                "id": recipe.id,
+                "yield_qty": str(recipe.yield_qty),
+                "yield_unit": recipe.yield_unit.code if recipe.yield_unit else "",
+                "lines_count": len(lines),
+                "lines": lines,
+                "total_cost": str(total_cost.quantize(Decimal("0.01"))) if has_any_cost else None,
+                "has_cost_data": has_any_cost,
+            }
+
+            # Profit margin if selling price and cost both known
+            if has_any_cost and product.price_excl_tax and total_cost > 0:
+                selling = Decimal(str(product.price_excl_tax))
+                profit = selling - total_cost
+                margin_pct = (profit / selling * 100).quantize(Decimal("0.1")) if selling > 0 else None
+                result["recipe"]["profit_margin"] = str(margin_pct) if margin_pct is not None else None
+                result["recipe"]["profit_amount"] = str(profit.quantize(Decimal("0.01")))
+            else:
+                result["recipe"]["profit_margin"] = None
+                result["recipe"]["profit_amount"] = None
+
+        return response.Response(result)
+
+
+# ─── Recipe Line CRUD ──────────────────────────────────────────────────────────
+
+def _build_line_response(line: "RecipeLine") -> dict:
+    """Serialize a single RecipeLine for API response (reuses ProductDetailView logic)."""
+    ing = line.ingredient
+    qty = line.qty
+    line_cost_str = None
+
+    if ing.unit_cost is not None:
+        try:
+            recipe_unit_code = line.unit.code if line.unit else ""
+            base_unit_code = ing.base_unit.code if ing.base_unit else ""
+            if recipe_unit_code == base_unit_code:
+                factor = Decimal("1")
+            else:
+                factor = Decimal("1")
+                pkg = IngredientPackage.objects.filter(ingredient=ing, is_active=True).first()
+                if pkg and pkg.conversion_factor:
+                    factor = Decimal(str(pkg.conversion_factor))
+            line_cost = qty * factor * ing.unit_cost
+            line_cost_str = str(line_cost.quantize(Decimal("0.0001")))
+        except Exception:
+            line_cost_str = None
+
+    return {
+        "id": line.id,
+        "ingredient_id": ing.id,
+        "ingredient_name": ing.name_en or "",
+        "ingredient_name_ar": ing.name_ar or "",
+        "serial_code": ing.serial_code or "",
+        "unit_code": line.unit.code if line.unit else "",
+        "unit_label": line.unit.name_en if line.unit else "",
+        "unit_label_ar": line.unit.name_ar if line.unit else "",
+        "qty": str(qty),
+        "unit_cost": str(ing.unit_cost) if ing.unit_cost is not None else None,
+        "line_cost": line_cost_str,
+    }
+
+
+class ProductRecipeLinesView(views.APIView):
+    """POST – add a new ingredient line to a product's recipe."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def post(self, request, pk):
+        try:
+            product = FoodicsProduct.objects.get(pk=pk)
+        except FoodicsProduct.DoesNotExist:
+            return response.Response({"error": "Product not found"}, status=404)
+
+        ingredient_id = request.data.get("ingredient_id")
+        qty = request.data.get("qty")
+        unit_code = request.data.get("unit_code")
+
+        if not ingredient_id or not qty or not unit_code:
+            return response.Response({"error": "ingredient_id, qty, unit_code are required"}, status=400)
+
+        try:
+            ing = Ingredient.objects.get(pk=ingredient_id)
+        except Ingredient.DoesNotExist:
+            return response.Response({"error": "Ingredient not found"}, status=404)
+
+        try:
+            unit = Unit.objects.get(code=unit_code)
+        except Unit.DoesNotExist:
+            return response.Response({"error": f"Unit '{unit_code}' not found"}, status=404)
+
+        # Get or create the Recipe for this product
+        recipe, _ = Recipe.objects.get_or_create(
+            product=product,
+            defaults={"yield_unit": unit},
+        )
+
+        # Create or update the line
+        line, created = RecipeLine.objects.get_or_create(
+            recipe=recipe,
+            ingredient=ing,
+            defaults={"qty": Decimal(str(qty)), "unit": unit},
+        )
+        if not created:
+            line.qty = Decimal(str(qty))
+            line.unit = unit
+            line.save()
+
+        return response.Response(_build_line_response(line), status=201 if created else 200)
+
+
+class ProductRecipeLineDetailView(views.APIView):
+    """PATCH / DELETE a single recipe line."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def _get_line(self, pk, line_id):
+        try:
+            line = RecipeLine.objects.select_related(
+                "ingredient", "ingredient__base_unit", "unit", "recipe__product"
+            ).get(id=line_id, recipe__product__id=pk)
+            return line, None
+        except RecipeLine.DoesNotExist:
+            return None, response.Response({"error": "Line not found"}, status=404)
+
+    def patch(self, request, pk, line_id):
+        line, err = self._get_line(pk, line_id)
+        if err:
+            return err
+
+        if "qty" in request.data:
+            line.qty = Decimal(str(request.data["qty"]))
+
+        if "unit_code" in request.data:
+            try:
+                line.unit = Unit.objects.get(code=request.data["unit_code"])
+            except Unit.DoesNotExist:
+                return response.Response({"error": "Unit not found"}, status=404)
+
+        line.save()
+        return response.Response(_build_line_response(line))
+
+    def delete(self, request, pk, line_id):
+        line, err = self._get_line(pk, line_id)
+        if err:
+            return err
+        line.delete()
+        return response.Response(status=204)
+
+
+class StockBalanceReportView(views.APIView):
+    """
+    تقرير أرصدة المخزون الحالية — Stock Balance Report
+    GET /inventory/stock-balance/
+    يعرض كمية كل صنف في كل فرع مع قيمة المخزون وحالة الإنذار المبكر.
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        scope = get_user_scope(request.user)
+        qs = BranchStock.objects.select_related(
+            "branch", "branch__brand", "ingredient", "ingredient__base_unit"
+        ).order_by("branch__name", "ingredient__name_en")
+
+        branch_id = request.query_params.get("branch_id")
+        brand_id = request.query_params.get("brand_id")
+        search = (request.query_params.get("search") or "").strip()
+        low_stock_only = request.query_params.get("low_stock_only") == "1"
+
+        if scope.get("brand_ids"):
+            qs = qs.filter(branch__brand_id__in=scope["brand_ids"])
+        elif brand_id:
+            try:
+                qs = qs.filter(branch__brand_id=int(brand_id))
+            except (TypeError, ValueError):
+                pass
+
+        if scope.get("branch_ids"):
+            qs = qs.filter(branch_id__in=scope["branch_ids"])
+        elif branch_id:
+            try:
+                qs = qs.filter(branch_id=int(branch_id))
+            except (TypeError, ValueError):
+                pass
+
+        if search:
+            qs = qs.filter(
+                Q(ingredient__name_en__icontains=search)
+                | Q(ingredient__name_ar__icontains=search)
+            )
+
+        if low_stock_only:
+            from django.db.models import F
+            qs = qs.filter(on_hand__lte=F("reorder_level"))
+
+        page_items, pagination = paginate_queryset(qs, request, page_size=50, max_page_size=100)
+        rows = []
+        total_value = Decimal("0")
+        for bs in page_items:
+            unit_cost = bs.ingredient.unit_cost if hasattr(bs.ingredient, "unit_cost") else None
+            value = (bs.on_hand * unit_cost) if unit_cost else None
+            if value:
+                total_value += value
+            is_low = bs.reorder_level > 0 and bs.on_hand <= bs.reorder_level
+            rows.append({
+                "id": bs.id,
+                "branch_id": bs.branch_id,
+                "branch_name": bs.branch.name,
+                "brand_name": bs.branch.brand.name if bs.branch.brand else "",
+                "ingredient_id": bs.ingredient_id,
+                "ingredient_name_en": bs.ingredient.name_en,
+                "ingredient_name_ar": bs.ingredient.name_ar or "",
+                "unit_code": bs.ingredient.base_unit.code if bs.ingredient.base_unit else "",
+                "on_hand": str(bs.on_hand),
+                "reorder_level": str(bs.reorder_level),
+                "unit_cost": str(unit_cost) if unit_cost is not None else None,
+                "value": str(value) if value is not None else None,
+                "is_low_stock": is_low,
+            })
+
+        return response.Response({
+            "rows": rows,
+            "total_count": pagination["count"],
+            "total_value": str(total_value),
+            "pagination": pagination,
+        })
+
+
+class StockMovementsReportView(views.APIView):
+    """
+    تقرير حركات المخزون — Stock Movements Report
+    GET /inventory/stock-movements/
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        scope = get_user_scope(request.user)
+        from datetime import date, datetime as _dt
+
+        branch_id = request.query_params.get("branch_id")
+        brand_id = request.query_params.get("brand_id")
+        ingredient_id = request.query_params.get("ingredient_id")
+        movement_type = request.query_params.get("movement_type")
+        date_from_str = request.query_params.get("date_from")
+        date_to_str = request.query_params.get("date_to")
+        search = (request.query_params.get("search") or "").strip()
+
+        today = date.today()
+        try:
+            date_from = _dt.strptime(date_from_str, "%Y-%m-%d").date() if date_from_str else today
+        except ValueError:
+            date_from = today
+        try:
+            date_to = _dt.strptime(date_to_str, "%Y-%m-%d").date() if date_to_str else today
+        except ValueError:
+            date_to = today
+
+        qs = StockMovement.objects.select_related(
+            "branch", "branch__brand", "ingredient", "ingredient__base_unit"
+        ).filter(
+            created_at__date__gte=date_from,
+            created_at__date__lte=date_to,
+        ).order_by("-created_at")
+
+        if scope.get("brand_ids"):
+            qs = qs.filter(branch__brand_id__in=scope["brand_ids"])
+        elif brand_id:
+            try:
+                qs = qs.filter(branch__brand_id=int(brand_id))
+            except (TypeError, ValueError):
+                pass
+
+        if scope.get("branch_ids"):
+            qs = qs.filter(branch_id__in=scope["branch_ids"])
+        elif branch_id:
+            try:
+                qs = qs.filter(branch_id=int(branch_id))
+            except (TypeError, ValueError):
+                pass
+
+        if ingredient_id:
+            try:
+                qs = qs.filter(ingredient_id=int(ingredient_id))
+            except (TypeError, ValueError):
+                pass
+
+        if movement_type:
+            qs = qs.filter(movement_type=movement_type)
+
+        if search:
+            qs = qs.filter(
+                Q(ingredient__name_en__icontains=search)
+                | Q(ingredient__name_ar__icontains=search)
+                | Q(reference__icontains=search)
+            )
+
+        from inventory.models import StockMovementType
+        type_labels_ar = {
+            "purchase": "شراء",
+            "adjustment": "تسوية",
+            "depletion": "استهلاك",
+            "transfer_out": "تحويل صادر",
+            "transfer_in": "تحويل وارد",
+        }
+
+        rows = []
+        for mv in qs[:2000]:
+            rows.append({
+                "id": mv.id,
+                "branch_id": mv.branch_id,
+                "branch_name": mv.branch.name,
+                "brand_name": mv.branch.brand.name if mv.branch.brand else "",
+                "ingredient_id": mv.ingredient_id,
+                "ingredient_name_en": mv.ingredient.name_en,
+                "ingredient_name_ar": mv.ingredient.name_ar or "",
+                "unit_code": mv.ingredient.base_unit.code if mv.ingredient.base_unit else "",
+                "movement_type": mv.movement_type,
+                "movement_type_ar": type_labels_ar.get(mv.movement_type, mv.movement_type),
+                "qty_delta": str(mv.qty_delta),
+                "reference": mv.reference or "",
+                "created_at": mv.created_at.isoformat() if mv.created_at else None,
+            })
+
+        total_in = sum(
+            Decimal(r["qty_delta"]) for r in rows if Decimal(r["qty_delta"]) > 0
+        )
+        total_out = sum(
+            Decimal(r["qty_delta"]) for r in rows if Decimal(r["qty_delta"]) < 0
+        )
+
+        return response.Response({
+            "rows": rows,
+            "total_count": len(rows),
+            "total_in": str(total_in),
+            "total_out": str(total_out),
+            "date_from": str(date_from),
+            "date_to": str(date_to),
+        })
+
+
+class IngredientCostUpdateView(views.APIView):
+    """PATCH /ingredients/<pk>/cost/ – update only the unit_cost of an ingredient."""
+
+    permission_classes = [permissions.IsAuthenticated]
+
+    def patch(self, request, pk):
+        try:
+            ing = Ingredient.objects.get(pk=pk)
+        except Ingredient.DoesNotExist:
+            return response.Response({"error": "Ingredient not found"}, status=404)
+
+        raw_cost = request.data.get("unit_cost")
+        if raw_cost is None:
+            return response.Response({"error": "unit_cost is required"}, status=400)
+
+        try:
+            ing.unit_cost = Decimal(str(raw_cost)) if str(raw_cost).strip() else None
+            ing.save(update_fields=["unit_cost"])
+        except Exception as exc:
+            return response.Response({"error": str(exc)}, status=400)
+
+        return response.Response({
+            "id": ing.id,
+            "name_ar": ing.name_ar or "",
+            "name_en": ing.name_en or "",
+            "unit_cost": str(ing.unit_cost) if ing.unit_cost is not None else None,
+        })
+
+
+# ─── Recipe Costing API ────────────────────────────────────────────────────────
+
+class RecipeCostView(views.APIView):
+    """
+    GET /api/inventory/recipes/<product_pk>/cost/
+
+    Returns detailed cost breakdown for a product's recipe:
+      - cost_per_serving: total ingredient cost (SAR)
+      - ingredients_cost: same (raw without waste)
+      - waste_cost: extra cost due to waste %
+      - lines: per-ingredient breakdown
+      - has_missing_costs: True if any ingredient lacks unit_cost
+    """
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, product_pk):
+        try:
+            recipe = Recipe.objects.prefetch_related(
+                "lines__ingredient", "lines__unit"
+            ).get(product_id=product_pk)
+        except Recipe.DoesNotExist:
+            return response.Response(
+                {"detail": "Recipe not found for this product."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        lines_data = []
+        total_raw_cost = Decimal("0.0000")
+        total_waste_cost = Decimal("0.0000")
+        has_missing_costs = False
+
+        for line in recipe.lines.all():
+            ing = line.ingredient
+            unit_cost = ing.unit_cost or Decimal("0")
+            if ing.unit_cost is None:
+                has_missing_costs = True
+
+            raw_cost = (line.qty * unit_cost).quantize(Decimal("0.0001"))
+            effective_cost = line.actual_cost_per_serving
+            waste_cost_line = (effective_cost - raw_cost).quantize(Decimal("0.0001"))
+
+            total_raw_cost += effective_cost
+            total_waste_cost += waste_cost_line
+
+            lines_data.append({
+                "ingredient_id": ing.pk,
+                "ingredient_name": ing.name_en,
+                "ingredient_name_ar": ing.name_ar,
+                "qty": str(line.qty),
+                "unit": line.unit.code,
+                "waste_percentage": str(line.waste_percentage),
+                "effective_qty": str(line.effective_qty.quantize(Decimal("0.0001"))),
+                "unit_cost": str(unit_cost),
+                "raw_cost": str(raw_cost),
+                "waste_cost": str(waste_cost_line),
+                "total_cost": str(effective_cost),
+            })
+
+        ingredients_cost = (total_raw_cost - total_waste_cost).quantize(Decimal("0.01"))
+        cost_per_serving = total_raw_cost.quantize(Decimal("0.01"))
+        waste_total = total_waste_cost.quantize(Decimal("0.01"))
+
+        # Food cost % vs selling price
+        product = recipe.product
+        food_cost_pct = None
+        if product.price_excl_tax and product.price_excl_tax > 0 and cost_per_serving > 0:
+            food_cost_pct = float(
+                (cost_per_serving / product.price_excl_tax * 100).quantize(Decimal("0.1"))
+            )
+
+        return response.Response({
+            "product_id": product.pk,
+            "product_name": product.name,
+            "selling_price": str(product.price_excl_tax) if product.price_excl_tax else None,
+            "cost_per_serving": str(cost_per_serving),
+            "ingredients_cost": str(ingredients_cost),
+            "waste": str(waste_total),
+            "food_cost_pct": food_cost_pct,
+            "has_missing_costs": has_missing_costs,
+            "lines": lines_data,
+        })

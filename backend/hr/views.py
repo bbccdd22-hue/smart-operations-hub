@@ -1,11 +1,12 @@
 """
 HR APIs - الخدمة الذاتية للموظفين (إجازات، سلف) + إدارة.
 """
+from django.db.models import Q
 from rest_framework import permissions, response, status, views
 from rest_framework.exceptions import PermissionDenied
 
 from hr.attendance_services import record_clock_in, record_clock_out
-from hr.models import Employee, LeaveRequest, SalaryAdvance
+from hr.models import CostCenter, Employee, LeaveRequest, SalaryAdvance
 from hr.payroll_services import calculate_net_salary
 
 
@@ -169,3 +170,101 @@ class ClockInView(views.APIView):
     def post(self, request):
         ok = record_clock_in(request.user)
         return response.Response({"recorded": ok})
+
+
+class CostCenterListAPIView(views.APIView):
+    """قائمة مراكز التكلفة — للاستخدام في قيود اليومية والأبعاد."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from core.permissions import get_user_scope
+        scope = get_user_scope(request.user)
+        qs = CostCenter.objects.filter(is_active=True).select_related("branch", "brand").order_by("code")
+        if scope.get("brand_ids"):
+            qs = qs.filter(brand_id__in=scope["brand_ids"])
+        if scope.get("branch_ids"):
+            qs = qs.filter(branch_id__in=scope["branch_ids"])
+        brand_id = request.query_params.get("brand_id")
+        branch_id = request.query_params.get("branch_id")
+        if brand_id:
+            try:
+                qs = qs.filter(brand_id=int(brand_id))
+            except (TypeError, ValueError):
+                pass
+        if branch_id:
+            try:
+                qs = qs.filter(branch_id=int(branch_id))
+            except (TypeError, ValueError):
+                pass
+        search = (request.query_params.get("search") or "").strip()
+        if search:
+            qs = qs.filter(
+                Q(code__icontains=search)
+                | Q(name__icontains=search)
+                | Q(name_ar__icontains=search)
+            )
+        rows = [
+            {
+                "id": cc.id,
+                "code": cc.code,
+                "name": cc.name,
+                "name_ar": cc.name_ar or cc.name,
+                "branch_id": cc.branch_id,
+                "branch_name": cc.branch.name,
+                "brand_id": cc.brand_id,
+                "brand_name": cc.brand.name,
+            }
+            for cc in qs[:200]
+        ]
+        return response.Response({"cost_centers": rows})
+
+
+class EmployeeListAPIView(views.APIView):
+    """قائمة الموظفين — للاستخدام في قيود اليومية والأبعاد."""
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request):
+        from core.permissions import get_user_scope
+        scope = get_user_scope(request.user)
+        qs = Employee.objects.filter(is_active=True).select_related("branch", "brand").order_by("employee_id")
+        if scope.get("brand_ids"):
+            qs = qs.filter(brand_id__in=scope["brand_ids"])
+        if scope.get("branch_ids"):
+            qs = qs.filter(branch_id__in=scope["branch_ids"])
+        brand_id = request.query_params.get("brand_id")
+        branch_id = request.query_params.get("branch_id")
+        if brand_id:
+            try:
+                qs = qs.filter(brand_id=int(brand_id))
+            except (TypeError, ValueError):
+                pass
+        if branch_id:
+            try:
+                qs = qs.filter(branch_id=int(branch_id))
+            except (TypeError, ValueError):
+                pass
+        search = (request.query_params.get("search") or "").strip()
+        if search:
+            qs = qs.filter(
+                Q(employee_id__icontains=search)
+                | Q(first_name__icontains=search)
+                | Q(last_name__icontains=search)
+                | Q(first_name_ar__icontains=search)
+                | Q(last_name_ar__icontains=search)
+            )
+        rows = [
+            {
+                "id": emp.id,
+                "employee_id": emp.employee_id,
+                "first_name": emp.first_name,
+                "last_name": emp.last_name,
+                "first_name_ar": emp.first_name_ar or emp.first_name,
+                "last_name_ar": emp.last_name_ar or emp.last_name,
+                "branch_id": emp.branch_id,
+                "branch_name": emp.branch.name if emp.branch else None,
+                "brand_id": emp.brand_id,
+                "brand_name": emp.brand.name if emp.brand else None,
+            }
+            for emp in qs[:200]
+        ]
+        return response.Response({"employees": rows})

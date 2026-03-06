@@ -107,7 +107,7 @@ export default function ReconciliationPage() {
   const [isFinalizing, setIsFinalizing] = useState(false);
 
   useEffect(() => {
-    fetchBrands().then(setBrands);
+    fetchBrands().then((r) => setBrands(Array.isArray(r) ? r : [])).catch(() => setBrands([]));
   }, []);
 
   useEffect(() => {
@@ -213,7 +213,7 @@ export default function ReconciliationPage() {
               className="rounded-xl border border-white/20 bg-white/10 px-3 py-2 text-sm dark:border-slate-600 dark:bg-slate-800/50"
             >
               <option value="">{t("all")}</option>
-              {brands.map((b) => (
+              {(Array.isArray(brands) ? brands : []).map((b) => (
                 <option key={b.id} value={b.slug}>{b.name}</option>
               ))}
             </select>

@@ -14,6 +14,16 @@ import { useOrgs } from "../../contexts/OrgsContext";
 import { getBrandChartCodes } from "../../lib/brandChartMapping";
 import { getBrandDisplayName, getBranchDisplayName } from "../../lib/localization";
 import { applyParentChildAggregation } from "../../lib/chartAggregation";
+import TemplateLayoutToolbar from "../../components/TemplateLayoutToolbar";
+import {
+  loadLayout,
+  getDisplayColumnOrder,
+  getColumnWidth,
+  getColumnLabel,
+  type TemplateLayout,
+} from "../../config/templateTableConfig";
+
+const TEMPLATE_KEY = "profit_loss";
 
 function toNum(v: string | number | undefined): number {
   if (v == null) return 0;
@@ -28,7 +38,9 @@ function formatAmount(n: number, isRTL: boolean): string {
 
 export default function ProfitLossReport() {
   const { i18n } = useTranslation();
-  const { brands: orgBrands, branches: orgBranches, branchesByBrandId } = useOrgs();
+  const { brands, branches, branchesByBrandId } = useOrgs();
+  const orgBrands = Array.isArray(brands) ? brands : [];
+  const orgBranches = Array.isArray(branches) ? branches : [];
   const isRTL = i18n.language === "ar";
   const lang = i18n.language;
   const [accounts, setAccounts] = useState<ChartAccount[]>([]);
@@ -38,9 +50,15 @@ export default function ProfitLossReport() {
   const [filterLevel, setFilterLevel] = useState<number>(5);
   const levelClamped = Math.min(5, Math.max(1, filterLevel));
 
+  const [tableLayout, setTableLayout] = useState<TemplateLayout | null>(() => loadLayout(TEMPLATE_KEY));
+  const displayColumnOrder = useMemo(
+    () => getDisplayColumnOrder(TEMPLATE_KEY, tableLayout, []),
+    [tableLayout]
+  );
+
   useEffect(() => {
     fetchChartAccounts()
-      .then(setAccounts)
+      .then((r) => setAccounts(Array.isArray(r) ? r : []))
       .catch(() => setAccounts([]))
       .finally(() => setLoading(false));
   }, []);
@@ -56,7 +74,7 @@ export default function ProfitLossReport() {
   const branchesForBrand = useMemo(
     () =>
       filterBrand && selectedBrand
-        ? (branchesByBrandId[selectedBrand.id] ?? [])
+        ? (Array.isArray(branchesByBrandId[selectedBrand.id]) ? branchesByBrandId[selectedBrand.id] : [])
         : orgBranches,
     [filterBrand, selectedBrand, branchesByBrandId, orgBranches]
   );
@@ -290,29 +308,32 @@ export default function ProfitLossReport() {
                 </svg>
                 {isRTL ? "تحليل المصاريف التشغيلية" : "Operating Expenses Analysis"}
               </h2>
+              <TemplateLayoutToolbar
+                templateKey={TEMPLATE_KEY}
+                onLayoutChange={(l) => setTableLayout(l)}
+                isRTL={isRTL}
+                T={(ar: string, en: string) => (isRTL ? ar : en)}
+              />
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full table-fixed" style={{ minWidth: 400 }}>
                 <thead>
                   <tr className="border-b border-white/10 bg-white/5">
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
-                      {isRTL ? "رقم الحساب" : "Account Code"}
-                    </th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-slate-400">
-                      {isRTL ? "البيان (الحساب التحليلي)" : "Description"}
-                    </th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-400">
-                      {isRTL ? "المبلغ" : "Amount"}
-                    </th>
-                    <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-400">
-                      {isRTL ? "النسبة من الإيراد" : "% of Revenue"}
-                    </th>
+                    {displayColumnOrder.map((colId) => (
+                      <th
+                        key={colId}
+                        className={`px-4 py-3 text-xs font-semibold uppercase tracking-wider text-slate-400 ${colId === "amount" || colId === "perc" ? "text-right" : "text-left"}`}
+                        style={{ width: getColumnWidth(TEMPLATE_KEY, tableLayout, colId, false), minWidth: 60 }}
+                      >
+                        {getColumnLabel(TEMPLATE_KEY, colId, undefined, isRTL)}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody id="p-l-details">
                   {expenseRows.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="px-4 py-8 text-center text-slate-500">
+                      <td colSpan={displayColumnOrder.length} className="px-4 py-8 text-center text-slate-500">
                         {isRTL ? "لا توجد مصاريف مسجلة. قم برفع الأرصدة من الإكسل أولاً." : "No expenses recorded. Upload balances from Excel first."}
                       </td>
                     </tr>
@@ -321,17 +342,16 @@ export default function ProfitLossReport() {
                       <tr
                         key={row.id}
                         className="border-b border-white/5 transition hover:bg-white/5"
+                        style={{ height: tableLayout?.rowHeight ? `${tableLayout.rowHeight}px` : undefined }}
                       >
-                        <td className="px-4 py-3 font-mono text-sm text-slate-300">{row.code}</td>
-                        <td className="px-4 py-3 text-slate-200" dir="rtl">
-                          {isRTL ? row.name_ar : row.name_en}
-                        </td>
-                        <td className="px-4 py-3 text-right font-medium text-slate-200">
-                          {row.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س
-                        </td>
-                        <td className="px-4 py-3 text-right text-slate-400">
-                          {row.pctOfRevenue.toFixed(1)}%
-                        </td>
+                        {displayColumnOrder.map((colId) => {
+                          const w = getColumnWidth(TEMPLATE_KEY, tableLayout, colId, false);
+                          if (colId === "code") return <td key={colId} className="px-4 py-3 font-mono text-sm text-slate-300" style={{ width: w }}>{row.code}</td>;
+                          if (colId === "name") return <td key={colId} className="px-4 py-3 text-slate-200" dir="rtl" style={{ width: w }}>{isRTL ? row.name_ar : row.name_en}</td>;
+                          if (colId === "amount") return <td key={colId} className="px-4 py-3 text-right font-medium text-slate-200" style={{ width: w }}>{row.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })} ر.س</td>;
+                          if (colId === "perc") return <td key={colId} className="px-4 py-3 text-right text-slate-400" style={{ width: w }}>{row.pctOfRevenue.toFixed(1)}%</td>;
+                          return <td key={colId} style={{ width: w }}>—</td>;
+                        })}
                       </tr>
                     ))
                   )}

@@ -104,6 +104,41 @@ class Ingredient(TimestampedModel):
         return self.name_en
 
 
+class IngredientPackage(TimestampedModel):
+    """عبوة صنف — يدعم عبوات متعددة لكل صنف (كرتون، علبة، باليت، إلخ)."""
+    ingredient = models.ForeignKey(Ingredient, on_delete=models.CASCADE, related_name="packages")
+    name_en = models.CharField(max_length=120)
+    name_ar = models.CharField(max_length=120, blank=True, default="")
+    conversion_factor = models.DecimalField(
+        max_digits=18, decimal_places=6,
+        help_text="عدد الوحدات الأساسية في هذه العبوة (مثل: 12 قطعة في الكرتون)",
+    )
+    is_active = models.BooleanField(default=True)
+    is_default = models.BooleanField(
+        default=False, db_index=True,
+        help_text="العبوة الافتراضية التي تظهر في التقارير والمشتريات",
+    )
+    sort_order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        ordering = ["sort_order", "id"]
+        verbose_name = "Ingredient Package"
+        verbose_name_plural = "Ingredient Packages"
+
+    def __str__(self) -> str:
+        return f"{self.ingredient.name_en} → {self.name_en} (×{self.conversion_factor})"
+
+
+class ProductCategory(models.TextChoices):
+    """فئات المنتجات — للسوبرماركت وتحليلات ABC."""
+    BEVERAGES = "beverages", "مشروبات"
+    MEALS = "meals", "وجبات"
+    DESSERTS = "desserts", "حلويات"
+    GROCERY = "grocery", "بقالة"
+    SNACKS = "snacks", "سناكات"
+    OTHER = "other", "أخرى"
+
+
 class FoodicsProduct(TimestampedModel):
     """
     Product (final item sold). From Product Catalog upload or Foodics sync.
@@ -116,6 +151,14 @@ class FoodicsProduct(TimestampedModel):
     )
     foodics_product_id = models.CharField(max_length=64, unique=True)
     name = models.CharField(max_length=255)
+    category = models.CharField(
+        max_length=24,
+        choices=ProductCategory.choices,
+        default=ProductCategory.OTHER,
+        db_index=True,
+        blank=True,
+        help_text="فئة المنتج للتحليلات",
+    )
     is_active = models.BooleanField(default=True)
     sales_unit = models.ForeignKey(
         Unit, null=True, blank=True, on_delete=models.SET_NULL, related_name="products"
@@ -144,6 +187,25 @@ class Recipe(TimestampedModel):
     def __str__(self) -> str:
         return f"Recipe: {self.product}"
 
+    @property
+    def total_ingredients_cost(self) -> Decimal:
+        """مجموع تكلفة المكونات لكل وحدة إنتاج."""
+        return sum(
+            (line.actual_cost_per_serving for line in self.lines.all()),
+            Decimal("0.0000"),
+        )
+
+    @property
+    def waste_cost(self) -> Decimal:
+        """مجموع تكلفة الهدر فقط."""
+        return sum(
+            (
+                line.actual_cost_per_serving - (line.qty * (line.ingredient.unit_cost or Decimal("0")))
+                for line in self.lines.all()
+            ),
+            Decimal("0.0000"),
+        )
+
 
 class RecipeLine(TimestampedModel):
     system_code = models.CharField(
@@ -154,6 +216,10 @@ class RecipeLine(TimestampedModel):
     ingredient = models.ForeignKey(Ingredient, on_delete=models.PROTECT, related_name="recipe_lines")
     qty = models.DecimalField(max_digits=12, decimal_places=4)
     unit = models.ForeignKey(Unit, on_delete=models.PROTECT, related_name="recipe_lines")
+    waste_percentage = models.DecimalField(
+        max_digits=6, decimal_places=2, default=Decimal("0.00"),
+        help_text="نسبة الهدر % (0-100). تُضاف إلى الكمية الفعلية المستهلكة.",
+    )
 
     class Meta:
         constraints = [
@@ -162,6 +228,23 @@ class RecipeLine(TimestampedModel):
 
     def __str__(self) -> str:
         return f"{self.recipe.product} -> {self.ingredient} ({self.qty} {self.unit})"
+
+    @property
+    def effective_qty(self) -> Decimal:
+        """الكمية الفعلية بعد الهدر = qty × (1 + waste_percentage/100)."""
+        return self.qty * (1 + self.waste_percentage / 100)
+
+    @property
+    def actual_cost_per_serving(self) -> Decimal:
+        """
+        تكلفة هذا المكوّن لصنف واحد (SAR).
+        = effective_qty × ingredient.unit_cost
+        Returns 0 if ingredient has no unit_cost.
+        """
+        cost = self.ingredient.unit_cost
+        if cost is None:
+            return Decimal("0.00")
+        return (self.effective_qty * cost).quantize(Decimal("0.0001"))
 
 
 class BranchStock(TimestampedModel):

@@ -1,14 +1,29 @@
-# Render Blueprint - Smart Operations Hub [Ref: 24/7 deployment]
-# Deploy: Connect repo at render.com, Render will detect this file.
+# Render Blueprint - Smart Operations Hub (Production)
+# Deploy: Connect repo at render.com → Auto-deploy on push
+# Region: frankfurt (قريب من السعودية)
+
+envVarGroups:
+  - name: smartops-secrets
+    envVars:
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+
 services:
+  # ═══════════════════════════════════════════════════════════════════════
+  # Backend Web Server
+  # ═══════════════════════════════════════════════════════════════════════
   - type: web
-    name: smart-ops-hub-api
+    name: smartops-backend
     runtime: python
-    region: oregon
-    plan: free
+    region: frankfurt
+    plan: starter
     rootDir: backend
-    buildCommand: pip install -r requirements.txt && python manage.py migrate --noinput && python manage.py seed_brands && python manage.py collectstatic --noinput --clear
-    startCommand: gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
+    buildCommand: |
+      pip install -r requirements.txt &&
+      python manage.py migrate --noinput &&
+      python manage.py seed_demo_data &&
+      python manage.py collectstatic --noinput --clear
+    startCommand: sh start.sh
     envVars:
       - key: PYTHON_VERSION
         value: "3.11"
@@ -16,36 +31,116 @@ services:
         value: "false"
       - key: DJANGO_ALLOWED_HOSTS
         sync: false
-        # Set in Render dashboard: your-service.onrender.com
-      - key: DJANGO_SECRET_KEY
-        generateValue: true
+        # Set: yourapp.onrender.com,*.onrender.com
+      - key: SMARTOPS_BASE_DOMAIN
+        value: smartops.com
+      - fromGroup: smartops-secrets
       - key: DATABASE_URL
         fromDatabase:
-          name: smart-ops-hub-db
+          name: smartops-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: smartops-redis
           property: connectionString
       - key: FRONTEND_ORIGINS
         sync: false
-        # Set: https://your-frontend.onrender.com (or Vercel URL)
-    healthCheckPath: /api/dashboard/system-health/
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+    healthCheckPath: /api/health/
 
+  # ═══════════════════════════════════════════════════════════════════════
+  # Celery Worker (Background Jobs)
+  # ═══════════════════════════════════════════════════════════════════════
+  - type: worker
+    name: celery-worker
+    runtime: python
+    region: frankfurt
+    plan: starter
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: celery -A config worker -l info -Q default,reports,notifications --concurrency=2
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: DJANGO_DEBUG
+        value: "false"
+      - fromGroup: smartops-secrets
+      - key: DATABASE_URL
+        fromDatabase:
+          name: smartops-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: smartops-redis
+          property: connectionString
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Celery Beat (Scheduled Tasks)
+  # ═══════════════════════════════════════════════════════════════════════
+  - type: worker
+    name: celery-beat
+    runtime: python
+    region: frankfurt
+    plan: starter
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: celery -A config beat -l info
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: DJANGO_DEBUG
+        value: "false"
+      - fromGroup: smartops-secrets
+      - key: DATABASE_URL
+        fromDatabase:
+          name: smartops-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: smartops-redis
+          property: connectionString
+
+  # ═══════════════════════════════════════════════════════════════════════
+  # Frontend (Static)
+  # ═══════════════════════════════════════════════════════════════════════
   - type: web
-    name: smart-ops-hub-frontend
+    name: smartops-frontend
     runtime: static
-    region: oregon
-    plan: free
+    region: frankfurt
+    plan: starter
     rootDir: frontend
     buildCommand: npm ci && npm run build
     staticPublishPath: dist
     envVars:
       - key: VITE_API_BASE
         sync: false
-        # Set: https://smart-ops-hub-api.onrender.com/api
+        # Set: https://smartops-backend.onrender.com/api
     routes:
       - type: rewrite
         source: /*
         destination: /index.html
 
+  # ═══════════════════════════════════════════════════════════════════════
+  # Redis (Key Value)
+  # ═══════════════════════════════════════════════════════════════════════
+  - type: keyvalue
+    name: smartops-redis
+    plan: starter
+    region: frankfurt
+    ipAllowList:
+      - source: 0.0.0.0/0
+        description: all
+
 databases:
-  - name: smart-ops-hub-db
-    plan: free
-    region: oregon
+  - name: smartops-db
+    databaseName: smartops
+    plan: starter
+    region: frankfurt

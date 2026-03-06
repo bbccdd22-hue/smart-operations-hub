@@ -22,7 +22,7 @@ export default function CentralKitchenPage() {
     setLoading(true);
     try {
       const res = await fetchCentralKitchenTransfers();
-      setTransfers(res.transfers);
+      setTransfers(Array.isArray(res?.transfers) ? res.transfers : []);
     } catch {
       setTransfers([]);
     } finally {
@@ -78,7 +78,7 @@ export default function CentralKitchenPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {transfers.map((tr) => (
+          {(Array.isArray(transfers) ? transfers : []).map((tr) => (
             <div
               key={tr.uuid}
               className="rounded-2xl border border-slate-200 bg-white p-6 dark:border-slate-700 dark:bg-slate-800"
@@ -110,7 +110,7 @@ export default function CentralKitchenPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {tr.lines.map((l, i) => (
+                    {(Array.isArray(tr?.lines) ? tr.lines : []).map((l, i) => (
                       <tr key={i} className="border-b border-slate-100 dark:border-slate-700/50">
                         <td className="px-3 py-2">{l.ingredient_name}</td>
                         <td className="px-3 py-2 text-right">{l.qty}</td>
@@ -122,16 +122,16 @@ export default function CentralKitchenPage() {
               <div className="mt-4 flex gap-2">
                 <button
                   type="button"
-                  onClick={() => handleConfirm(tr.uuid)}
-                  disabled={!!confirmingId || !!rejectingId}
+                  onClick={() => tr.uuid && handleConfirm(tr.uuid)}
+                  disabled={!tr.uuid || !!confirmingId || !!rejectingId}
                   className="rounded-xl bg-emerald-600 px-4 py-2 text-white hover:bg-emerald-700 disabled:opacity-50"
                 >
                   {confirmingId === tr.uuid ? "..." : t("confirmReceive") ?? "Confirm"}
                 </button>
                 <button
                   type="button"
-                  onClick={() => handleReject(tr.uuid)}
-                  disabled={!!confirmingId || !!rejectingId}
+                  onClick={() => tr.uuid && handleReject(tr.uuid)}
+                  disabled={!tr.uuid || !!confirmingId || !!rejectingId}
                   className="rounded-xl border border-slate-300 px-4 py-2 text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700 disabled:opacity-50"
                 >
                   {rejectingId === tr.uuid ? "..." : t("reject") ?? "Reject"}

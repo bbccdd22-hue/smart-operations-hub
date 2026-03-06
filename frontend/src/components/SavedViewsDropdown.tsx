@@ -63,7 +63,7 @@ export default function SavedViewsDropdown({
 
   useEffect(() => {
     if (isSAIF) {
-      fetchSavedViews().then(setSavedViews);
+      fetchSavedViews().then((r) => setSavedViews(Array.isArray(r) ? r : [])).catch(() => setSavedViews([]));
     }
   }, [isSAIF]);
 

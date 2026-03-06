@@ -56,15 +56,15 @@ export default function UsersPage() {
         if (!r.ok) return [];
         return Array.isArray(data) ? data : data?.users ?? [];
       })
-      .then(setUsers)
+      .then((r) => setUsers(Array.isArray(r) ? r : []))
       .catch(() => setUsers([]))
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
     loadUsers();
-    fetchBrands().then(setBrands);
-    fetchBranches().then(setBranches);
+    fetchBrands().then((r) => setBrands(Array.isArray(r) ? r : [])).catch(() => setBrands([]));
+    fetchBranches().then((r) => setBranches(Array.isArray(r) ? r : [])).catch(() => setBranches([]));
   }, []);
 
   const handleModalClose = () => {

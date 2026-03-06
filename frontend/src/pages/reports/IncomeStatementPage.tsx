@@ -22,6 +22,15 @@ import UnifiedFilterSelect from "../../components/UnifiedFilterSelect";
 import { getBrandChartCodes } from "../../lib/brandChartMapping";
 import { getBrandDisplayName, getBranchDisplayName } from "../../lib/localization";
 import { applyParentChildAggregation, validateAggregationMismatches } from "../../lib/chartAggregation";
+import {
+  loadLayout,
+  saveLayout,
+  getDisplayColumnOrder,
+  getColumnWidth,
+  getColumnLabel,
+  type TemplateLayout,
+} from "../../config/templateTableConfig";
+import { TemplateLayoutToolbar } from "../../components/TemplateLayoutToolbar";
 
 function toNum(v: string | number | undefined): number {
   if (v == null) return 0;
@@ -149,7 +158,9 @@ function calculateStatement(
 export default function IncomeStatementPage() {
   const { i18n } = useTranslation();
   const { addToast } = useNotifications() ?? { addToast: () => {} };
-  const { brands: orgBrands, branches: orgBranches, branchesByBrand, branchesByBrandId } = useOrgs();
+  const { brands, branches, branchesByBrand, branchesByBrandId } = useOrgs();
+  const orgBrands = Array.isArray(brands) ? brands : [];
+  const orgBranches = Array.isArray(branches) ? branches : [];
   const isRTL = i18n.language === "ar";
   const [accounts, setAccounts] = useState<ChartAccount[]>([]);
   const [loading, setLoading] = useState(true);
@@ -164,6 +175,16 @@ export default function IncomeStatementPage() {
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [aggregationMismatches, setAggregationMismatches] = useState<Array<{ code: string; name_ar: string; uploadedTotal: number; computedSum: number; diff: number }>>([]);
   const [budgetExceededCodes, setBudgetExceededCodes] = useState<Set<string>>(new Set());
+  const [tableLayout, setTableLayout] = useState<TemplateLayout | null>(() =>
+    loadLayout("income_statement")
+  );
+  const TEMPLATE_KEY = "income_statement";
+  const displayColumnOrder = getDisplayColumnOrder(TEMPLATE_KEY, tableLayout, []);
+
+  const handleLayoutChange = useCallback((layout: TemplateLayout) => {
+    saveLayout(TEMPLATE_KEY, layout);
+    setTableLayout(layout);
+  }, []);
 
   const updateDynamicReport = () => {
     setIsUpdating(true);
@@ -291,7 +312,7 @@ export default function IncomeStatementPage() {
   const branchesForBrand = useMemo(
     () =>
       filterBrand && selectedBrand
-        ? (branchesByBrandId[selectedBrand.id] ?? [])
+        ? (Array.isArray(branchesByBrandId[selectedBrand.id]) ? branchesByBrandId[selectedBrand.id] : [])
         : orgBranches,
     [filterBrand, selectedBrand, branchesByBrandId, orgBranches]
   );

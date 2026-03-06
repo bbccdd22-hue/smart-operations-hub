@@ -57,7 +57,7 @@ export default function FinancialReportsPage() {
   const [exporting, setExporting] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchBrands().then(setBrands);
+    fetchBrands().then((r) => setBrands(Array.isArray(r) ? r : [])).catch(() => setBrands([]));
   }, []);
 
   useEffect(() => {
@@ -67,7 +67,7 @@ export default function FinancialReportsPage() {
       return;
     }
     fetchBranches(selectedBrand).then((b) => {
-      setBranches(b);
+      setBranches(Array.isArray(b) ? b : []);
       setSelectedBranchId("");
     });
   }, [selectedBrand]);

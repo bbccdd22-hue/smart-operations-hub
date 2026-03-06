@@ -255,6 +255,10 @@ class JournalEntry(TimestampedModel):
     )
     entry_date = models.DateField(db_index=True)
     description = models.CharField(max_length=500)
+    reference = models.CharField(
+        max_length=64, blank=True, default="",
+        help_text="رقم أو مرجع القيد (المرجع)",
+    )
     source_type = models.CharField(
         max_length=24, choices=JournalEntrySource.choices, db_index=True,
     )
@@ -300,6 +304,7 @@ class JournalEntryLine(TimestampedModel):
     """
     سطر القيد (Transaction) – مبدأ القيد المزدوج.
     كل قيد: مجموع المدين = مجموع الدائن.
+    أبعاد اختيارية: فرع، علامة، مركز تكلفة، موظف، مرجع – للتقارير والفلترة.
     """
     system_code = models.CharField(
         max_length=16, default=SYSTEM_CODE_JOURNAL_LINE, db_index=True,
@@ -321,7 +326,104 @@ class JournalEntryLine(TimestampedModel):
     debit_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
     credit_amount = models.DecimalField(max_digits=18, decimal_places=2, default=Decimal("0.00"))
 
+    # ─── Accounting dimensions (optional; for filtering and reporting) ───
+    branch = models.ForeignKey(
+        "org.Branch",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="journal_entry_lines",
+        db_index=True,
+        help_text="الفرع – ربط المصروف/الإيراد بموقع",
+    )
+    brand = models.ForeignKey(
+        "org.Brand",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="journal_entry_lines",
+        db_index=True,
+        help_text="العلامة – أداء حسب العلامة",
+    )
+    cost_center = models.ForeignKey(
+        "hr.CostCenter",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="journal_entry_lines",
+        db_index=True,
+        help_text="مركز التكلفة / القسم",
+    )
+    employee = models.ForeignKey(
+        "hr.Employee",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="journal_entry_lines",
+        db_index=True,
+        help_text="موظف – مصروفات أو عمولات حسب الموظف",
+    )
+    reference_type = models.CharField(
+        max_length=32,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="نوع المستند المرتبط، مثل: invoice, grn, transfer",
+    )
+    reference_id = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_index=True,
+        help_text="معرف المستند (رقم فاتورة، رقم استلام، إلخ)",
+    )
+    # Dynamic metadata for multi-invoice / custom columns (Design Robot)
+    metadata = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="حقول مخصصة: purchase_date, invoice_ref, vendor_name, إلخ",
+    )
+
     class Meta:
         ordering = ["id"]
         verbose_name = "Journal Entry Line"
         verbose_name_plural = "Journal Entry Lines"
+        indexes = [
+            models.Index(fields=["branch", "journal_entry"], name="jel_branch_je_idx"),
+            models.Index(fields=["brand", "journal_entry"], name="jel_brand_je_idx"),
+            models.Index(fields=["cost_center", "journal_entry"], name="jel_cc_je_idx"),
+            models.Index(fields=["employee", "journal_entry"], name="jel_emp_je_idx"),
+            models.Index(fields=["reference_type", "reference_id"], name="jel_ref_type_id_idx"),
+        ]
+
+
+class JournalEntryCustomColumn(TimestampedModel):
+    """
+    Design Robot: custom column definition for Journal Entry lines.
+    Values are stored in JournalEntryLine.metadata[key].
+    """
+    FIELD_TYPE_CHOICES = [
+        ("text", "Text"),
+        ("number", "Number"),
+        ("date", "Date"),
+    ]
+    name = models.CharField(
+        max_length=64,
+        unique=True,
+        db_index=True,
+        help_text="Internal key (e.g. purchase_date, invoice_ref, vendor_name)",
+    )
+    label = models.CharField(max_length=128, help_text="Display label (e.g. Maintenance Date)")
+    field_type = models.CharField(
+        max_length=16,
+        choices=FIELD_TYPE_CHOICES,
+        default="text",
+        db_index=True,
+    )
+    order = models.PositiveSmallIntegerField(default=0, help_text="Display order")
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["order", "name"]
+        verbose_name = "Journal Entry Custom Column"
+        verbose_name_plural = "Journal Entry Custom Columns"
